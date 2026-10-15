@@ -23,7 +23,7 @@
   "build": {
     "appId": "org.onyxops.palisade",
     "productName": "Palisade",
-    "copyright": "Copyright © 2026 Onyx Operations Group",
+    "copyright": "Copyright \u00a9 2026 Onyx Operations Group",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -31,7 +31,6 @@
     "files": [
       "src/**/*",
       "assets/icon.ico",
-      "assets/update-public-key.pem",
       "package.json",
       "THIRD-PARTY-NOTICES.md"
     ],
