@@ -1,0 +1,38 @@
+name: Windows build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run tests
+        run: npm run check
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Build Windows installer
+        run: npm run package:win
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: palisade-windows-${{ github.sha }}
+          path: out/Palisade-Setup-*.exe
+          if-no-files-found: error
+          retention-days: 14

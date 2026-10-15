@@ -1,0 +1,12 @@
+node_modules/
+out/
+*.log
+*.bak
+secrets/
+*.pem
+!assets/update-public-key.pem
+.env
+.env.*
+.DS_Store
+*.p12
+*.pfx

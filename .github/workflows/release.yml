@@ -1,0 +1,67 @@
+name: Publish Windows release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: palisade-windows-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Check tagged version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          if ($env:GITHUB_REF_NAME -cne "v$version") {
+            throw 'Git tag does not match the package version.'
+          }
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Test and audit
+        run: |
+          npm run check
+          npm audit --omit=dev --audit-level=high
+      - name: Build Windows installer
+        run: npm run package:win
+      - name: Sign update manifest
+        shell: pwsh
+        env:
+          PALISADE_UPDATE_SIGNING_KEY_B64: ${{ secrets.PALISADE_UPDATE_SIGNING_KEY_B64 }}
+        run: |
+          if (-not $env:PALISADE_UPDATE_SIGNING_KEY_B64) {
+            throw 'PALISADE_UPDATE_SIGNING_KEY_B64 is not configured.'
+          }
+          $keyPath = Join-Path $env:RUNNER_TEMP 'palisade-release-key.pem'
+          try {
+            $keyBytes = [Convert]::FromBase64String($env:PALISADE_UPDATE_SIGNING_KEY_B64)
+            [System.IO.File]::WriteAllBytes($keyPath, $keyBytes)
+            $env:PALISADE_UPDATE_PRIVATE_KEY_FILE = $keyPath
+            $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+            node scripts/sign-release.cjs "out/Palisade-Setup-$version-x64.exe" out
+          } finally {
+            Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue
+          }
+      - name: Publish to GitHub Releases
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          gh release create "v$version" "out/Palisade-Setup-$version-x64.exe" "out/release.json" `
+            --title "Palisade Desktop v$version" --generate-notes --verify-tag
