@@ -18,18 +18,18 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Output: `out/Palisade-Setup-0.2.0-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Output: `out/Palisade-Setup-0.2.1-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
 The repository contains the update *public* key. Keep the matching private key out of Git history, issue attachments, chat transcripts and release assets.
 
-Store the base64 representation of the private PEM as repository Actions secret `PALISADE_UPDATE_SIGNING_KEY_B64`. From PowerShell with the GitHub CLI installed and authenticated:
+Create the `release` environment in repository Settings > Environments, configure required reviewers and restrict deployment tags to `v*`. The workflow refuses publishing without required reviewers. Store the base64 representation of the private PEM as an environment Actions secret `PALISADE_UPDATE_SIGNING_KEY_B64`. From PowerShell with the GitHub CLI installed and authenticated:
 
 ```powershell
 $path = 'C:\secure\palisade-update-private-key.pem'
 [Convert]::ToBase64String([IO.File]::ReadAllBytes($path)) |
-  gh secret set PALISADE_UPDATE_SIGNING_KEY_B64 --repo cortezdemartino/palisade-windows
+  gh secret set PALISADE_UPDATE_SIGNING_KEY_B64 --env release --repo cortezdemartino/palisade-windows
 ```
 
 The signing script confirms the private key matches the public key shipped with the client. Release signing fails if the secret is absent or incorrect. Generate a new production key before the initial distribution if the existing private key has been exposed.
@@ -42,16 +42,18 @@ The signing script confirms the private key matches the public key shipped with 
 4. Tag the exact reviewed commit and push the tag:
 
 ```powershell
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
-The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs `release.json` with the Actions secret, then publishes both assets as a public GitHub Release. It rejects tags that do not match `package.json`.
+The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs both manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
 
 Required release assets:
 
 - `Palisade-Setup-<version>-x64.exe`
-- `release.json`
+- `release.json`: v1 signed SHA-512 manifest for v0.2.0 clients
+- `release-v2.json`: v2 signed SHA-256 and SHA-512 manifest for v0.2.1 and later
+- `SHA256SUMS`: conventional installer checksum
 
 Do not upload unsigned or unverified replacement assets under an existing version. Publish a new tag and version for each release. GitHub Releases must remain publicly downloadable; a private repository requires another authenticated distribution design.
 
@@ -62,3 +64,7 @@ The 0.1.0 release has no updater; installing 0.2.0 once manually is required. Th
 If a release is withdrawn, remove it from the latest-release feed through GitHub release management and publish a fixed version. Compromised signing keys require a new client build with a rotated public key, plus a separate trusted reinstallation path for clients that cannot verify a new key.
 
 No OnyxOps App Store, Palisade web server or Nginx changes are required for this distribution method.
+
+Validate artifacts locally with `node scripts/verify-release.cjs out`. This requires no private key. Never replace the pinned public key to make an unknown private key pass. Remove the repository-scoped signing secret after the environment-scoped secret is configured and tested.
+
+The reproducible upgrade procedure is in [UPGRADE-TEST.md](UPGRADE-TEST.md). The current execution evidence and release prerequisites are in [TEST-RESULTS.md](TEST-RESULTS.md).

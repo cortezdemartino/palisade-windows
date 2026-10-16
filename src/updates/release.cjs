@@ -32,18 +32,41 @@ function parseVersion(value) {
 }
 
 function compareVersions(a, b) {
-  const x = parseVersion(a), y = parseVersion(b);
+  function semver(value) {
+    if (typeof value !== 'string') throw new Error('Invalid semantic version.');
+    const match = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.exec(value);
+    if (!match) throw new Error('Invalid semantic version.');
+    const pre = match[4]?.split('.') || [];
+    if (pre.some((p) => /^\d+$/.test(p) && p.length > 1 && p[0] === '0')) throw new Error('Invalid prerelease.');
+    return { core: parseVersion(match.slice(1, 4).join('.')), pre };
+  }
+  const left = semver(a), right = semver(b);
+  const x = left.core, y = right.core;
   for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i] ? 1 : -1;
+  if (!left.pre.length || !right.pre.length) return left.pre.length ? -1 : right.pre.length ? 1 : 0;
+  for (let i = 0; i < Math.max(left.pre.length, right.pre.length); i++) {
+    const l = left.pre[i], r = right.pre[i];
+    if (l === r) continue;
+    if (l === undefined || r === undefined) return l === undefined ? -1 : 1;
+    const ln = /^\d+$/.test(l), rn = /^\d+$/.test(r);
+    if (ln && rn) return BigInt(l) > BigInt(r) ? 1 : -1;
+    if (ln !== rn) return ln ? -1 : 1;
+    return l > r ? 1 : -1;
+  }
   return 0;
 }
 
 function normalisePayload(source) {
   if (!plainObject(source)) throw new Error('Invalid release payload.');
   const keys = ['channel', 'filename', 'publishedAt', 'schema', 'sha512', 'size', 'version'];
+  if (source.schema === 2) keys.push('sha256');
   if (Object.keys(source).sort().join(',') !== keys.sort().join(',')) {
     throw new Error('Unexpected release fields.');
   }
-  if (source.schema !== 1 || source.channel !== 'stable') throw new Error('Invalid release channel or schema.');
+  if (![1, 2].includes(source.schema) || source.channel !== 'stable') throw new Error('Invalid release channel or schema.');
+  if (source.schema === 2 && (typeof source.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sha256))) {
+    throw new Error('Installer SHA-256 is invalid.');
+  }
   parseVersion(source.version);
   const filename = `Palisade-Setup-${source.version}-x64.exe`;
   if (source.filename !== filename) throw new Error('Installer filename must match the release version.');
@@ -56,15 +79,15 @@ function normalisePayload(source) {
   }
   if (typeof source.publishedAt !== 'string' ||
       !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(source.publishedAt) ||
-      !Number.isFinite(Date.parse(source.publishedAt))) {
+      !Number.isFinite(Date.parse(source.publishedAt)) || new Date(source.publishedAt).toISOString() !== source.publishedAt) {
     throw new Error('Release timestamp is invalid.');
   }
-  return { schema: 1, channel: 'stable', version: source.version, filename, sha512: source.sha512,
-    size: source.size, publishedAt: source.publishedAt };
+  return { schema: source.schema, channel: 'stable', version: source.version, filename, sha512: source.sha512,
+    size: source.size, publishedAt: source.publishedAt, ...(source.schema === 2 ? { sha256: source.sha256 } : {}) };
 }
 
 function signedBytes(source) {
-  return Buffer.from('PALISADE-DESKTOP-RELEASE-V1\n' + JSON.stringify(normalisePayload(source)), 'utf8');
+  return Buffer.from(`PALISADE-DESKTOP-RELEASE-V${source.schema}\n` + JSON.stringify(normalisePayload(source)), 'utf8');
 }
 
 function verifyEnvelope(envelope, publicKeyPem) {
@@ -76,7 +99,7 @@ function verifyEnvelope(envelope, publicKeyPem) {
     throw new Error('Release manifest signature is missing.');
   }
   const signature = Buffer.from(envelope.signature, 'base64');
-  const key = createPublicKey(publicKeyPem);
+  const key = publicKeyPem?.type === 'public' ? publicKeyPem : createPublicKey(publicKeyPem);
   if (key.asymmetricKeyType !== 'ed25519' || signature.length !== 64 ||
       !verify(null, signedBytes(payload), key, signature)) {
     throw new Error('Release manifest signature verification failed.');
@@ -102,7 +125,7 @@ async function readLimited(response, maximum) {
 
 function releaseAssetUrl(version, filename) {
   parseVersion(version);
-  if (filename !== 'release.json' && filename !== `Palisade-Setup-${version}-x64.exe`) {
+  if (!['release.json', 'release-v2.json', `Palisade-Setup-${version}-x64.exe`].includes(filename)) {
     throw new Error('Unrecognized release asset.');
   }
   return `${RELEASE_BASE}v${version}/${filename}`;
@@ -113,7 +136,7 @@ async function fetchAsset(url, { fetchFn = fetch, signal = AbortSignal.timeout(3
   let target = url;
   for (let redirects = 0; redirects < 6; redirects++) {
     const parsed = new URL(target);
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || !ASSET_HOSTS.has(parsed.hostname)) {
+    if (parsed.protocol !== 'https:' || parsed.port || parsed.username || parsed.password || !ASSET_HOSTS.has(parsed.hostname)) {
       throw new Error('Release asset redirected outside GitHub.');
     }
     const response = await fetchFn(target, { redirect: 'manual', signal,
@@ -121,6 +144,7 @@ async function fetchAsset(url, { fetchFn = fetch, signal = AbortSignal.timeout(3
     if ([301, 302, 303, 307, 308].includes(response.status)) {
       const location = response.headers.get('location');
       if (!location) throw new Error('Release asset redirect has no destination.');
+      await response.body?.cancel?.();
       target = new URL(location, target).href;
       continue;
     }
@@ -130,7 +154,7 @@ async function fetchAsset(url, { fetchFn = fetch, signal = AbortSignal.timeout(3
   throw new Error('Too many GitHub release redirects.');
 }
 
-async function findLatestRelease(fetchFn = fetch) {
+async function findLatestRelease(fetchFn = fetch, details = false) {
   const response = await fetchFn(RELEASES_API, {
     redirect: 'error', signal: AbortSignal.timeout(15000),
     headers: { 'User-Agent': 'PalisadeDesktop-Updater', Accept: 'application/vnd.github+json' },
@@ -150,29 +174,37 @@ async function findLatestRelease(fetchFn = fetch) {
   if (!names.includes('release.json') || !names.includes(`Palisade-Setup-${version}-x64.exe`)) {
     throw new Error('Required release assets missing.');
   }
-  return version;
+  return details ? { version, notes: typeof info.body === 'string' ? info.body.slice(0, 8000) : '' } : version;
 }
 
 async function fetchRelease(fetchFn, publicKeyPem, installedVersion) {
-  const version = await findLatestRelease(fetchFn);
+  const { version, notes } = await findLatestRelease(fetchFn, true);
   if (compareVersions(version, installedVersion) <= 0) return null;
-  const response = await fetchAsset(releaseAssetUrl(version, 'release.json'), { fetchFn });
+  const response = await fetchAsset(releaseAssetUrl(version, 'release-v2.json'), { fetchFn });
   const envelope = await readLimited(response, MANIFEST_BYTES_LIMIT);
   const payload = verifyEnvelope(envelope, publicKeyPem);
+  if (payload.schema !== 2) throw new Error('SHA-256 signed manifest required.');
   if (payload.version !== version || compareVersions(payload.version, installedVersion) <= 0) {
     throw new Error('Signed manifest version differs from the GitHub release.');
   }
+  Object.defineProperty(payload, 'releaseNotes', { value: notes });
   return payload;
 }
 
 async function verifyDownloadedFile(filename, manifest) {
-  const details = await stat(filename);
+  let details;
+  try { details = await stat(filename); } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
   if (!details.isFile() || details.size !== manifest.size) return false;
   const hash = createHash('sha512');
-  for await (const bytes of createReadStream(filename)) hash.update(bytes);
+  const sha256 = createHash('sha256');
+  for await (const bytes of createReadStream(filename)) { hash.update(bytes); sha256.update(bytes); }
   const actual = hash.digest();
   const expected = Buffer.from(manifest.sha512, 'base64');
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  return actual.length === expected.length && timingSafeEqual(actual, expected) &&
+    (manifest.schema !== 2 || sha256.digest('hex') === manifest.sha256);
 }
 
 module.exports = {

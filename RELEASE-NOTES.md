@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.2.1 (unreleased)
+
+- Added signed SHA-256 update manifests while retaining the v0.2.0 update format.
+- Added download progress, release notes, native update notifications and menu status.
+- Added persisted tray preferences, optional launch on login and an About dialog.
+- Added a verified installer handoff after shutdown, failure receipts and retry handling.
+- Hardened release verification, credential checks and publishing permissions.
+- Added Windows upgrade and installer-helper tests.
+
 ## 0.2.0
 
 - Added automatic update checks using public GitHub Releases.

@@ -2,7 +2,7 @@
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
-**Current version: 0.2.0.** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
+**Source version: 0.2.1 (unreleased).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
 
 ## Features
 
@@ -12,7 +12,7 @@ Palisade's Windows desktop client runs the existing Palisade service in a restri
 - HTTPS navigation restrictions and confirmation for external links
 - Microphone audio and notification permissions; other device permissions denied
 - Automatic update checks through [GitHub Releases](https://github.com/cortezdemartino/palisade-windows/releases)
-- Ed25519-signed release metadata and SHA-512 installer verification
+- Ed25519-signed release metadata and SHA-256 and SHA-512 installer verification
 
 ## Install
 
@@ -30,7 +30,7 @@ npm test
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.2.0-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.2.1-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
 
 ## Updates
 
@@ -46,6 +46,9 @@ The repository contains no backend service, web assets or Matrix authentication 
 - [Build and release operations](docs/OPERATIONS.md)
 - [Security notes](docs/SECURITY.md)
 - [Release notes](RELEASE-NOTES.md)
+- [Phase 2 audit](docs/AUDIT-PHASE-2.md)
+- [Upgrade test procedure](docs/UPGRADE-TEST.md)
+- [Validation and release gates](docs/TEST-RESULTS.md)
 
 ## License
 

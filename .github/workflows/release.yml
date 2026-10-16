@@ -14,9 +14,18 @@ concurrency:
 jobs:
   release:
     runs-on: windows-latest
+    environment: release
     permissions:
-      contents: write
+      contents: read
+      actions: read
     steps:
+      - name: Require protected release environment
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $rules = gh api "repos/$env:GITHUB_REPOSITORY/environments/release" --jq '.protection_rules | map(select(.type == "required_reviewers")) | length'
+          if ($LASTEXITCODE -ne 0 -or [int]$rules -lt 1) { throw 'Configure required reviewers on the release environment before publishing.' }
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
@@ -27,6 +36,7 @@ jobs:
       - name: Check tagged version
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           if ($env:GITHUB_REF_NAME -cne "v$version") {
             throw 'Git tag does not match the package version.'
@@ -34,16 +44,26 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
       - name: Test and audit
+        shell: pwsh
         run: |
           npm run check
+          if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
           npm audit --omit=dev --audit-level=high
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency audit failed.' }
       - name: Build Windows installer
-        run: npm run package:win
+        shell: pwsh
+        run: |
+          npm run package:win
+          if ($LASTEXITCODE -ne 0) { throw 'Packaging failed.' }
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $actual = (Get-Item -LiteralPath "out/Palisade-Setup-$version-x64.exe").VersionInfo.ProductVersion
+          if ($actual -notin @($version, "$version.0")) { throw 'Installer version does not match the package.' }
       - name: Sign update manifest
         shell: pwsh
         env:
           PALISADE_UPDATE_SIGNING_KEY_B64: ${{ secrets.PALISADE_UPDATE_SIGNING_KEY_B64 }}
         run: |
+          $ErrorActionPreference = 'Stop'
           if (-not $env:PALISADE_UPDATE_SIGNING_KEY_B64) {
             throw 'PALISADE_UPDATE_SIGNING_KEY_B64 is not configured.'
           }
@@ -54,14 +74,47 @@ jobs:
             $env:PALISADE_UPDATE_PRIVATE_KEY_FILE = $keyPath
             $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
             node scripts/sign-release.cjs "out/Palisade-Setup-$version-x64.exe" out
+            if ($LASTEXITCODE -ne 0) { throw 'Release signing failed.' }
+            node scripts/verify-release.cjs out
+            if ($LASTEXITCODE -ne 0) { throw 'Release verification failed.' }
           } finally {
             Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue
           }
+      - name: Upload verified release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-windows-release
+          path: |
+            out/Palisade-Setup-*-x64.exe
+            out/release.json
+            out/release-v2.json
+            out/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: release
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-windows-release
+          path: out
+      - name: Verify signed artifacts before publishing
+        run: node scripts/verify-release.cjs out
       - name: Publish to GitHub Releases
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          gh release create "v$version" "out/Palisade-Setup-$version-x64.exe" "out/release.json" `
+          gh release create "v$version" "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/SHA256SUMS" `
             --title "Palisade Desktop v$version" --generate-notes --verify-tag

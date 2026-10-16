@@ -19,6 +19,8 @@ const payload = normalisePayload({ schema: 1, channel: 'stable', version: '0.3.0
   filename: 'Palisade-Setup-0.3.0-x64.exe', sha512, size: goodContent.length,
   publishedAt: '2026-10-15T10:00:00.000Z' });
 const envelope = { payload, signature: sign(null, signedBytes(payload), privateKey).toString('base64') };
+const modern = normalisePayload({ ...payload, schema: 2, sha256: createHash('sha256').update(goodContent).digest('hex') });
+const modernEnvelope = { payload: modern, signature: sign(null, signedBytes(modern), privateKey).toString('base64') };
 const key = publicKey.export({ type: 'spki', format: 'pem' });
 
 function response(value, url, status = 200) {
@@ -70,13 +72,13 @@ test('release URLs cannot be controlled by the manifest', () => {
 });
 
 test('GitHub release metadata and manifest must match', async () => {
-  const download = releaseAssetUrl(payload.version, 'release.json');
+  const download = releaseAssetUrl(payload.version, 'release-v2.json');
   const fetchFn = async (url) => {
     if (url === RELEASES_API) return response(latest(), url);
-    if (url === download) return response(envelope, url);
+    if (url === download) return response(modernEnvelope, url);
     throw new Error('Unexpected URL');
   };
-  assert.deepEqual(await fetchRelease(fetchFn, key, '0.2.0'), payload);
+  assert.deepEqual(await fetchRelease(fetchFn, key, '0.2.0'), modern);
   assert.equal(await fetchRelease(fetchFn, key, '0.3.0'), null);
   await assert.rejects(fetchRelease(async (url) => url === RELEASES_API
     ? response(latest('0.4.0'), url) : response(envelope, url), key, '0.2.0'));

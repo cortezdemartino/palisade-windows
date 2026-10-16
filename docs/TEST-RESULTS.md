@@ -1,21 +1,32 @@
 # Validation
 
-## Completed locally
+Executed on Windows 10.0.26300 x64 on October 15, 2026, using Node.js 24.20.0 and npm 11.19.0. GitHub Actions uses Node.js 22; that hosted workflow has not yet been executed for this change.
 
-- Node.js 22 policy and release tests: 11 passed.
-- Main process, updater and module syntax checks: passed.
-- Release manifest signature validation: valid, altered and untrusted-key cases tested.
-- Release source and redirection rules: tested with controlled network responses.
-- Installer hash, length and partial-download cleanup: tested with local fixtures.
+## Executed checks
 
-## Required on Windows
+- `npm ci --no-audit --no-fund`: passed with network access outside the restricted sandbox.
+- `npm run check`: 21 automated tests passed, including Windows helper execution; main-process and updater syntax checks passed.
+- `npm audit --omit=dev --audit-level=high`: passed, zero production vulnerabilities.
+- `npm run package:win`: Windows x64 NSIS packaging passed. Output is `out/Palisade-Setup-0.2.1-x64.exe`; Authenticode signing is optional and was not used.
+- Both workflow YAML files parsed successfully. A hosted Actions run is still required.
+- Release CLI tests generated temporary fixture keys, signed and verified both manifest formats, and rejected missing credentials, a mismatched key and modified artifacts. These tests did not use the production private key.
+- Installer helper test compiled a harmless Windows fixture, executed the actual PowerShell helper, verified parent-exit ordering and NSIS arguments, and checked success/failure receipts and SHA-256 tampering rejection. No execution-policy bypass was used.
+- Isolated NSIS v0.2.0 installation, v0.2.1 upgrade at the same path, synthetic profile-file preservation and test uninstall passed. This used a separate packaging identity, as described in UPGRADE-TEST.md.
+- Repository inspection found an existing v0.1.0 installation on the workstation. The production identity was not installed over it.
 
-- Locked dependency install and dependency audit.
-- Electron Windows installer packaging in GitHub Actions.
-- Install over 0.1.0 without losing the Palisade Matrix device profile.
-- Application startup, login, notifications, voice microphone permission and session recovery.
-- GitHub Release signed-manifest distribution from the public repository.
-- Install prompt, unattended installer completion, relaunch and new-version checks.
-- Interrupted downloads, missing release assets, installer failure and rollback handling.
+The sandbox initially denied an atomic settings-file rename; the same test passed outside the sandbox. The executable-version test was corrected to accept Windows' four-part `0.2.0.0` representation. The helper test found a missing `Get-FileHash` cmdlet in the inherited module environment; the helper now hashes using built-in .NET cryptography and passes.
 
-Passing these tests does not establish an independent security assessment or production approval.
+## Release status and remaining gates
+
+No tag was pushed and no release was published. GitHub returned no published releases during inspection. A repository-scoped `PALISADE_UPDATE_SIGNING_KEY_B64` secret entry exists; its value was not read and its match to the pinned public key has not been established. The `release` environment endpoint returned 404. Configure required reviewers and an environment-scoped signing secret, then remove the broader repository-scoped secret after validating the protected setup. The workflow rejects publishing without reviewer protection, valid signing credentials and successful artifact verification.
+
+Still unverified:
+
+- Hosted Windows Actions build, production-key signing and publication of all four assets.
+- Download and installation through the live public GitHub Releases endpoint, including v0.2.0 legacy-manifest compatibility in an installed client.
+- Upgrade using the production application identity and a real authenticated Matrix device. Synthetic fixture preservation is not proof of authenticated-session preservation.
+- Actual NSIS automatic relaunch and Windows-policy failures with the production application. The helper fixture test checks flags and receipts, but does not launch Palisade.
+- Interactive tray/menu behavior, login startup, native website notifications, microphone permissions, external-link prompts and single-instance behavior on an installed client.
+- Recovery from a partially replaced installation, tested in a disposable VM. There is no automatic binary rollback.
+
+Follow UPGRADE-TEST.md before calling the production update lifecycle verified. Passing the automated tests and packaging is not a production release sign-off.

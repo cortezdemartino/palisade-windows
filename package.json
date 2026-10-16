@@ -1,7 +1,7 @@
 {
   "name": "@palisade/desktop",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Windows desktop client for Palisade",
   "license": "Apache-2.0",
   "main": "src/main.cjs",
@@ -63,7 +63,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "artifactName": "Palisade-Setup-${version}-${arch}.${ext}"
+      "artifactName": "Palisade-Setup-${version}-${arch}.${ext}",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     }
   }
 }

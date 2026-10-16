@@ -13,9 +13,9 @@ The desktop client uses its own persistent browser partition. It does not use Wi
 - Update checks use the public GitHub Releases API for `cortezdemartino/palisade-windows`.
 - Only stable, non-draft releases with a numeric `vMAJOR.MINOR.PATCH` tag are considered.
 - The `release.json` asset must contain an Ed25519 signature from the key embedded in this application.
-- The signed data fixes the version, installer filename, size, SHA-512 checksum and channel.
+- The signed data fixes the version, installer filename, size, SHA-256 and SHA-512 checksums and channel.
 - Downloads use an exact GitHub release path. Redirects are limited to HTTPS GitHub release-asset hosts.
-- The installer is downloaded to a dedicated temporary directory and verified before it is offered, then verified again immediately before execution.
+- The installer is downloaded to a dedicated disposable cache under the existing user profile and verified before it is offered, then verified again immediately before execution.
 - The updater never reads commands, executable URLs or release selections from the Palisade web renderer.
 - Downgrades and invalid or unsigned manifests are refused.
 
@@ -26,3 +26,7 @@ The Ed25519 key pair authenticates Palisade update metadata independently of a W
 Windows SmartScreen and managed endpoint policies may reject unsigned installers. The updater does not bypass those controls. The application runs code served by the live Palisade website, so a compromised website remains a separate risk. A stolen release signing key could authorize malicious update metadata; protect it as a production release credential.
 
 The release process is not independently audited. Before production distribution, verify Windows installation and update behavior on actual devices, test rollback and installer failure modes, review the Electron dependency chain, and establish an incident procedure for signing-key compromise.
+
+Version 0.2.1 requires `release-v2.json` and rejects a missing or legacy-only manifest. The release workflow also emits the original `release.json` format so v0.2.0 can upgrade using its existing SHA-512 verifier. Both formats use the unchanged pinned Ed25519 key. GitHub release notes are bounded plain text for display and never determine executable commands or download locations.
+
+The installer helper repeats SHA-256 verification after the application exits. It runs under the current user and Windows PowerShell execution policy, without an execution-policy override. A blocked helper leaves the running application open. NSIS exit failures are recorded for the next launch and trigger an attempt to reopen the installed executable. An interrupted or partially failed installation can require running the official installer manually; there is no automatic binary rollback. Cache cleanup never targets the browser partition.

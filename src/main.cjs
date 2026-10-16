@@ -3,6 +3,7 @@
 const { app, BrowserWindow, dialog, Menu, nativeImage, session, shell, Tray } = require('electron');
 const path = require('node:path');
 const { createUpdateController } = require('./updates/updater.cjs');
+const { loadSettings, saveSettings } = require('./settings.cjs');
 const {
   PALISADE_URL,
   PALISADE_ORIGIN,
@@ -21,6 +22,7 @@ let keepRunningInTray = false;
 let quitting = false;
 let lastExternalPromptAt = 0;
 let updaterController = null;
+let updateStatus = 'Updates: idle';
 
 app.setName('Palisade');
 if (process.platform === 'win32') app.setAppUserModelId('org.onyxops.palisade');
@@ -37,6 +39,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('before-quit', () => {
     quitting = true;
+    session.fromPartition(PARTITION).flushStorageData();
   });
 
   app.on('web-contents-created', (_event, webContents) => {
@@ -45,11 +48,16 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    keepRunningInTray = loadSettings(app.getPath('userData')).keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
     installSessionPolicy(profile);
     createMainWindow(profile);
     createTray();
-    updaterController = createUpdateController(() => window);
+    updaterController = createUpdateController(() => window, (status) => {
+      updateStatus = status;
+      updateTrayMenu();
+      createApplicationMenu();
+    });
     createApplicationMenu();
     updaterController.start();
   });
@@ -158,6 +166,9 @@ function createMainWindow(profile) {
   });
 
   window.once('ready-to-show', () => window?.show());
+  window.on('minimize', () => {
+    if (keepRunningInTray) window?.hide();
+  });
   window.on('close', (event) => {
     if (!quitting && keepRunningInTray) {
       event.preventDefault();
@@ -216,15 +227,21 @@ function updateTrayMenu() {
     Menu.buildFromTemplate([
       { label: 'Open Palisade', click: openWindow },
       {
-        label: 'Keep running when window is closed',
+        label: 'Minimize and close to tray',
         type: 'checkbox',
         checked: keepRunningInTray,
         click: (item) => {
-          keepRunningInTray = item.checked;
+          try {
+            saveSettings(app.getPath('userData'), { keepRunningInTray: item.checked });
+            keepRunningInTray = item.checked;
+          } catch {
+            void dialog.showMessageBox({ type: 'error', message: 'Could not save desktop settings.', buttons: ['OK'] });
+          }
           updateTrayMenu();
         },
       },
       { type: 'separator' },
+      { label: updateStatus, enabled: false },
       {
         label: 'Check for updates', click: () => void updaterController?.check(true),
       },
@@ -246,8 +263,16 @@ function createApplicationMenu() {
       {
         label: 'Palisade',
         submenu: [
+          { label: updateStatus, enabled: false },
           { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => window?.webContents.reload() },
           { label: 'Check for updates', click: () => void updaterController?.check(true) },
+          { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged,
+            checked: app.getLoginItemSettings().openAtLogin,
+            click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked }); createApplicationMenu(); } },
+          { label: 'About Palisade', click: () => void dialog.showMessageBox({
+            type: 'info', title: 'About Palisade', message: `Palisade ${app.getVersion()}`,
+            detail: 'Windows x64 desktop client\nCopyright 2026 Onyx Operations Group\nApache-2.0. Palisade trademarks remain with their owner.', buttons: ['OK'],
+          }) },
           { type: 'separator' },
           { label: 'Quit', accelerator: 'Alt+F4', click: () => app.quit() },
         ],

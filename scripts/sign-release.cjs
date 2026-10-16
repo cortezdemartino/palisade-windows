@@ -2,7 +2,7 @@
 const { readFileSync, writeFileSync, statSync } = require('node:fs');
 const { createHash, sign, createPrivateKey, createPublicKey } = require('node:crypto');
 const path = require('node:path');
-const { signedBytes, normalisePayload } = require('../src/updates/release.cjs');
+const { signedBytes, normalisePayload, verifyEnvelope } = require('../src/updates/release.cjs');
 
 const keyFile = process.env.PALISADE_UPDATE_PRIVATE_KEY_FILE;
 const installer = process.argv[2];
@@ -29,4 +29,10 @@ if (!privateKey.asymmetricKeyType || !trusted.equals(createPublicKey(privateKey)
 const signature = sign(null, signedBytes(payload), privateKey).toString('base64');
 const dest = path.join(outputDir, 'release.json');
 writeFileSync(dest, JSON.stringify({ payload, signature }, null, 2) + '\n', { flag: 'w' });
+const modern = normalisePayload({ ...payload, schema: 2, sha256: createHash('sha256').update(data).digest('hex') });
+const envelope = { payload: modern, signature: sign(null, signedBytes(modern), privateKey).toString('base64') };
+verifyEnvelope(envelope, trusted);
+verifyEnvelope({ payload, signature }, trusted);
+writeFileSync(path.join(outputDir, 'release-v2.json'), JSON.stringify(envelope, null, 2) + '\n');
+writeFileSync(path.join(outputDir, 'SHA256SUMS'), `${modern.sha256}  ${modern.filename}\n`);
 console.log(`Signed manifest: ${dest}`);
