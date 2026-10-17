@@ -33,11 +33,12 @@ test('controller reports network failure and recovers on a subsequent check',asy
  try{await h.controller.check(true);assert.match(h.statuses.at(-1),/failed/);assert.equal(h.prompts[0].type,'warning');await h.controller.check(true);assert.equal(h.statuses.at(-1),'Updates: up to date');}finally{await h.cleanup();}
 });
 test('checks are serialized and shutdown cancels future checks; schedules startup and six-hour checks',async()=>{
- let finish;let calls=0;
- const h=await harness(()=>{calls++;return new Promise(r=>{finish=r;});},()=>{});
+ let finish;let calls=0;let started;
+ const fetching=new Promise(resolve=>{started=resolve;});
+ const h=await harness(()=>{calls++;started();return new Promise(r=>{finish=r;});},()=>{});
  try{
   h.controller.start();assert.deepEqual(h.timers,[15000,21600000]);
-  const pending=h.controller.check();await new Promise(r=>setTimeout(r,20));await h.controller.check(true);assert.equal(calls,1);
+  const pending=h.controller.check();await fetching;await h.controller.check(true);assert.equal(calls,1);
   finish(null);await pending;h.app.emit('before-quit');await h.controller.check(true);assert.equal(calls,1);
  }finally{await h.cleanup();}
 });

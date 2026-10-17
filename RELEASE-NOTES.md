@@ -1,13 +1,13 @@
 # Release notes
 
-## 0.2.2 (unreleased)
+## 0.2.2 (2026-10-17)
 
 - Integrated the supplied Ed25519 public key for the authorized manual test-client bootstrap.
 - Added signed installer URLs and authenticated, version-bound key transitions.
 - Kept compatibility manifests and fail-closed release signing checks.
 - Added rotation, signature, installer-integrity and key-recovery tests and documentation.
 
-The original test executable must be reinstalled manually. The prior key cannot authenticate the regenerated pair. No release is published by this change.
+All earlier manual installations have been uninstalled, as confirmed by the operator. Install 0.2.2 manually to establish the current update trust key. Future releases can be authenticated by this installation; earlier old-key executables cannot authenticate this bootstrap.
 
 ## 0.2.1 (unreleased)
 
