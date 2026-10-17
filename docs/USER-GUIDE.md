@@ -15,7 +15,7 @@ Palisade checks for newer versions at startup and every six hours. Choose **Pali
 
 Download progress appears in the tray and application menus and on the taskbar. A native Windows notification announces a verified update, and the installation prompt includes release notes. Choose **Install update** to run the installer or **Later** to continue working. Save ongoing work before installing. The installer can close and replace the existing application.
 
-The installed 0.1.0 release cannot update itself. Install version 0.2.0 manually once to enable this feature.
+The original test executable must be replaced manually with v0.2.2. The new signing key is established by that explicit reinstall; the older key cannot authenticate this bootstrap. See [signing and recovery](UPDATE-SIGNING.md).
 
 ## Notifications, microphone and tray
 

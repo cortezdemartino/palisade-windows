@@ -18,7 +18,7 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Output: `out/Palisade-Setup-0.2.1-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Output: `out/Palisade-Setup-0.2.2-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
@@ -42,29 +42,32 @@ The signing script confirms the private key matches the public key shipped with 
 4. Tag the exact reviewed commit and push the tag:
 
 ```powershell
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
-The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs both manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
+The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs all three manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
 
 Required release assets:
 
 - `Palisade-Setup-<version>-x64.exe`
-- `release.json`: v1 signed SHA-512 manifest for v0.2.0 clients
-- `release-v2.json`: v2 signed SHA-256 and SHA-512 manifest for v0.2.1 and later
+- `release.json`: v1 signed SHA-512 manifest for clients using this format and the current trust anchor
+- `release-v2.json`: v2 signed SHA-256 and SHA-512 manifest for clients using this format and the current trust anchor
+- `release-v3.json`: signed download URL and authenticated transition chain for v0.2.2 and later
 - `SHA256SUMS`: conventional installer checksum
 
 Do not upload unsigned or unverified replacement assets under an existing version. Publish a new tag and version for each release. GitHub Releases must remain publicly downloadable; a private repository requires another authenticated distribution design.
 
 ## Compatibility and response
 
-The 0.1.0 release has no updater; installing 0.2.0 once manually is required. The application ID `org.onyxops.palisade` and the `persist:palisade-desktop` browser partition are unchanged, preserving the usual desktop profile on upgrade. Verify this in Windows testing.
+The 0.1.0 release has no updater. The sole existing test installation requires the explicitly authorized manual v0.2.2 bootstrap to establish the new signing key. The application ID `org.onyxops.palisade` and the `persist:palisade-desktop` browser partition are unchanged, preserving the usual desktop profile on upgrade. Verify this in Windows testing.
 
-If a release is withdrawn, remove it from the latest-release feed through GitHub release management and publish a fixed version. Compromised signing keys require a new client build with a rotated public key, plus a separate trusted reinstallation path for clients that cannot verify a new key.
+If a release is withdrawn, remove it from the latest-release feed through GitHub release management and publish a fixed version. Follow [UPDATE-SIGNING.md](UPDATE-SIGNING.md) for authenticated future rotation and separately authenticated recovery after key loss or compromise.
 
 No OnyxOps App Store, Palisade web server or Nginx changes are required for this distribution method.
 
 Validate artifacts locally with `node scripts/verify-release.cjs out`. This requires no private key. Never replace the pinned public key to make an unknown private key pass. Remove the repository-scoped signing secret after the environment-scoped secret is configured and tested.
 
 The reproducible upgrade procedure is in [UPGRADE-TEST.md](UPGRADE-TEST.md). The current execution evidence and release prerequisites are in [TEST-RESULTS.md](TEST-RESULTS.md).
+
+The sole earlier test client requires the explicitly authorized manual v0.2.2 bootstrap because its original private key was lost. The old tagged public key does not authenticate the new key. See the signing guide for fingerprints, operator scope and the production publication gates. After future rotation, retain the bootstrap private key as the protected legacy-signing secret while compatibility clients exist.

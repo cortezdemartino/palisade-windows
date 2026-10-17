@@ -26,7 +26,7 @@ test('v2 authenticates SHA-256 and refuses legacy envelope fallback', async () =
   const legacy = { ...manifest, schema: 1 }; delete legacy.sha256;
   const legacyEnvelope = { payload: legacy, signature: sign(null, signedBytes(legacy),privateKey).toString('base64') };
   const response = (value,url) => ({ ok:true, url, headers:new Map(), body:(async function*(){yield Buffer.from(JSON.stringify(value));})() });
-  await assert.rejects(fetchRelease(async (url) => response(url === RELEASES_API ? { draft:false, prerelease:false, tag_name:'v0.2.1', assets:[{name:'release.json'},{name:manifest.filename}] } : legacyEnvelope,url),key,'0.2.0'), /SHA-256/);
+  await assert.rejects(fetchRelease(async (url) => response(url === RELEASES_API ? { draft:false, prerelease:false, tag_name:'v0.2.1', assets:[{name:'release.json'},{name:manifest.filename}] } : legacyEnvelope,url),key,'0.2.0'), /rotation-aware/);
 });
 test('SHA-256 mismatch is refused independently of a correct SHA-512', async () => {
   const dir = await mkdtemp(path.join(os.tmpdir(),'palisade-test-'));

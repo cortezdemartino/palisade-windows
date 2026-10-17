@@ -37,7 +37,7 @@ async function downloadInstaller(manifest, destination, fetchFn = fetch, onProgr
     const actual = hash.digest();
     const expected = Buffer.from(manifest.sha512, 'base64');
     if (bytes !== manifest.size || actual.length !== expected.length ||
-        !timingSafeEqual(actual, expected) || (manifest.schema === 2 && sha256.digest('hex') !== manifest.sha256)) {
+        !timingSafeEqual(actual, expected) || (manifest.schema >= 2 && sha256.digest('hex') !== manifest.sha256)) {
       throw new Error('Installer does not match the signed manifest.');
     }
     return filename;

@@ -2,7 +2,7 @@
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
-**Source version: 0.2.1 (unreleased).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
+**Source version: 0.2.2 (unreleased).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
 
 ## Features
 
@@ -16,7 +16,7 @@ Palisade's Windows desktop client runs the existing Palisade service in a restri
 
 ## Install
 
-Download the most recent installer from [Releases](https://github.com/cortezdemartino/palisade-windows/releases). Run it on Windows and sign in to your existing Palisade account. The 0.1.0 client must be updated manually once; automatic update checks start with 0.2.0.
+Download the most recent installer from [Releases](https://github.com/cortezdemartino/palisade-windows/releases). Run it on Windows and sign in to your existing Palisade account. The existing test client must be replaced manually with v0.2.2 to establish the new signing-key trust anchor; see the signing and recovery guide.
 
 Windows may display an unknown-publisher warning for unsigned installers. This project does not disable certificate validation or bypass Windows security policy.
 
@@ -30,7 +30,7 @@ npm test
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.2.1-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.2.2-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
 
 ## Updates
 
@@ -44,6 +44,7 @@ The repository contains no backend service, web assets or Matrix authentication 
 
 - [User guide](docs/USER-GUIDE.md)
 - [Build and release operations](docs/OPERATIONS.md)
+- [Signing, authenticated key rotation and recovery](docs/UPDATE-SIGNING.md)
 - [Security notes](docs/SECURITY.md)
 - [Release notes](RELEASE-NOTES.md)
 - [Phase 2 audit](docs/AUDIT-PHASE-2.md)

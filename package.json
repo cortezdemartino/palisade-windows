@@ -1,7 +1,7 @@
 {
   "name": "@palisade/desktop",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Windows desktop client for Palisade",
   "license": "Apache-2.0",
   "main": "src/main.cjs",
@@ -32,6 +32,7 @@
       "src/**/*",
       "assets/icon.ico",
       "assets/update-public-key.pem",
+      "assets/update-key-transitions.json",
       "package.json",
       "THIRD-PARTY-NOTICES.md"
     ],

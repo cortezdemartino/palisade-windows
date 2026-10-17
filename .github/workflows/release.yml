@@ -62,16 +62,22 @@ jobs:
         shell: pwsh
         env:
           PALISADE_UPDATE_SIGNING_KEY_B64: ${{ secrets.PALISADE_UPDATE_SIGNING_KEY_B64 }}
+          PALISADE_UPDATE_LEGACY_SIGNING_KEY_B64: ${{ secrets.PALISADE_UPDATE_LEGACY_SIGNING_KEY_B64 }}
         run: |
           $ErrorActionPreference = 'Stop'
           if (-not $env:PALISADE_UPDATE_SIGNING_KEY_B64) {
             throw 'PALISADE_UPDATE_SIGNING_KEY_B64 is not configured.'
           }
           $keyPath = Join-Path $env:RUNNER_TEMP 'palisade-release-key.pem'
+          $legacyKeyPath = Join-Path $env:RUNNER_TEMP 'palisade-legacy-release-key.pem'
           try {
             $keyBytes = [Convert]::FromBase64String($env:PALISADE_UPDATE_SIGNING_KEY_B64)
             [System.IO.File]::WriteAllBytes($keyPath, $keyBytes)
             $env:PALISADE_UPDATE_PRIVATE_KEY_FILE = $keyPath
+            if ($env:PALISADE_UPDATE_LEGACY_SIGNING_KEY_B64) {
+              [System.IO.File]::WriteAllBytes($legacyKeyPath, [Convert]::FromBase64String($env:PALISADE_UPDATE_LEGACY_SIGNING_KEY_B64))
+              $env:PALISADE_UPDATE_LEGACY_PRIVATE_KEY_FILE = $legacyKeyPath
+            }
             $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
             node scripts/sign-release.cjs "out/Palisade-Setup-$version-x64.exe" out
             if ($LASTEXITCODE -ne 0) { throw 'Release signing failed.' }
@@ -79,6 +85,7 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Release verification failed.' }
           } finally {
             Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $legacyKeyPath -Force -ErrorAction SilentlyContinue
           }
       - name: Upload verified release artifacts
         uses: actions/upload-artifact@v4
@@ -88,6 +95,7 @@ jobs:
             out/Palisade-Setup-*-x64.exe
             out/release.json
             out/release-v2.json
+            out/release-v3.json
             out/SHA256SUMS
           if-no-files-found: error
           retention-days: 7
@@ -116,5 +124,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          gh release create "v$version" "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/SHA256SUMS" `
+          gh release create "v$version" "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/release-v3.json" "out/SHA256SUMS" `
             --title "Palisade Desktop v$version" --generate-notes --verify-tag

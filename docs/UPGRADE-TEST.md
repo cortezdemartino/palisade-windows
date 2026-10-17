@@ -1,5 +1,7 @@
 # Reproducing the v0.2.0 to v0.2.1 upgrade
 
+This is the historical Phase 2 v0.2.0-to-v0.2.1 test. For the new-key v0.2.2 manual bootstrap, follow [UPDATE-SIGNING.md](UPDATE-SIGNING.md). The two source archives below reproduce the original tested versions independently of the current checkout.
+
 ## Isolated NSIS installation test
 
 This test changes the packaging identity to `org.onyxops.palisade.phase2test` and product name to `PalisadePhase2Test`. It verifies NSIS replacement at the same path and preservation of a synthetic profile file. It does not launch the application or validate a real Matrix session. It refuses an existing test installation or profile. The real Palisade installation is not a target.
@@ -11,7 +13,9 @@ New-Item -ItemType Directory -Path out -Force | Out-Null
 git archive bea6a0b --output=out/baseline.zip
 Expand-Archive -LiteralPath out/baseline.zip -DestinationPath out/baseline -Force
 & .\node_modules\.bin\electron-builder.cmd --projectDir out/baseline --win nsis --x64 --publish never --config.appId=org.onyxops.palisade.phase2test --config.productName=PalisadePhase2Test --config.directories.output=../upgrade-test/baseline
-& .\node_modules\.bin\electron-builder.cmd --win nsis --x64 --publish never --config.appId=org.onyxops.palisade.phase2test --config.productName=PalisadePhase2Test --config.directories.output=out/upgrade-test/candidate
+git archive fa8d46a --output=out/candidate.zip
+Expand-Archive -LiteralPath out/candidate.zip -DestinationPath out/candidate-source -Force
+& .\node_modules\.bin\electron-builder.cmd --projectDir out/candidate-source --win nsis --x64 --publish never --config.appId=org.onyxops.palisade.phase2test --config.productName=PalisadePhase2Test --config.directories.output=../upgrade-test/candidate
 pwsh -NoProfile -File scripts/test-windows-upgrade.ps1 -Execute
 ```
 

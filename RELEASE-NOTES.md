@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.2.2 (unreleased)
+
+- Integrated the supplied Ed25519 public key for the authorized manual test-client bootstrap.
+- Added signed installer URLs and authenticated, version-bound key transitions.
+- Kept compatibility manifests and fail-closed release signing checks.
+- Added rotation, signature, installer-integrity and key-recovery tests and documentation.
+
+The original test executable must be reinstalled manually. The prior key cannot authenticate the regenerated pair. No release is published by this change.
+
 ## 0.2.1 (unreleased)
 
 - Added signed SHA-256 update manifests while retaining the v0.2.0 update format.

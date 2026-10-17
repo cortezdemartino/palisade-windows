@@ -3,12 +3,13 @@
 const { createHash, createPublicKey, verify, timingSafeEqual } = require('node:crypto');
 const { createReadStream } = require('node:fs');
 const { stat } = require('node:fs/promises');
+const { resolveTrust, requireTrustedPrefix } = require('./key-trust.cjs');
 
 const OWNER = 'cortezdemartino';
 const REPOSITORY = 'palisade-windows';
 const RELEASES_API = `https://api.github.com/repos/${OWNER}/${REPOSITORY}/releases/latest`;
 const RELEASE_BASE = `https://github.com/${OWNER}/${REPOSITORY}/releases/download/`;
-const MANIFEST_BYTES_LIMIT = 16 * 1024;
+const MANIFEST_BYTES_LIMIT = 32 * 1024;
 const API_BYTES_LIMIT = 256 * 1024;
 const MAX_INSTALLER_BYTES = 1024 * 1024 * 1024;
 const ASSET_HOSTS = new Set([
@@ -59,17 +60,20 @@ function compareVersions(a, b) {
 function normalisePayload(source) {
   if (!plainObject(source)) throw new Error('Invalid release payload.');
   const keys = ['channel', 'filename', 'publishedAt', 'schema', 'sha512', 'size', 'version'];
-  if (source.schema === 2) keys.push('sha256');
+  if (source.schema >= 2) keys.push('sha256');
+  if (source.schema === 3) keys.push('downloadUrl');
   if (Object.keys(source).sort().join(',') !== keys.sort().join(',')) {
     throw new Error('Unexpected release fields.');
   }
-  if (![1, 2].includes(source.schema) || source.channel !== 'stable') throw new Error('Invalid release channel or schema.');
-  if (source.schema === 2 && (typeof source.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sha256))) {
+  if (![1, 2, 3].includes(source.schema) || source.channel !== 'stable') throw new Error('Invalid release channel or schema.');
+  if (source.schema >= 2 && (typeof source.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sha256))) {
     throw new Error('Installer SHA-256 is invalid.');
   }
   parseVersion(source.version);
   const filename = `Palisade-Setup-${source.version}-x64.exe`;
   if (source.filename !== filename) throw new Error('Installer filename must match the release version.');
+  const downloadUrl = releaseAssetUrl(source.version, filename);
+  if (source.schema === 3 && source.downloadUrl !== downloadUrl) throw new Error('Invalid signed download location.');
   if (!Number.isSafeInteger(source.size) || source.size <= 0 || source.size > MAX_INSTALLER_BYTES) {
     throw new Error('Installer size is invalid.');
   }
@@ -83,15 +87,18 @@ function normalisePayload(source) {
     throw new Error('Release timestamp is invalid.');
   }
   return { schema: source.schema, channel: 'stable', version: source.version, filename, sha512: source.sha512,
-    size: source.size, publishedAt: source.publishedAt, ...(source.schema === 2 ? { sha256: source.sha256 } : {}) };
+    size: source.size, publishedAt: source.publishedAt, ...(source.schema >= 2 ? { sha256: source.sha256 } : {}),
+    ...(source.schema === 3 ? { downloadUrl } : {}) };
 }
 
 function signedBytes(source) {
   return Buffer.from(`PALISADE-DESKTOP-RELEASE-V${source.schema}\n` + JSON.stringify(normalisePayload(source)), 'utf8');
 }
 
-function verifyEnvelope(envelope, publicKeyPem) {
-  if (!plainObject(envelope) || Object.keys(envelope).sort().join(',') !== 'payload,signature') {
+function verifyEnvelope(envelope, publicKeyPem, installedTransitions = []) {
+  const modern = envelope?.payload?.schema === 3;
+  if (!modern && installedTransitions.length) throw new Error('Legacy envelopes cannot reset signing-key history.');
+  if (!plainObject(envelope) || Object.keys(envelope).sort().join(',') !== (modern ? 'payload,signature,transitions' : 'payload,signature')) {
     throw new Error('Invalid signed release envelope.');
   }
   const payload = normalisePayload(envelope.payload);
@@ -99,7 +106,12 @@ function verifyEnvelope(envelope, publicKeyPem) {
     throw new Error('Release manifest signature is missing.');
   }
   const signature = Buffer.from(envelope.signature, 'base64');
-  const key = publicKeyPem?.type === 'public' ? publicKeyPem : createPublicKey(publicKeyPem);
+  if (modern) {
+    resolveTrust(publicKeyPem, installedTransitions, payload.version);
+    requireTrustedPrefix(envelope.transitions, installedTransitions);
+  }
+  const key = modern ? resolveTrust(publicKeyPem, envelope.transitions, payload.version) :
+    (publicKeyPem?.type === 'public' ? publicKeyPem : createPublicKey(publicKeyPem));
   if (key.asymmetricKeyType !== 'ed25519' || signature.length !== 64 ||
       !verify(null, signedBytes(payload), key, signature)) {
     throw new Error('Release manifest signature verification failed.');
@@ -125,7 +137,7 @@ async function readLimited(response, maximum) {
 
 function releaseAssetUrl(version, filename) {
   parseVersion(version);
-  if (!['release.json', 'release-v2.json', `Palisade-Setup-${version}-x64.exe`].includes(filename)) {
+  if (!['release.json', 'release-v2.json', 'release-v3.json', `Palisade-Setup-${version}-x64.exe`].includes(filename)) {
     throw new Error('Unrecognized release asset.');
   }
   return `${RELEASE_BASE}v${version}/${filename}`;
@@ -177,13 +189,13 @@ async function findLatestRelease(fetchFn = fetch, details = false) {
   return details ? { version, notes: typeof info.body === 'string' ? info.body.slice(0, 8000) : '' } : version;
 }
 
-async function fetchRelease(fetchFn, publicKeyPem, installedVersion) {
+async function fetchRelease(fetchFn, publicKeyPem, installedVersion, installedTransitions = []) {
   const { version, notes } = await findLatestRelease(fetchFn, true);
   if (compareVersions(version, installedVersion) <= 0) return null;
-  const response = await fetchAsset(releaseAssetUrl(version, 'release-v2.json'), { fetchFn });
+  const response = await fetchAsset(releaseAssetUrl(version, 'release-v3.json'), { fetchFn });
   const envelope = await readLimited(response, MANIFEST_BYTES_LIMIT);
-  const payload = verifyEnvelope(envelope, publicKeyPem);
-  if (payload.schema !== 2) throw new Error('SHA-256 signed manifest required.');
+  const payload = verifyEnvelope(envelope, publicKeyPem, installedTransitions);
+  if (payload.schema !== 3) throw new Error('Signed location and rotation-aware manifest required.');
   if (payload.version !== version || compareVersions(payload.version, installedVersion) <= 0) {
     throw new Error('Signed manifest version differs from the GitHub release.');
   }
@@ -204,7 +216,7 @@ async function verifyDownloadedFile(filename, manifest) {
   const actual = hash.digest();
   const expected = Buffer.from(manifest.sha512, 'base64');
   return actual.length === expected.length && timingSafeEqual(actual, expected) &&
-    (manifest.schema !== 2 || sha256.digest('hex') === manifest.sha256);
+    (manifest.schema < 2 || sha256.digest('hex') === manifest.sha256);
 }
 
 module.exports = {

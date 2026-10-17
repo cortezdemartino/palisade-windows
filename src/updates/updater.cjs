@@ -97,7 +97,8 @@ function createUpdateController(getWindow, onStatus = () => {}) {
     try {
       await initialized;
       const key = await readFile(PUBLIC_KEY_PATH, 'utf8');
-      const manifest = await fetchRelease(fetch, key, app.getVersion());
+      const transitions = JSON.parse(await readFile(path.join(__dirname, '../../assets/update-key-transitions.json'), 'utf8'));
+      const manifest = await fetchRelease(fetch, key, app.getVersion(), transitions);
       if (!manifest) {
         status('Updates: up to date');
         if (manual) await notify({ type: 'info', message: 'Palisade Desktop is up to date.', buttons: ['OK'] });

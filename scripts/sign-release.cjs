@@ -1,8 +1,10 @@
 'use strict';
 const { readFileSync, writeFileSync, statSync } = require('node:fs');
-const { createHash, sign, createPrivateKey, createPublicKey } = require('node:crypto');
+const { createHash, sign, createPublicKey } = require('node:crypto');
 const path = require('node:path');
 const { signedBytes, normalisePayload, verifyEnvelope } = require('../src/updates/release.cjs');
+const { resolveTrust } = require('../src/updates/key-trust.cjs');
+const { loadPrivateKey } = require('./signing-key.cjs');
 
 const keyFile = process.env.PALISADE_UPDATE_PRIVATE_KEY_FILE;
 const installer = process.argv[2];
@@ -20,19 +22,30 @@ const payload = normalisePayload({ schema: 1, channel: 'stable', version: pkg.ve
   sha512: createHash('sha512').update(data).digest('base64'),
   publishedAt: new Date().toISOString(),
 });
-const privateKey = createPrivateKey(readFileSync(keyFile));
-if (privateKey.asymmetricKeyType !== 'ed25519') throw new Error('Expected an Ed25519 private key.');
+const privateKey = loadPrivateKey(keyFile);
 const trusted = createPublicKey(readFileSync(path.resolve('assets/update-public-key.pem')));
-if (!privateKey.asymmetricKeyType || !trusted.equals(createPublicKey(privateKey))) {
-  throw new Error('Release private key does not match the client-pinned public key.');
+const transitions = JSON.parse(readFileSync(path.resolve('assets/update-key-transitions.json'), 'utf8'));
+const active = resolveTrust(trusted, transitions, pkg.version);
+if (!active.equals(createPublicKey(privateKey))) {
+  throw new Error('Signing key is not authorized by the pinned key and packaged transitions.');
 }
-const signature = sign(null, signedBytes(payload), privateKey).toString('base64');
+const legacyKey = process.env.PALISADE_UPDATE_LEGACY_PRIVATE_KEY_FILE
+  ? loadPrivateKey(process.env.PALISADE_UPDATE_LEGACY_PRIVATE_KEY_FILE) : privateKey;
+if (legacyKey.asymmetricKeyType !== 'ed25519' || !trusted.equals(createPublicKey(legacyKey))) {
+  throw new Error('The original private key is required for clients that still trust the original key.');
+}
+const signature = sign(null, signedBytes(payload), legacyKey).toString('base64');
 const dest = path.join(outputDir, 'release.json');
-writeFileSync(dest, JSON.stringify({ payload, signature }, null, 2) + '\n', { flag: 'w' });
 const modern = normalisePayload({ ...payload, schema: 2, sha256: createHash('sha256').update(data).digest('hex') });
-const envelope = { payload: modern, signature: sign(null, signedBytes(modern), privateKey).toString('base64') };
+const envelope = { payload: modern, signature: sign(null, signedBytes(modern), legacyKey).toString('base64') };
+const current = normalisePayload({ ...modern, schema: 3,
+  downloadUrl: require('../src/updates/release.cjs').releaseAssetUrl(pkg.version, payload.filename) });
+const currentEnvelope = { payload: current, signature: sign(null, signedBytes(current), privateKey).toString('base64'), transitions };
 verifyEnvelope(envelope, trusted);
 verifyEnvelope({ payload, signature }, trusted);
+verifyEnvelope(currentEnvelope, trusted, transitions);
+writeFileSync(dest, JSON.stringify({ payload, signature }, null, 2) + '\n', { flag: 'w' });
 writeFileSync(path.join(outputDir, 'release-v2.json'), JSON.stringify(envelope, null, 2) + '\n');
+writeFileSync(path.join(outputDir, 'release-v3.json'), JSON.stringify(currentEnvelope, null, 2) + '\n');
 writeFileSync(path.join(outputDir, 'SHA256SUMS'), `${modern.sha256}  ${modern.filename}\n`);
 console.log(`Signed manifest: ${dest}`);
