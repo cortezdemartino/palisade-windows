@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('desktopControls', {
   microphoneSettings: () => ipcRenderer.send('palisade:window-control', 'microphone-settings'),
   copyDiagnostics: () => ipcRenderer.send('palisade:window-control', 'copy-diagnostics'),
   reloadClient: () => ipcRenderer.send('palisade:window-control', 'reload-client'),
+  checkForUpdates: () => ipcRenderer.send('palisade:window-control', 'check-updates'),
   openUpdates: () => ipcRenderer.send('palisade:window-control', 'updates'),
   minimize: () => ipcRenderer.send('palisade:window-control', 'minimize'),
   maximize: () => ipcRenderer.send('palisade:window-control', 'maximize'),
@@ -19,6 +20,7 @@ contextBridge.exposeInMainWorld('desktopControls', {
       if (typeof state?.maximized === 'boolean') callback({ maximized: state.maximized, settingsOpen: state.settingsOpen === true,
         keepRunningInTray: state.keepRunningInTray === true, launchOnLogin: state.launchOnLogin === true,
         loginAvailable: state.loginAvailable === true, version: typeof state.version === 'string' ? state.version.slice(0, 64) : '',
+        notificationStatus: typeof state.notificationStatus === 'string' ? state.notificationStatus.slice(0, 200) : '',
         updateStatus: typeof state.updateStatus === 'string' ? state.updateStatus.slice(0, 160) : '' });
     };
     ipcRenderer.on('palisade:window-state', listener);

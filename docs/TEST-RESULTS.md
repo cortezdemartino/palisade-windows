@@ -54,3 +54,9 @@ The operator confirmed that all previous manual installations were uninstalled a
 The Windows client passes 34 automated tests, including manager dependency substitution, signed releases, downloads, IPC boundaries, settings actions, diagnostics and session/data preservation contracts. The source Windows UI smoke check passes with the release file-protocol restriction. The companion manager passes 40 tests and its packaged-source/public-key check. The production dependency audit reports zero vulnerabilities.
 
 Windows packaging, packaged-archive UI verification, signed release artifact verification and hosted workflow results are checked again for the final commit. Interactive NSIS installation, an authenticated-session migration, native banner delivery and a real 0.2.0 to 0.2.1 upgrade have not been executed for this candidate. No passing result is claimed for those checks.
+
+## Version 0.2.4 verification scope
+
+The client passes 43 automated tests, including virtual-clock polling and retry schedules, authenticated update offers, cancellation, unread IPC sender validation, preview suppression, count aggregation and notification rate limiting. The Windows smoke suite now includes a real isolated preload fixture that changes unread labels, verifies baseline/read transitions and the red ring image, and verifies that no desktop bridge is exposed to the page. The source visual smoke check uses software rendering to avoid occlusion-dependent capture failures.
+
+Real-account chat arrival, physical Windows taskbar rendering, native banner display, multi-hour sleep/resume and authenticated installation upgrades still require operator checks. Fixture success is not a passing result for those checks.

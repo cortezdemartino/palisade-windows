@@ -47,6 +47,7 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
   });
   const view = new WebContentsView({ webPreferences: {
     ...SECURE_WEB_PREFERENCES, partition, javascript: true, backgroundThrottling: false,
+    preload: path.join(__dirname, 'chat-notifications-preload.cjs'),
   } });
   const controls = new WebContentsView({ webPreferences: {
     ...SECURE_WEB_PREFERENCES, partition: 'palisade-window-controls', javascript: true,
@@ -77,7 +78,7 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
         event.senderFrame !== controls.webContents.mainFrame || event.senderFrame?.url !== controlsUrl ||
         controls.webContents.getURL() !== controlsUrl) return;
     if (action === 'settings') { settingsOpen = !settingsOpen; layout(); publishState(); }
-    else if (['tray-on', 'tray-off', 'login-on', 'login-off', 'notification-test', 'updates', 'notification-settings', 'microphone-settings', 'copy-diagnostics', 'reload-client'].includes(action)) {
+    else if (['tray-on', 'tray-off', 'login-on', 'login-off', 'notification-test', 'updates', 'notification-settings', 'microphone-settings', 'copy-diagnostics', 'reload-client', 'check-updates'].includes(action)) {
       onDeviceAction(action); publishState();
     }
     else if (action === 'minimize') window.minimize();
@@ -105,6 +106,6 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
   });
   void window.loadURL(controlsUrl);
   void controls.webContents.loadURL(controlsUrl);
-  return { window, contents: view.webContents };
+  return { window, contents: view.webContents, refreshSettings: publishState };
 }
 module.exports = { createDesktopWindow, CONTROLS_WIDTH, CONTROLS_HEIGHT };

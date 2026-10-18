@@ -4,6 +4,7 @@ const { app, clipboard, dialog, Menu, nativeImage, Notification, session, shell,
 const path = require('node:path');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
+const { installChatNotifications } = require('./chat-notifications.cjs');
 const { createDesktopWindow } = require('./desktop-window.cjs');
 const {
   PALISADE_URL,
@@ -13,13 +14,14 @@ const {
   mayGrantPermission,
 } = require('./security-policy.cjs');
 
-// The hosted client has no preload, privileged IPC bridge, or local HTTP server.
+// The hosted client has only a one-way unread observer, with no page-accessible IPC bridge.
 // Only the isolated local window-controls view has a narrowly scoped control bridge.
 // The web client remains responsible for Matrix auth, Rust cryptography, and E2EE.
 const PARTITION = 'persist:palisade-desktop';
 const ICON = path.join(__dirname, '..', 'assets', 'icon.ico');
 let window = null;
 let mainContents = null;
+let refreshDeviceSettings = null;
 let trayNoticeShown = false;
 const activeNotifications = new Set();
 let tray = null;
@@ -28,6 +30,7 @@ let quitting = false;
 let lastExternalPromptAt = 0;
 let updaterController = null;
 let updateStatus = 'Updates: idle';
+let notificationStatus = 'No desktop notifications sent yet.';
 
 app.setName('Palisade');
 if (process.platform === 'win32') app.setAppUserModelId('org.onyxops.palisade');
@@ -63,7 +66,9 @@ if (!app.requestSingleInstanceLock()) {
       updateStatus = status;
       updateTrayMenu();
       createApplicationMenu();
-    });
+      refreshDeviceSettings?.();
+    }, { onAvailable: (manifest, openManager) => notifyDesktop(
+      'Palisade ' + manifest.version + ' is available. Open the update manager to install it.', openManager) });
     createApplicationMenu();
     updaterController.start();
   });
@@ -114,7 +119,7 @@ function createMainWindow(profile) {
   const icon = nativeImage.createFromPath(ICON);
   const desktop = createDesktopWindow({ partition: PARTITION, icon,
     onSettings: () => ({ keepRunningInTray, launchOnLogin: app.getLoginItemSettings().openAtLogin,
-      loginAvailable: app.isPackaged, version: app.getVersion(), updateStatus }),
+      loginAvailable: app.isPackaged, version: app.getVersion(), updateStatus, notificationStatus }),
     onDeviceAction: (action) => {
       try {
       if (action === 'tray-on' || action === 'tray-off') trayPreferenceItem().click({ checked: action === 'tray-on' });
@@ -131,14 +136,17 @@ function createMainWindow(profile) {
           'Launch on login: ' + app.getLoginItemSettings().openAtLogin, updateStatus,
         ].join('\n'));
       } else if (action === 'reload-client') mainContents?.reload();
-      else if (action === 'updates') void updaterController?.check(true);
+      else if (action === 'updates') void updaterController?.openManager();
+      else if (action === 'check-updates') void updaterController?.check(true);
       } catch {
         void dialog.showMessageBox(window, { type: 'error', message: 'The device setting could not be applied. Try again.', buttons: ['OK'] });
       }
     },
   });
+  refreshDeviceSettings = desktop.refreshSettings;
   window = desktop.window;
   const contents = mainContents = desktop.contents;
+  installChatNotifications(window, contents, { notify: notifyDesktop, openWindow });
   contents.setWindowOpenHandler(({ url }) => {
     if (isPalisadeUrl(url)) {
       // In-app enrollment and verification links remain in the one trusted window.
@@ -184,6 +192,7 @@ function createMainWindow(profile) {
   window.on('closed', () => {
     window = null;
     mainContents = null;
+    refreshDeviceSettings = null;
   });
 
   // No production override or insecure localhost URL is allowed by this build.
@@ -221,13 +230,14 @@ function openWindow() {
   mainContents?.focus();
 }
 
-function notifyDesktop(body) {
-  if (!Notification.isSupported()) return;
+function notifyDesktop(body, onClick = openWindow) {
+  if (!Notification.isSupported()) { notificationStatus = 'Desktop notifications are unavailable on this Windows session.'; refreshDeviceSettings?.(); return; }
   const notification = new Notification({ title: 'Palisade', body, icon: ICON, silent: false });
   activeNotifications.add(notification);
-  notification.on('click', openWindow);
+  notification.on('click', onClick);
   notification.on('close', () => activeNotifications.delete(notification));
-  notification.on('failed', () => activeNotifications.delete(notification));
+  notification.on('show', () => { notificationStatus = 'Windows accepted the last notification.'; refreshDeviceSettings?.(); });
+  notification.on('failed', () => { activeNotifications.delete(notification); notificationStatus = 'Windows could not display the notification. Check Windows notification settings.'; refreshDeviceSettings?.(); });
   notification.show();
 }
 
@@ -275,7 +285,10 @@ function updateTrayMenu() {
       { label: 'Send test notification', click: () => notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.') },
       { label: updateStatus, enabled: false },
       {
-        label: 'Open Installer & Update Manager', click: () => void updaterController?.check(true),
+        label: 'Check for Updates', click: () => void updaterController?.check(true),
+      },
+      {
+        label: 'Open Installer & Update Manager', click: () => void updaterController?.openManager(),
       },
       { type: 'separator' },
       {
@@ -297,7 +310,8 @@ function createApplicationMenu() {
         submenu: [
           { label: updateStatus, enabled: false },
           { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => mainContents?.reload() },
-          { label: 'Open Installer & Update Manager', click: () => void updaterController?.check(true) },
+          { label: 'Check for Updates', click: () => void updaterController?.check(true) },
+          { label: 'Open Installer & Update Manager', click: () => void updaterController?.openManager() },
           trayPreferenceItem(),
           { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged,
             checked: app.getLoginItemSettings().openAtLogin,

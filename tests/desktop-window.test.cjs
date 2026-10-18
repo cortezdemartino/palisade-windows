@@ -48,7 +48,7 @@ test('floating Tabler controls reserve no top bar and reject untrusted window co
   assert.equal(owner.options.webPreferences.javascript, false);
   assert.equal(view.options.webPreferences.partition, 'persist:palisade-desktop');
   assert.equal(view.options.webPreferences.backgroundThrottling, false);
-  assert.equal(view.options.webPreferences.preload, undefined);
+  assert.match(view.options.webPreferences.preload, /chat-notifications-preload\.cjs$/);
   assert.match(controls.options.webPreferences.preload, /window-controls-preload\.cjs$/);
   for (const prefs of [owner.options.webPreferences, view.options.webPreferences, controls.options.webPreferences]) {
     assert.equal(prefs.sandbox, true); assert.equal(prefs.contextIsolation, true); assert.equal(prefs.nodeIntegration, false);
@@ -97,7 +97,7 @@ test('local preload exposes only fixed controls and strips Electron events from 
   ipcRenderer.send = (...args) => sent.push(args);
   const context = { require: () => ({ ipcRenderer, contextBridge: { exposeInMainWorld: (name, value) => { assert.equal(name, 'desktopControls'); bridge = value; } } }) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/window-controls-preload.cjs'), 'utf8'), context);
-  assert.equal(Object.keys(bridge).sort().join(','), 'close,copyDiagnostics,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,setLogin,setTray,settings,testNotification');
+  assert.equal(Object.keys(bridge).sort().join(','), 'checkForUpdates,close,copyDiagnostics,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,setLogin,setTray,settings,testNotification');
   bridge.minimize(); bridge.maximize(); bridge.close();
   assert.equal(sent.map((args) => args[1]).join(','), 'minimize,maximize,close');
   const received = []; const unsubscribe = bridge.onState((...args) => received.push(args));
@@ -126,6 +126,7 @@ test('tray close keeps the session alive, notification click restores the app, a
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'), process: { platform: 'win32', arch: 'x64', versions: { electron: '44.7.2' } }, require(name) {
     if (name === 'electron') return electron;
     if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote }; } };
+    if (name === './chat-notifications.cjs') return { installChatNotifications() {} };
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {} }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');

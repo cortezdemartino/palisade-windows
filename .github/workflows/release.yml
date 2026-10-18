@@ -164,6 +164,6 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed.' }
             gh release edit $tag --draft=false --latest
           } else {
-            gh release create $tag "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/release-v3.json" "out/SHA256SUMS" (Join-Path 'out' $manager.filename) --title "Palisade Desktop v$version" --notes-file docs/RELEASE-0.2.3.md --verify-tag
+            gh release create $tag "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/release-v3.json" "out/SHA256SUMS" (Join-Path 'out' $manager.filename) --title "Palisade Desktop v$version" --notes-file "docs/RELEASE-$version.md" --verify-tag
           }
           if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

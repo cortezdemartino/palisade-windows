@@ -1,5 +1,7 @@
 'use strict';
 const { app } = require('electron');
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 const assert = require('node:assert/strict');
 const fs = require('node:fs/promises');
 const syncFs = require('node:fs');
@@ -15,10 +17,16 @@ const deadline = setTimeout(() => { syncFs.writeFileSync(resultFile, JSON.string
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const deviceActions = [];
-  const desktop = createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.3', loginAvailable: true }), onDeviceAction: action => deviceActions.push(action), partition: 'tabler-controls-smoke', icon: undefined });
+  const desktop = createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.4', loginAvailable: true }), onDeviceAction: action => deviceActions.push(action), partition: 'tabler-controls-smoke', icon: undefined });
   owner = desktop.window;
   const remote = desktop.contents;
   const controls = owner.contentView.children[1].webContents;
+  const captureControls = async (rect) => {
+    for (let attempt = 0; ; attempt++) {
+      try { return await controls.capturePage(rect, { stayAwake: true }); }
+      catch (error) { if (attempt === 2) throw error; await pause(250); }
+    }
+  };
   await new Promise((resolve, reject) => { controls.once('did-finish-load', resolve); controls.once('did-fail-load', (_e, _c, text) => reject(new Error(text))); });
   await remote.loadURL('data:text/html,<html><body style="background:%230d0f14">Palisade layout fixture</body></html>');
   assert.equal(await remote.executeJavaScript('typeof window.desktopControls'), 'undefined');
@@ -28,7 +36,7 @@ app.whenReady().then(async () => {
   assert.equal(owner.contentView.children[0].getBounds().height, 700);
   owner.showInactive(); await pause(500);
   for (const button of ['settings', 'minimize', 'maximize', 'close']) {
-    const capture = await controls.capturePage(await controls.executeJavaScript(`(() => { const r=document.getElementById('${button}').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`));
+    const capture = await captureControls(await controls.executeJavaScript(`(() => { const r=document.getElementById('${button}').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`));
     const pixels = capture.toBitmap();
     assert.ok(pixels.some((value, index) => index % 4 === 3 && value > 0), `${button} must draw visible pixels`);
   }
@@ -45,16 +53,18 @@ app.whenReady().then(async () => {
   await pause(100);
   assert.equal(deviceActions.at(-1), 'notification-settings');
   await controls.executeJavaScript("document.querySelector('[data-section=about]').click()");
+  await controls.executeJavaScript("document.getElementById('check-updates').click()");
+  await pause(100); assert.equal(deviceActions.at(-1), 'check-updates');
   await controls.executeJavaScript("document.getElementById('copy-diagnostics').click()");
   await pause(100);
   assert.equal(deviceActions.at(-1), 'copy-diagnostics');
   await controls.executeJavaScript("document.querySelector('[data-section=general]').click()");
   await pause(180);
-  await fs.writeFile(path.join(__dirname, '../out/device-settings.png'), (await controls.capturePage()).toPNG());
+  await fs.writeFile(path.join(__dirname, '../out/device-settings.png'), (await captureControls()).toPNG());
   await controls.executeJavaScript("document.getElementById('dismiss-settings').click()");
   await pause(100);
   assert.equal(await controls.executeJavaScript("document.getElementById('device-settings').hidden"), true);
-  const normalCapture = await controls.capturePage();
+  const normalCapture = await captureControls();
   const bitmap = normalCapture.toBitmap();
   let visiblePixels = 0;
   for (let i = 3; i < bitmap.length; i += 4) if (bitmap[i] > 0) visiblePixels++;
@@ -69,7 +79,7 @@ app.whenReady().then(async () => {
     await inspect.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['hover'] });
     await pause(160);
     assert.equal(await controls.executeJavaScript(`getComputedStyle(document.querySelector('${selector}')).color`), expected);
-    await fs.writeFile(path.join(__dirname, '../out', filename), (await controls.capturePage()).toPNG());
+    await fs.writeFile(path.join(__dirname, '../out', filename), (await captureControls()).toPNG());
     await inspect.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
   }
   inspect.detach();

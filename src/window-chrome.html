@@ -93,7 +93,7 @@
     <div id="section-general" class="settings-section">
       <label class="setting"><span>Keep running in the tray<small>Stay available when minimized or closed.</small></span><input id="tray-setting" type="checkbox"></label>
       <label class="setting"><span>Launch on login<small>Open Palisade when you sign in to Windows.</small></span><input id="login-setting" type="checkbox"></label>
-      <div class="setting"><span>Notification test<small>Send a native Windows notification.</small></span><button class="action" id="test-notification">Send test</button></div>
+      <div class="setting"><span>Notification test<small><span id="notification-status">Send a native Windows notification.</span></small></span><button class="action" id="test-notification">Send test</button></div>
       <p class="hint">Changes apply immediately. Message alerts also depend on your Palisade conversation preferences.</p>
     </div>
     <div id="section-permissions" class="settings-section" hidden>
@@ -103,10 +103,10 @@
       <p class="hint">This panel does not grant Windows permissions or change your account settings.</p>
     </div>
     <div id="section-about" class="settings-section" hidden>
-      <div class="setting"><span>Stable updates<small id="update-status"></small></span><button class="action" id="open-updates">Open manager</button></div>
+      <div class="setting"><span>Stable updates<small id="update-status"></small></span><div class="update-actions"><button class="action" id="check-updates">Check now</button><button class="action" id="open-updates">Open manager</button></div></div>
       <div class="setting"><span>Reload Palisade<small>Reload the page if the connection is interrupted.</small></span><button class="action" id="reload-client">Reload</button></div>
       <div class="setting"><span>Support diagnostics<small>Copy app and system versions, tray and login settings, and update status. No account or message data.</small></span><button class="action" id="copy-diagnostics">Copy</button></div>
-      <p class="hint">Signed updates keep this device’s local session and application data. The manager asks before closing Palisade.</p>
+      <p class="hint">Checks run at startup, every six hours, and after an overdue wake. Signed updates keep this device’s local session and application data. The manager asks before closing Palisade.</p>
     </div>
     <p id="settings-feedback" role="status" aria-live="polite"></p>
     <footer>Version <span id="device-version"></span></footer>

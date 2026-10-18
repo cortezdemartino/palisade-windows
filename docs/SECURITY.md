@@ -4,7 +4,7 @@ The Windows client is a desktop wrapper around the official Palisade web applica
 
 ## Desktop boundary
 
-The Electron renderer is sandboxed, runs without Node integration or a preload bridge, and can navigate only within `https://palisade.onyxops.org`. External HTTPS links require confirmation before opening in the system browser. Non-HTTPS schemes, camera access, screen capture and privileged device APIs are blocked. Standard TLS validation remains enabled.
+The Electron renderer is sandboxed, runs without Node integration or a page-accessible preload bridge, and can navigate only within `https://palisade.onyxops.org`. External HTTPS links require confirmation before opening in the system browser. Non-HTTPS schemes, camera access, screen capture and privileged device APIs are blocked. Standard TLS validation remains enabled.
 
 The desktop client uses its own persistent browser partition. It does not use Windows DPAPI or the TPM to independently protect Matrix tokens or cryptographic material. Signing out or revoking a session remains essential after device loss.
 
@@ -33,4 +33,10 @@ The installer helper repeats SHA-256 verification after the application exits. I
 
 Version 0.2.2 requires a v3 envelope binding the SHA-256 and exact GitHub download URL. It authenticates successor keys through predecessor-signed transitions, enforces activation versions and retains the packaged transition history as an append-only floor. An old envelope cannot bypass this requirement. Root-key loss and compromise need the recovery procedures in [UPDATE-SIGNING.md](UPDATE-SIGNING.md).
 
-Custom window controls are rendered in a separate, local, sandboxed WebContentsView. Its isolated preload exposes only minimize, maximize/restore, close and sanitized window-state updates. The main process validates the exact sender, main frame, local file URL and action before handling a command. The hosted Palisade view has no preload or privileged control bridge. Local control views cannot request device permissions or navigate externally.
+Custom window controls are rendered in a separate, local, sandboxed WebContentsView. Its isolated preload exposes only minimize, maximize/restore, close and sanitized window-state updates. The main process validates the exact sender, main frame, local protocol URL and action before handling a command. The hosted view has an isolated, one-way unread observer with no page-accessible privileged bridge. Local control views cannot request device permissions or navigate externally.
+
+## Version 0.2.4 behavior
+
+The client polls release metadata through the existing v3 verifier, including pinned-key/transition checks and stable-version comparison. It never downloads or starts an installer during a poll. Downloads and installation remain in the confirmed manager workflow, which rechecks its signed metadata and installer. Timer cleanup aborts pending checks on shutdown. The older internal installer-helper description above does not describe the current manager handoff.
+
+The remote preload reads only rendered workspace/direct-message unread labels. It exposes no functions to the web page and reads no browser storage, credentials, message text or Matrix APIs. Its one-way IPC accepts bounded counts only from the exact hosted main frame at the Palisade origin. Preview/invitation counts are ignored; initial synchronization is silent. The main process owns the icon and rate-limited generic notifications. Read-only DOM observation requires no website, backend or Matrix changes.

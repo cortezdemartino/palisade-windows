@@ -37,3 +37,5 @@ button.tab.selected { color: #b9d8ff; background: #22354c; }
 .settings-section[hidden] { display: none; }
 .hint { color: #9aa8ba; font-size: 11px; line-height: 1.6; margin: 14px 0 0; }
 #settings-feedback { min-height: 16px; margin: 12px 0 0; color: #a9cfff; font-size: 11px; }
+
+.update-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }

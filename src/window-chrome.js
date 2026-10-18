@@ -10,6 +10,7 @@ if (controls) {
   document.getElementById('tray-setting').addEventListener('change', (event) => controls.setTray(event.target.checked));
   document.getElementById('login-setting').addEventListener('change', (event) => controls.setLogin(event.target.checked));
   document.getElementById('test-notification').addEventListener('click', () => controls.testNotification());
+  document.getElementById('check-updates').addEventListener('click', () => controls.checkForUpdates());
   document.getElementById('open-updates').addEventListener('click', () => controls.openUpdates());
   const feedback = document.getElementById('settings-feedback');
   document.querySelectorAll('[data-section]').forEach((tab) => tab.addEventListener('click', () => {
@@ -35,6 +36,7 @@ if (controls) {
     document.getElementById('login-setting').disabled = !state.loginAvailable;
     document.getElementById('device-version').textContent = state.version;
     document.getElementById('update-status').textContent = state.updateStatus;
+    document.getElementById('notification-status').textContent = state.notificationStatus;
     const button = document.getElementById('maximize');
     button.dataset.maximized = String(maximized);
     button.title = maximized ? 'Restore' : 'Maximize';
