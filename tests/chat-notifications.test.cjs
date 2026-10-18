@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { EventEmitter } = require('node:events');
-test('unread state accepts only the trusted main frame, shows the ring only in the system tray, clears on read, and throttles generic notices', () => {
+test('unread state accepts only the trusted main frame, shows the unread indicator only in the system tray, clears on read, and throttles generic notices', () => {
   const ipcMain = new EventEmitter(), notices = [], icons = [], trayIcons = [], flashes = [];
   let focused = false;
   let clock = 0;

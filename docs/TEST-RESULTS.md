@@ -74,3 +74,7 @@ Windows x64 packaging and packaged-archive window/chat smoke checks passed. Loca
 ## Version 0.2.7
 
 45 automated tests and Windows x64 packaging passed. Rebuilt PNG/ICO artwork was visually inspected with white shield markings. Packaged window/chat smoke checks passed on rerun after an unread-state timing assertion failed once. Local signed manifests and installer digests verified. Physical shell artwork remains an operator check.
+
+## Version 0.2.8
+
+45 automated tests and Windows x64 packaging passed. Visually inspected enlarged icons and bright red unread markings without a ring. Packaged window/chat checks passed after replacing short fixed unread waits with bounded state polling. Local release signatures and installer digests verified. Physical shell rendering remains an operator check.
