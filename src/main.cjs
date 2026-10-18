@@ -1,9 +1,10 @@
 'use strict';
 
-const { app, BrowserWindow, dialog, Menu, nativeImage, session, shell, Tray } = require('electron');
+const { app, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
 const path = require('node:path');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
+const { createDesktopWindow } = require('./desktop-window.cjs');
 const {
   PALISADE_URL,
   PALISADE_ORIGIN,
@@ -12,11 +13,15 @@ const {
   mayGrantPermission,
 } = require('./security-policy.cjs');
 
-// There is intentionally no preload, IPC interface, Node bridge, or local HTTP server.
+// The hosted client has no preload, privileged IPC bridge, or local HTTP server.
+// Only the isolated local window-controls view has a narrowly scoped control bridge.
 // The web client remains responsible for Matrix auth, Rust cryptography, and E2EE.
 const PARTITION = 'persist:palisade-desktop';
 const ICON = path.join(__dirname, '..', 'assets', 'icon.ico');
 let window = null;
+let mainContents = null;
+let trayNoticeShown = false;
+const activeNotifications = new Set();
 let tray = null;
 let keepRunningInTray = false;
 let quitting = false;
@@ -35,6 +40,7 @@ if (!app.requestSingleInstanceLock()) {
     window.show();
     if (window.isMinimized()) window.restore();
     window.focus();
+    mainContents?.focus();
   });
 
   app.on('before-quit', () => {
@@ -72,7 +78,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function isMainContents(webContents) {
-  return Boolean(window && webContents === window.webContents);
+  return Boolean(window && webContents === mainContents);
 }
 
 function trustedRequester(webContents, details) {
@@ -106,33 +112,33 @@ function installSessionPolicy(profile) {
 
 function createMainWindow(profile) {
   const icon = nativeImage.createFromPath(ICON);
-  window = new BrowserWindow({
-    title: 'Palisade',
-    width: 1240,
-    height: 780,
-    minWidth: 780,
-    minHeight: 540,
-    backgroundColor: '#0d0f14',
-    icon,
-    show: false,
-    autoHideMenuBar: true,
-    webPreferences: {
-      partition: PARTITION,
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      nodeIntegrationInWorker: false,
-      webSecurity: true,
-      allowRunningInsecureContent: false,
-      webviewTag: false,
-      javascript: true,
-      spellcheck: false,
-      devTools: false,
-      backgroundThrottling: true,
+  const desktop = createDesktopWindow({ partition: PARTITION, icon,
+    onSettings: () => ({ keepRunningInTray, launchOnLogin: app.getLoginItemSettings().openAtLogin,
+      loginAvailable: app.isPackaged, version: app.getVersion(), updateStatus }),
+    onDeviceAction: (action) => {
+      try {
+      if (action === 'tray-on' || action === 'tray-off') trayPreferenceItem().click({ checked: action === 'tray-on' });
+      else if ((action === 'login-on' || action === 'login-off') && app.isPackaged) {
+        app.setLoginItemSettings({ openAtLogin: action === 'login-on' }); createApplicationMenu();
+      } else if (action === 'notification-test') notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.');
+      else if (action === 'notification-settings' || action === 'microphone-settings') {
+        void shell.openExternal(action === 'notification-settings' ? 'ms-settings:notifications' : 'ms-settings:privacy-microphone')
+          .catch(() => dialog.showMessageBox(window, { type: 'error', message: 'Windows settings could not be opened.', buttons: ['OK'] }));
+      } else if (action === 'copy-diagnostics') {
+        clipboard.writeText([
+          'Palisade ' + app.getVersion(), 'Windows desktop · ' + process.platform + ' ' + process.arch,
+          'Electron ' + process.versions.electron, 'Tray: ' + keepRunningInTray,
+          'Launch on login: ' + app.getLoginItemSettings().openAtLogin, updateStatus,
+        ].join('\n'));
+      } else if (action === 'reload-client') mainContents?.reload();
+      else if (action === 'updates') void updaterController?.check(true);
+      } catch {
+        void dialog.showMessageBox(window, { type: 'error', message: 'The device setting could not be applied. Try again.', buttons: ['OK'] });
+      }
     },
   });
-
-  const contents = window.webContents;
+  window = desktop.window;
+  const contents = mainContents = desktop.contents;
   contents.setWindowOpenHandler(({ url }) => {
     if (isPalisadeUrl(url)) {
       // In-app enrollment and verification links remain in the one trusted window.
@@ -165,18 +171,19 @@ function createMainWindow(profile) {
     }
   });
 
-  window.once('ready-to-show', () => window?.show());
+  window.once('ready-to-show', () => { window?.show(); mainContents?.focus(); });
   window.on('minimize', () => {
-    if (keepRunningInTray) window?.hide();
+    if (keepRunningInTray) hideToTray();
   });
   window.on('close', (event) => {
     if (!quitting && keepRunningInTray) {
       event.preventDefault();
-      window?.hide();
+      hideToTray();
     }
   });
   window.on('closed', () => {
     window = null;
+    mainContents = null;
   });
 
   // No production override or insecure localhost URL is allowed by this build.
@@ -211,6 +218,25 @@ function openWindow() {
   if (window.isMinimized()) window.restore();
   window.show();
   window.focus();
+  mainContents?.focus();
+}
+
+function notifyDesktop(body) {
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({ title: 'Palisade', body, icon: ICON, silent: false });
+  activeNotifications.add(notification);
+  notification.on('click', openWindow);
+  notification.on('close', () => activeNotifications.delete(notification));
+  notification.on('failed', () => activeNotifications.delete(notification));
+  notification.show();
+}
+
+function hideToTray() {
+  window?.hide();
+  if (!trayNoticeShown) {
+    trayNoticeShown = true;
+    notifyDesktop('Palisade is still running in the tray. Messages and notifications remain available.');
+  }
 }
 
 function createTray() {
@@ -221,29 +247,35 @@ function createTray() {
   updateTrayMenu();
 }
 
+function trayPreferenceItem() {
+  return {
+  label: 'Minimize and close to tray',
+  type: 'checkbox',
+  checked: keepRunningInTray,
+  click: (item) => {
+    try {
+      saveSettings(app.getPath('userData'), { keepRunningInTray: item.checked });
+      keepRunningInTray = item.checked;
+    } catch {
+      void dialog.showMessageBox({ type: 'error', message: 'Could not save desktop settings.', buttons: ['OK'] });
+    }
+    updateTrayMenu();
+    createApplicationMenu();
+  },
+      };
+}
+
 function updateTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Palisade', click: openWindow },
-      {
-        label: 'Minimize and close to tray',
-        type: 'checkbox',
-        checked: keepRunningInTray,
-        click: (item) => {
-          try {
-            saveSettings(app.getPath('userData'), { keepRunningInTray: item.checked });
-            keepRunningInTray = item.checked;
-          } catch {
-            void dialog.showMessageBox({ type: 'error', message: 'Could not save desktop settings.', buttons: ['OK'] });
-          }
-          updateTrayMenu();
-        },
-      },
+      trayPreferenceItem(),
       { type: 'separator' },
+      { label: 'Send test notification', click: () => notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.') },
       { label: updateStatus, enabled: false },
       {
-        label: 'Check for updates', click: () => void updaterController?.check(true),
+        label: 'Open Installer & Update Manager', click: () => void updaterController?.check(true),
       },
       { type: 'separator' },
       {
@@ -264,8 +296,9 @@ function createApplicationMenu() {
         label: 'Palisade',
         submenu: [
           { label: updateStatus, enabled: false },
-          { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => window?.webContents.reload() },
-          { label: 'Check for updates', click: () => void updaterController?.check(true) },
+          { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => mainContents?.reload() },
+          { label: 'Open Installer & Update Manager', click: () => void updaterController?.check(true) },
+          trayPreferenceItem(),
           { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged,
             checked: app.getLoginItemSettings().openAtLogin,
             click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked }); createApplicationMenu(); } },
@@ -274,7 +307,7 @@ function createApplicationMenu() {
             detail: 'Windows x64 desktop client\nCopyright 2026 Onyx Operations Group\nApache-2.0. Palisade trademarks remain with their owner.', buttons: ['OK'],
           }) },
           { type: 'separator' },
-          { label: 'Quit', accelerator: 'Alt+F4', click: () => app.quit() },
+          { label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
         ],
       },
       {

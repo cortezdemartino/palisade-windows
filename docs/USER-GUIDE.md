@@ -11,9 +11,7 @@ A desktop installation creates its own Matrix device. Keep your recovery informa
 
 ## Updating
 
-Palisade checks for newer versions at startup and every six hours. Choose **Palisade > Check for updates** or use **Check for updates** from the tray icon to check manually.
-
-Download progress appears in the tray and application menus and on the taskbar. A native Windows notification announces a verified update, and the installation prompt includes release notes. Choose **Install update** to run the installer or **Later** to continue working. Save ongoing work before installing. The installer can close and replace the existing application.
+Choose **Open Installer & Update Manager** from the application or tray menu. After confirmation, Palisade opens its bundled manager outside the installation folder and exits so the manager can update or repair the installation. Cancel leaves Palisade running. The client delegates release discovery, downloads and installation to the manager; it does not schedule its own background update checks.
 
 The original test executable must be replaced manually with v0.2.2. The new signing key is established by that explicit reinstall; the older key cannot authenticate this bootstrap. See [signing and recovery](UPDATE-SIGNING.md).
 
@@ -21,7 +19,7 @@ The original test executable must be replaced manually with v0.2.2. The new sign
 
 Windows notification settings and your Palisade channel preferences both affect notifications. Experimental voice requires microphone permission in Windows and voice support on the Palisade service. Camera and screen capture are not enabled in this client.
 
-Closing the window normally exits Palisade. To keep it running in the tray, enable **Minimize and close to tray** in the tray menu. Use **Quit Palisade** to close a hidden instance.
+New profiles keep Palisade running in the tray when the window is minimized or closed. Existing saved preferences are respected. Toggle **Minimize and close to tray** in the tray menu to change this behavior. Use **Quit Palisade** or Ctrl+Q to exit completely.
 
 ## Security and recovery
 
@@ -31,6 +29,14 @@ If an update fails verification, the current version stays installed. Do not byp
 
 If a Matrix decryption or device verification problem occurs, use Palisade's Security Center and recovery process before clearing local app data.
 
-The tray preference survives restarts and applies both to minimizing and closing the window. Enable **Palisade > Launch on login** to start with Windows; it is off by default. **Palisade > About Palisade** shows the installed version. Standard edit shortcuts, Ctrl+R and Alt+F4 are available in the native menu. Website notifications use the native Electron notification integration and remain subject to Windows settings.
+The tray preference survives restarts and applies both to minimizing and closing the window. Enable **Palisade > Launch on login** to start with Windows; it is off by default. **Palisade > About Palisade** shows the installed version. Standard edit shortcuts and Ctrl+R work in the app. Alt+F4 closes to the tray when that preference is enabled; Ctrl+Q exits. Website notifications use the native Electron notification integration and remain subject to Windows settings.
 
-After choosing **Later**, check for updates again to reopen the install prompt. Restarting Palisade removes its disposable download cache and downloads a fresh verified installer if needed. Failed checks appear in update status; manual failures also show a dialog. The application waits for shutdown before running the installer and asks NSIS to relaunch it after success. If Windows blocks installation, launch Palisade again or run the official installer manually. Do not clear the profile to fix an update.
+If the manager cannot open, Palisade reports the failure and stays running. Use the official manager to recover. Do not clear the profile to fix an update.
+
+The app fills the window with no title bar or reserved top strip. Compact Tabler settings, minimize, maximize/restore and close icons sit in the upper-right corner. They are grey normally; minimize/maximize turn Palisade blue on hover or keyboard focus, and close turns red. Drag from the invisible top edge to move the window. Press Alt to access the application menu.
+
+Use **Send test notification** in the tray menu to check Windows toast delivery while the app is open. The first move to the tray also shows a native notification; clicking it restores Palisade. Enable message notifications in Palisade and in Windows Settings > System > Notifications. Windows controls the toast position and may suppress banners during Do Not Disturb/Focus Assist. Palisade channel and active-conversation preferences still determine which message alerts the hosted client emits.
+
+The gear before minimize opens the device settings panel. Change tray behavior or launch on login, send a test notification, open the update manager, or view the installed version there. Close the panel with its close button, the gear, or Escape.
+
+Device settings has three sections: **General** for tray, login and notification testing; **Permissions** for the fixed Windows notification and microphone pages; and **About & updates** for the manager, page reload and a diagnostic summary. The summary excludes account data, messages, profile paths and credentials. Windows privacy settings and Palisade conversation preferences still govern access and delivery.

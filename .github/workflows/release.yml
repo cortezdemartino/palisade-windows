@@ -48,8 +48,21 @@ jobs:
         run: |
           npm run check
           if ($LASTEXITCODE -ne 0) { throw 'Tests failed.' }
+          npm run test:window-controls
+          if ($LASTEXITCODE -ne 0) { throw 'Window controls verification failed.' }
           npm audit --omit=dev --audit-level=high
           if ($LASTEXITCODE -ne 0) { throw 'Dependency audit failed.' }
+      - name: Retrieve pinned update manager
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manager = Get-Content assets/manager-release.json -Raw | ConvertFrom-Json
+          New-Item -ItemType Directory -Path .manager -Force | Out-Null
+          gh release download $manager.tag --repo $manager.repository --pattern $manager.filename --dir .manager --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned update manager download failed.' }
+          node -e "require('./scripts/bundle-manager.cjs').verifyManager(require('node:path').join('.manager', require('./assets/manager-release.json').filename)).catch(e => { console.error(e.message); process.exitCode = 1; })"
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned update manager verification failed.' }
       - name: Build Windows installer
         shell: pwsh
         run: |
@@ -58,6 +71,16 @@ jobs:
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           $actual = (Get-Item -LiteralPath "out/Palisade-Setup-$version-x64.exe").VersionInfo.ProductVersion
           if ($actual -notin @($version, "$version.0")) { throw 'Installer version does not match the package.' }
+      - name: Verify packaged window controls
+        shell: pwsh
+        run: |
+          $env:PALISADE_WINDOW_SMOKE_ASAR = (Resolve-Path 'out/win-unpacked/resources/app.asar').Path
+          try {
+            npm run test:window-controls
+            if ($LASTEXITCODE -ne 0) { throw 'Packaged window controls verification failed.' }
+          } finally {
+            Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR -ErrorAction SilentlyContinue
+          }
       - name: Sign update manifest
         shell: pwsh
         env:
@@ -87,6 +110,11 @@ jobs:
             Remove-Item -LiteralPath $keyPath -Force -ErrorAction SilentlyContinue
             Remove-Item -LiteralPath $legacyKeyPath -Force -ErrorAction SilentlyContinue
           }
+      - name: Include pinned manager in release assets
+        shell: pwsh
+        run: |
+          $manager = Get-Content assets/manager-release.json -Raw | ConvertFrom-Json
+          Copy-Item -LiteralPath (Join-Path '.manager' $manager.filename) -Destination (Join-Path 'out' $manager.filename)
       - name: Upload verified release artifacts
         uses: actions/upload-artifact@v4
         with:
@@ -97,6 +125,7 @@ jobs:
             out/release-v2.json
             out/release-v3.json
             out/SHA256SUMS
+            out/Palisade-Manager-*-x64.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -124,5 +153,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          gh release create "v$version" "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/release-v3.json" "out/SHA256SUMS" `
-            --title "Palisade Desktop v$version" --generate-notes --verify-tag
+          $tag = "v$version"
+          $manager = Get-Content assets/manager-release.json -Raw | ConvertFrom-Json
+          node -e "require('./scripts/bundle-manager.cjs').verifyManager(require('node:path').join('out', require('./assets/manager-release.json').filename)).catch(e => { console.error(e.message); process.exitCode = 1; })"
+          if ($LASTEXITCODE -ne 0) { throw 'Release manager verification failed.' }
+          $existing = gh release view $tag --json isDraft,targetCommitish | ConvertFrom-Json
+          if ($LASTEXITCODE -eq 0) {
+            if (-not $existing.isDraft -or $existing.targetCommitish -ne $env:GITHUB_SHA) { throw 'Refusing to modify an existing release or an unrelated draft.' }
+            gh release upload $tag "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/release-v3.json" "out/SHA256SUMS" (Join-Path 'out' $manager.filename) --clobber
+            if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed.' }
+            gh release edit $tag --draft=false --latest
+          } else {
+            gh release create $tag "out/Palisade-Setup-$version-x64.exe" "out/release.json" "out/release-v2.json" "out/release-v3.json" "out/SHA256SUMS" (Join-Path 'out' $manager.filename) --title "Palisade Desktop v$version" --notes-file docs/RELEASE-0.2.3.md --verify-tag
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }

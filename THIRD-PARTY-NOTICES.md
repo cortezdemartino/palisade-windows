@@ -9,3 +9,7 @@ not incorporated into the Electron package. Their deployment-specific notices co
 
 Build toolchain dependency licenses are provided with their packages in node_modules during builds.
 Do not strip Electron runtime licensing files when distributing an installer.
+
+Window control SVGs are from Tabler Icons (https://github.com/tabler/tabler-icons),
+Copyright (c) 2020-2026 Paweł Kuna. Their MIT license is included in
+`src/icons/TABLER-LICENSE`; the pinned source revision is recorded in `src/icons/README.md`.

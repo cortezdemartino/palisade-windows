@@ -55,10 +55,11 @@ test('desktop settings survive restart without changing session or user data', a
   const dir=await mkdtemp(path.join(os.tmpdir(),'palisade-test-'));
   try {
     const profile=path.join(dir,'matrix-session'); await writeFile(profile,'session fixture');
-    assert.equal(loadSettings(dir).keepRunningInTray,false);
+    assert.equal(loadSettings(dir).keepRunningInTray,true);
     saveSettings(dir,{keepRunningInTray:true}); assert.equal(loadSettings(dir).keepRunningInTray,true);
+    saveSettings(dir,{keepRunningInTray:false}); assert.equal(loadSettings(dir).keepRunningInTray,false);
     await writeFile(path.join(dir,'desktop-settings.json'),'{broken');
-    assert.equal(loadSettings(dir).keepRunningInTray,false);
+    assert.equal(loadSettings(dir).keepRunningInTray,true);
     assert.equal(await readFile(profile,'utf8'),'session fixture');
     const pkg=require('../package.json');
     assert.equal(pkg.name,'@palisade/desktop'); assert.equal(pkg.build.appId,'org.onyxops.palisade');

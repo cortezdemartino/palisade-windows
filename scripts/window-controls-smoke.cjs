@@ -1,0 +1,90 @@
+'use strict';
+const { app } = require('electron');
+const assert = require('node:assert/strict');
+const fs = require('node:fs/promises');
+const syncFs = require('node:fs');
+const path = require('node:path');
+const { createDesktopWindow } = require(process.env.PALISADE_WINDOW_SMOKE_ASAR
+  ? path.join(process.env.PALISADE_WINDOW_SMOKE_ASAR, 'src/desktop-window.cjs')
+  : '../src/desktop-window.cjs');
+app.setPath('userData', path.join(__dirname, '../out/window-smoke-profile'));
+app.on('window-all-closed', () => {});
+let owner;
+const resultFile = path.join(__dirname, '../out/tabler-controls-result.json');
+const deadline = setTimeout(() => { syncFs.writeFileSync(resultFile, JSON.stringify({ passed: false, error: 'Timed out' })); app.exit(1); }, 30000);
+const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+app.whenReady().then(async () => {
+  const deviceActions = [];
+  const desktop = createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.3', loginAvailable: true }), onDeviceAction: action => deviceActions.push(action), partition: 'tabler-controls-smoke', icon: undefined });
+  owner = desktop.window;
+  const remote = desktop.contents;
+  const controls = owner.contentView.children[1].webContents;
+  await new Promise((resolve, reject) => { controls.once('did-finish-load', resolve); controls.once('did-fail-load', (_e, _c, text) => reject(new Error(text))); });
+  await remote.loadURL('data:text/html,<html><body style="background:%230d0f14">Palisade layout fixture</body></html>');
+  assert.equal(await remote.executeJavaScript('typeof window.desktopControls'), 'undefined');
+  assert.equal(await controls.executeJavaScript('typeof window.desktopControls.close'), 'function');
+  assert.equal(owner.contentView.children[0].getBounds().y, 0);
+  owner.setContentSize(1000, 700); await pause(100);
+  assert.equal(owner.contentView.children[0].getBounds().height, 700);
+  owner.showInactive(); await pause(500);
+  for (const button of ['settings', 'minimize', 'maximize', 'close']) {
+    const capture = await controls.capturePage(await controls.executeJavaScript(`(() => { const r=document.getElementById('${button}').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`));
+    const pixels = capture.toBitmap();
+    assert.ok(pixels.some((value, index) => index % 4 === 3 && value > 0), `${button} must draw visible pixels`);
+  }
+
+  await controls.executeJavaScript("document.getElementById('settings').click()");
+  await pause(100);
+  assert.equal(await controls.executeJavaScript("document.getElementById('device-settings').hidden"), false);
+  await controls.executeJavaScript("document.getElementById('tray-setting').click()");
+  await pause(100);
+  assert.equal(deviceActions[0], 'tray-off');
+  await controls.executeJavaScript("document.querySelector('[data-section=permissions]').click()");
+  assert.equal(await controls.executeJavaScript("document.getElementById('section-permissions').hidden"), false);
+  await controls.executeJavaScript("document.getElementById('notification-settings').click()");
+  await pause(100);
+  assert.equal(deviceActions.at(-1), 'notification-settings');
+  await controls.executeJavaScript("document.querySelector('[data-section=about]').click()");
+  await controls.executeJavaScript("document.getElementById('copy-diagnostics').click()");
+  await pause(100);
+  assert.equal(deviceActions.at(-1), 'copy-diagnostics');
+  await controls.executeJavaScript("document.querySelector('[data-section=general]').click()");
+  await pause(180);
+  await fs.writeFile(path.join(__dirname, '../out/device-settings.png'), (await controls.capturePage()).toPNG());
+  await controls.executeJavaScript("document.getElementById('dismiss-settings').click()");
+  await pause(100);
+  assert.equal(await controls.executeJavaScript("document.getElementById('device-settings').hidden"), true);
+  const normalCapture = await controls.capturePage();
+  const bitmap = normalCapture.toBitmap();
+  let visiblePixels = 0;
+  for (let i = 3; i < bitmap.length; i += 4) if (bitmap[i] > 0) visiblePixels++;
+  syncFs.writeFileSync(path.join(__dirname, '../out/controls-pixels.json'), JSON.stringify({ visiblePixels }));
+  await fs.writeFile(path.join(__dirname, '../out/controls-normal.png'), normalCapture.toPNG());
+  const inspect = controls.debugger;
+  inspect.attach('1.3');
+  await inspect.sendCommand('DOM.enable'); await inspect.sendCommand('CSS.enable');
+  const { root } = await inspect.sendCommand('DOM.getDocument');
+  for (const [selector, expected, filename] of [['#minimize', 'rgb(111, 178, 255)', 'controls-blue.png'], ['#close', 'rgb(239, 68, 68)', 'controls-red.png']]) {
+    const { nodeId } = await inspect.sendCommand('DOM.querySelector', { nodeId: root.nodeId, selector });
+    await inspect.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: ['hover'] });
+    await pause(160);
+    assert.equal(await controls.executeJavaScript(`getComputedStyle(document.querySelector('${selector}')).color`), expected);
+    await fs.writeFile(path.join(__dirname, '../out', filename), (await controls.capturePage()).toPNG());
+    await inspect.sendCommand('CSS.forcePseudoState', { nodeId, forcedPseudoClasses: [] });
+  }
+  inspect.detach();
+  await controls.executeJavaScript("document.getElementById('maximize').click()"); await pause(250);
+  assert.equal(owner.isMaximized(), true); owner.hide();
+  assert.equal(await controls.executeJavaScript("document.getElementById('maximize').dataset.maximized"), 'true');
+  await controls.executeJavaScript("document.getElementById('maximize').click()"); await pause(200); owner.hide();
+  assert.equal(owner.isMaximized(), false);
+  await controls.executeJavaScript("document.getElementById('minimize').click()"); await pause(200);
+  assert.equal(owner.isMinimized(), true); owner.hide();
+  let closed = false; owner.on('close', (event) => { closed = true; event.preventDefault(); });
+  await controls.executeJavaScript("document.getElementById('close').click()"); await pause(100);
+  assert.equal(closed, true);
+  owner.destroy(); await pause(100);
+  assert.equal(remote.isDestroyed(), true); assert.equal(controls.isDestroyed(), true);
+  await fs.writeFile(resultFile, JSON.stringify({ passed: true, noTopBar: true, localBridgeOnly: true, minimizeMaximizeRestoreClose: true, blueHover: true, redHover: true, cleanup: true }));
+  clearTimeout(deadline); app.exit(0);
+}).catch((error) => { syncFs.writeFileSync(resultFile, JSON.stringify({ passed: false, error: error.stack })); owner?.destroy(); clearTimeout(deadline); app.exit(1); });

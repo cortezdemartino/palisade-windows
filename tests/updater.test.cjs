@@ -1,44 +1,57 @@
 'use strict';
-const test=require('node:test');
-const assert=require('node:assert/strict');
-const vm=require('node:vm');
-const fs=require('node:fs/promises');
-const path=require('node:path');
-const os=require('node:os');
-const {EventEmitter}=require('node:events');
-async function harness(fetchRelease,downloadInstaller,verifyDownloadedFile=async()=>true){
- const directory=await fs.mkdtemp(path.join(os.tmpdir(),'palisade-controller-'));
- const app=Object.assign(new EventEmitter(),{isPackaged:true,getPath:()=>directory,getVersion:()=> '0.2.1',quit:()=>{throw new Error('Unexpected installation');}});
- const prompts=[],statuses=[],progress=[],timers=[];
- const electron={app,dialog:{showMessageBox:async(...args)=>{prompts.push(args.at(-1));return {response:1};}},Notification:class{static isSupported(){return false;}}};
- const exports={};
- const context={module:{exports},exports,__dirname:path.join(__dirname,'../src/updates'),process:{platform:'win32'},fetch:()=>{},setTimeout:(f,ms)=>{timers.push(ms);return {unref(){}};},setInterval:(f,ms)=>{timers.push(ms);return {unref(){}};},clearTimeout(){},clearInterval(){},require:(name)=> name==='electron'?electron:name==='./release.cjs'?{fetchRelease,verifyDownloadedFile}:name==='./downloader.cjs'?{downloadInstaller}:require(name)};
- vm.runInNewContext(await fs.readFile(path.join(__dirname,'../src/updates/updater.cjs'),'utf8'),context);
- const controller=context.module.exports.createUpdateController(()=>({isDestroyed:()=>false,setProgressBar:v=>progress.push(v)}),s=>statuses.push(s));
- return {controller,prompts,statuses,progress,timers,app,cleanup:()=>fs.rm(directory,{recursive:true,force:true})};
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const fs = require('node:fs/promises');
+const path = require('node:path');
+const { EventEmitter } = require('node:events');
+async function harness({ response = 0, fail = false } = {}) {
+  const calls = [], prompts = [], statuses = [];
+  let quit = 0;
+  const app = { isPackaged: true, getPath: () => 'C:\\Temp', quit: () => quit++ };
+  const fakeFs = { constants: { COPYFILE_EXCL: 1 } };
+  const promises = {
+    mkdtemp: async prefix => { calls.push(['mkdir', prefix]); return 'C:\\Temp\\manager-123'; },
+    copyFile: async (...args) => { calls.push(['copy', ...args]); if (fail) throw new Error('missing manager'); },
+    rm: async (...args) => { calls.push(['cleanup', ...args]); }
+  };
+  const context = { module: { exports: {} }, process: { platform: 'win32', resourcesPath: 'C:\\Apps\\Palisade\\resources', execPath: 'C:\\Apps\\Palisade\\Palisade.exe' },
+    require: name => {
+      if (name === 'electron') return { app, dialog: { showMessageBox: async (...args) => { prompts.push(args.at(-1)); return { response }; } } };
+      if (name === 'node:fs/promises') return promises;
+      if (name === 'node:fs') return fakeFs;
+      if (name === 'node:path') return path.win32;
+      if (name === 'node:child_process') return { spawn: (...args) => {
+        calls.push(['spawn', ...args]); const child = new EventEmitter(); child.unref = () => calls.push(['unref']);
+        process.nextTick(() => child.emit('spawn')); return child;
+      } };
+      throw new Error('Unexpected dependency ' + name);
+    } };
+  vm.runInNewContext(await fs.readFile(path.join(__dirname, '../src/updates/updater.cjs'), 'utf8'), context);
+  const controller = context.module.exports.createUpdateController(() => null, value => statuses.push(value));
+  return { controller, calls, prompts, statuses, quit: () => quit };
 }
-test('controller offers postponement, progress and ready status; a postponed installer is reused',async()=>{
- let downloads=0;
- const h=await harness(async()=>({version:'0.2.2',releaseNotes:'Release details'}),async(_m,dir,_f,onProgress)=>{downloads++;onProgress(5,10);onProgress(10,10);return path.join(dir,'installer.exe');});
- try{
-  await h.controller.check(true);
-  assert.equal(downloads,1);assert.match(h.prompts[0].detail,/Release details/);
-  assert.equal(h.prompts[0].buttons[1],'Later');assert.ok(h.progress.includes(0.5));assert.equal(h.progress.at(-1),-1);
-  await h.controller.check(true);assert.equal(downloads,1);assert.equal(h.statuses.at(-1),'Update 0.2.2 ready');
- }finally{await h.cleanup();}
+test('client delegates updates to a copied manager outside its installation and exits after launch', async () => {
+  const h = await harness(); await h.controller.check(true);
+  const copy = h.calls.find(x => x[0] === 'copy');
+  assert.equal(copy[1], 'C:\\Apps\\Palisade\\resources\\manager\\Palisade-Manager.exe');
+  assert.equal(copy[2], 'C:\\Temp\\manager-123\\Palisade-Manager.exe');
+  const launch = h.calls.find(x => x[0] === 'spawn');
+  assert.equal(launch[1], copy[2]);
+  assert.deepEqual(Array.from(launch[2]), ['--installation', 'C:\\Apps\\Palisade']);
+  assert.equal(launch[3].shell, false); assert.equal(h.quit(), 1);
 });
-test('controller reports network failure and recovers on a subsequent check',async()=>{
- let calls=0;
- const h=await harness(async()=>{if(!calls++)throw new Error('offline');return null;},()=>{throw new Error('unexpected download');});
- try{await h.controller.check(true);assert.match(h.statuses.at(-1),/failed/);assert.equal(h.prompts[0].type,'warning');await h.controller.check(true);assert.equal(h.statuses.at(-1),'Updates: up to date');}finally{await h.cleanup();}
+test('cancel keeps the client running and creates no installer or manager files', async () => {
+  const h = await harness({ response: 1 }); await h.controller.check(true);
+  assert.equal(h.quit(), 0); assert.equal(h.calls.length, 0);
 });
-test('checks are serialized and shutdown cancels future checks; schedules startup and six-hour checks',async()=>{
- let finish;let calls=0;let started;
- const fetching=new Promise(resolve=>{started=resolve;});
- const h=await harness(()=>{calls++;started();return new Promise(r=>{finish=r;});},()=>{});
- try{
-  h.controller.start();assert.deepEqual(h.timers,[15000,21600000]);
-  const pending=h.controller.check();await fetching;await h.controller.check(true);assert.equal(calls,1);
-  finish(null);await pending;h.app.emit('before-quit');await h.controller.check(true);assert.equal(calls,1);
- }finally{await h.cleanup();}
+test('missing manager keeps client running and reports recovery without executing setup', async () => {
+  const h = await harness({ fail: true }); await h.controller.check(true);
+  assert.equal(h.quit(), 0); assert.equal(h.calls.some(x => x[0] === 'spawn'), false);
+  assert.equal(h.prompts.at(-1).type, 'warning'); assert.equal(h.calls.at(-1)[0], 'cleanup');
+});
+test('client startup schedules no independent checks or downloads', async () => {
+  const h = await harness(); h.controller.start(); await h.controller.check();
+  assert.equal(h.calls.length, 0); assert.equal(h.prompts.length, 0);
+  assert.match(h.statuses[0], /managed by Palisade Manager/);
 });

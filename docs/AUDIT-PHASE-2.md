@@ -20,3 +20,7 @@ Reviewed the main process, security policy, update modules, key and signing scri
 Preserved package name, product name, application ID, NSIS identity derivation, installation options, pinned public key and `persist:palisade-desktop`. No new runtime dependencies, renderer bridges, backend changes or certificate-policy overrides were added. Existing website notifications continue through Electron's native notification support.
 
 The implementation does not provide automatic binary rollback. Windows policy can block an unsigned installer or helper. Installation-result receipts and manual recovery are documented. Production signing and authenticated-session upgrade validation remain release gates, as detailed in TEST-RESULTS.md.
+
+## Version 0.2.3 follow-up
+
+The current client uses a narrowly scoped local bridge for device settings and frameless controls; the hosted website still has no preload or privileged bridge. Archive pages use a fixed local protocol because restricted file loading prevented packaged controls from rendering. Source and packaged-archive pixel/action checks now gate publication. Manual updates and repairs are delegated to the companion manager; the client does not perform background polling or claim its former internal installer-receipt lifecycle. The manager dependency is pinned by size and SHA-256 and verified during build and publication. These changes supersede the earlier implementation descriptions above where behavior differs.

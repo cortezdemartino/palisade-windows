@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; form-action 'none'">
+  <link rel="stylesheet" href="window-chrome.css">
+  <script src="window-chrome.js" defer></script>
+  <title>Palisade</title>
+</head>
+<body>
+  <nav class="controls" aria-label="Window controls">
+    <button id="settings" aria-label="Desktop settings" title="Desktop settings"><svg class="icon" aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065" />
+  <path d="M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0" />
+</svg>
+</button>
+    <button id="minimize" aria-label="Minimize" title="Minimize"><svg class="icon " aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M5 12l14 0" />
+</svg>
+</button>
+    <button id="maximize" aria-label="Maximize" title="Maximize"><svg class="icon maximize-icon" aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M3 5a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-14" />
+</svg>
+<svg class="icon restore-icon" aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M8 10a2 2 0 0 1 2 -2h9a2 2 0 0 1 2 2v9a2 2 0 0 1 -2 2h-9a2 2 0 0 1 -2 -2l0 -9" />
+  <path d="M16 8v-3a2 2 0 0 0 -2 -2h-9a2 2 0 0 0 -2 2v9a2 2 0 0 0 2 2h3" />
+</svg>
+</button>
+    <button id="close" aria-label="Close" title="Close"><svg class="icon " aria-hidden="true"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+>
+  <path d="M18 6l-12 12" />
+  <path d="M6 6l12 12" />
+</svg>
+</button>
+  </nav>
+  <section id="device-settings" aria-labelledby="settings-title" hidden>
+    <header><h1 id="settings-title">Device settings</h1><button id="dismiss-settings" title="Close device settings" aria-label="Close device settings">×</button></header>
+    <p class="subtitle">Palisade on this Windows device</p>
+    <nav class="settings-tabs" aria-label="Settings sections">
+      <button class="tab selected" data-section="general" aria-pressed="true">General</button>
+      <button class="tab" data-section="permissions" aria-pressed="false">Permissions</button>
+      <button class="tab" data-section="about" aria-pressed="false">About &amp; updates</button>
+    </nav>
+    <div id="section-general" class="settings-section">
+      <label class="setting"><span>Keep running in the tray<small>Stay available when minimized or closed.</small></span><input id="tray-setting" type="checkbox"></label>
+      <label class="setting"><span>Launch on login<small>Open Palisade when you sign in to Windows.</small></span><input id="login-setting" type="checkbox"></label>
+      <div class="setting"><span>Notification test<small>Send a native Windows notification.</small></span><button class="action" id="test-notification">Send test</button></div>
+      <p class="hint">Changes apply immediately. Message alerts also depend on your Palisade conversation preferences.</p>
+    </div>
+    <div id="section-permissions" class="settings-section" hidden>
+      <div class="setting"><span>Windows notifications<small>Choose banners, sounds and Do Not Disturb settings.</small></span><button class="action" id="notification-settings">Open</button></div>
+      <div class="setting"><span>Microphone access<small>Review Windows microphone privacy permissions.</small></span><button class="action" id="microphone-settings">Open</button></div>
+      <p class="hint">Only the Palisade website can request microphone audio and notifications. Camera, screen capture and other device permissions are blocked.</p>
+      <p class="hint">This panel does not grant Windows permissions or change your account settings.</p>
+    </div>
+    <div id="section-about" class="settings-section" hidden>
+      <div class="setting"><span>Stable updates<small id="update-status"></small></span><button class="action" id="open-updates">Open manager</button></div>
+      <div class="setting"><span>Reload Palisade<small>Reload the page if the connection is interrupted.</small></span><button class="action" id="reload-client">Reload</button></div>
+      <div class="setting"><span>Support diagnostics<small>Copy app and system versions, tray and login settings, and update status. No account or message data.</small></span><button class="action" id="copy-diagnostics">Copy</button></div>
+      <p class="hint">Signed updates keep this device’s local session and application data. The manager asks before closing Palisade.</p>
+    </div>
+    <p id="settings-feedback" role="status" aria-live="polite"></p>
+    <footer>Version <span id="device-version"></span></footer>
+  </section>
+</body>
+</html>

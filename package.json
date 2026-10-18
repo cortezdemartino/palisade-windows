@@ -1,7 +1,7 @@
 {
   "name": "@palisade/desktop",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Windows desktop client for Palisade",
   "license": "Apache-2.0",
   "main": "src/main.cjs",
@@ -14,7 +14,8 @@
     "package:win": "electron-builder --win nsis --x64 --publish never",
     "package:dir": "electron-builder --win dir --x64 --publish never",
     "check": "npm test && node --check src/main.cjs && node --check src/updates/updater.cjs",
-    "release:sign": "node scripts/sign-release.cjs"
+    "release:sign": "node scripts/sign-release.cjs",
+    "test:window-controls": "node scripts/test-window-controls.cjs"
   },
   "devDependencies": {
     "electron": "44.7.2",
@@ -23,7 +24,7 @@
   "build": {
     "appId": "org.onyxops.palisade",
     "productName": "Palisade",
-    "copyright": "Copyright © 2026 Onyx Operations Group",
+    "copyright": "Copyright Â© 2026 Onyx Operations Group",
     "directories": {
       "output": "out",
       "buildResources": "assets"
@@ -34,7 +35,9 @@
       "assets/update-public-key.pem",
       "assets/update-key-transitions.json",
       "package.json",
-      "THIRD-PARTY-NOTICES.md"
+      "THIRD-PARTY-NOTICES.md",
+      "!src/updates/install.ps1",
+      "!src/updates/downloader.cjs"
     ],
     "asar": true,
     "electronFuses": {
@@ -67,6 +70,13 @@
       "artifactName": "Palisade-Setup-${version}-${arch}.${ext}",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false
-    }
+    },
+    "beforePack": "scripts/bundle-manager.cjs",
+    "extraResources": [
+      {
+        "from": ".manager/Palisade-Manager.exe",
+        "to": "manager/Palisade-Manager.exe"
+      }
+    ]
   }
 }

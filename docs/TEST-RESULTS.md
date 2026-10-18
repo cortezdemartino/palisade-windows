@@ -48,3 +48,9 @@ Follow UPGRADE-TEST.md before calling the production update lifecycle verified. 
 ## Release preparation, October 17, 2026
 
 The operator confirmed that all previous manual installations were uninstalled and authorized GitHub publication of 0.2.2. The external Ed25519 private key cryptographically matches the packaged trust anchor. All 29 tests and syntax checks passed outside sandbox restrictions; the production dependency audit reported zero vulnerabilities. The protected release environment has the repository owner as required reviewer and permits version tags only. The matching signing key was transferred directly to its environment secret without logging key material. Hosted build, publication and independent downloaded-artifact verification remain release gates. Old-key executables require a fresh manual installation; no authenticated old-key transition is claimed.
+
+## Version 0.2.3 release candidate
+
+The Windows client passes 34 automated tests, including manager dependency substitution, signed releases, downloads, IPC boundaries, settings actions, diagnostics and session/data preservation contracts. The source Windows UI smoke check passes with the release file-protocol restriction. The companion manager passes 40 tests and its packaged-source/public-key check. The production dependency audit reports zero vulnerabilities.
+
+Windows packaging, packaged-archive UI verification, signed release artifact verification and hosted workflow results are checked again for the final commit. Interactive NSIS installation, an authenticated-session migration, native banner delivery and a real 0.2.0 to 0.2.1 upgrade have not been executed for this candidate. No passing result is claimed for those checks.

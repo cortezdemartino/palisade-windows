@@ -29,6 +29,17 @@ jobs:
         run: npm run check
       - name: Audit production dependencies
         run: npm audit --omit=dev --audit-level=high
+      - name: Retrieve pinned update manager
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $manager = Get-Content assets/manager-release.json -Raw | ConvertFrom-Json
+          New-Item -ItemType Directory -Path .manager -Force | Out-Null
+          gh release download $manager.tag --repo $manager.repository --pattern $manager.filename --dir .manager --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned update manager download failed.' }
+          node -e "require('./scripts/bundle-manager.cjs').verifyManager(require('node:path').join('.manager', require('./assets/manager-release.json').filename)).catch(e => { console.error(e.message); process.exitCode = 1; })"
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned update manager verification failed.' }
       - name: Build Windows installer
         run: npm run package:win
       - name: Upload installer

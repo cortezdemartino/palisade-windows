@@ -10,3 +10,6 @@ secrets/
 .DS_Store
 *.p12
 *.pfx
+
+.manager/
+out-unified/
