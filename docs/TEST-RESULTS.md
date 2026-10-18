@@ -78,3 +78,7 @@ Windows x64 packaging and packaged-archive window/chat smoke checks passed. Loca
 ## Version 0.2.8
 
 45 automated tests and Windows x64 packaging passed. Visually inspected enlarged icons and bright red unread markings without a ring. Packaged window/chat checks passed after replacing short fixed unread waits with bounded state polling. Local release signatures and installer digests verified. Physical shell rendering remains an operator check.
+
+## Version 0.2.9
+
+45 automated tests passed, including separate web/control bounds, resize handling, fullscreen restoration and existing IPC security checks. Source and packaged Windows window/chat smoke checks and x64 packaging passed. The packaged check asserts that desktop buttons do not overlap the web view. Local signed manifests and installer hashes verified. Real-account visual layout remains an operator check.

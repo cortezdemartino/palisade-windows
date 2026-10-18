@@ -6,7 +6,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
 
-test('floating Tabler controls reserve no top bar and reject untrusted window commands', async () => {
+test('Tabler controls reserve a separate strip and reject untrusted window commands', async () => {
   const ipcMain = new EventEmitter();
   const views = [];
   let owner;
@@ -64,7 +64,8 @@ test('floating Tabler controls reserve no top bar and reject untrusted window co
   }
   assert.equal((await localProtocol.handler({ method: 'POST', url: 'palisade-controls://app/window-chrome.html' })).status, 404);
   assert.equal(view.webContents.session.protocol.handler, undefined);
-  assert.equal(view.bounds.y, 0); assert.equal(view.bounds.height, 700);
+  assert.equal(view.bounds.y, 36); assert.equal(view.bounds.height, 664);
+  assert.ok(controls.bounds.y + controls.bounds.height <= view.bounds.y);
   assert.equal(controls.bounds.width, 136); assert.equal(controls.bounds.height, 32); assert.equal(controls.color, '#00000000');
   assert.equal(controls.webContents.open().action, 'deny');
   let granted; controls.webContents.session.request(null, 'notifications', (value) => { granted = value; });
@@ -85,9 +86,9 @@ test('floating Tabler controls reserve no top bar and reject untrusted window co
   emit(controls.webContents, frame, 'maximize'); assert.equal(owner.maximized, false);
   emit(controls.webContents, frame, 'close'); assert.equal(owner.closeRequested, true);
   owner.size = [1400, 900]; owner.emit('resize');
-  assert.equal(view.bounds.width, 1400); assert.equal(view.bounds.height, 900); assert.equal(controls.bounds.x, 1246);
-  owner.fullScreen = true; owner.emit('enter-full-screen'); assert.equal(controls.visible, false);
-  owner.fullScreen = false; owner.emit('leave-full-screen'); assert.equal(controls.visible, true);
+  assert.equal(view.bounds.width, 1400); assert.equal(view.bounds.height, 864); assert.equal(controls.bounds.x, 1246);
+  owner.fullScreen = true; owner.emit('enter-full-screen'); assert.equal(controls.visible, false); assert.equal(view.bounds.y, 0); assert.equal(view.bounds.height, 900);
+  owner.fullScreen = false; owner.emit('leave-full-screen'); assert.equal(controls.visible, true); assert.equal(view.bounds.y, 36); assert.equal(view.bounds.height, 864);
   owner.emit('closed'); assert.equal(view.webContents.closed, true); assert.equal(controls.webContents.closed, true);
   assert.equal(ipcMain.listenerCount('palisade:window-control'), 0);
 });

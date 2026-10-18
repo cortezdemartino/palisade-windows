@@ -2,7 +2,7 @@
 
 ## Scope and layout
 
-The gear before the window buttons opens a local panel. General contains the saved tray preference, Windows login registration and notification test. Permissions opens the fixed Windows notification and microphone settings pages and explains the client's permission boundaries. About & updates provides the installed version, signed update manager, page reload and a copyable diagnostic summary.
+Desktop controls occupy a separate 36-pixel strip above the hosted page, with no title text. The strip provides window dragging and disappears in fullscreen. The gear before the window buttons opens a local panel. General contains the saved tray preference, Windows login registration and notification test. Permissions opens the fixed Windows notification and microphone settings pages and explains the client's permission boundaries. About & updates provides the installed version, signed update manager, page reload and a copyable diagnostic summary.
 
 Settings apply immediately. Login remains disabled by default. Existing tray choices, installation identity and the persistent Palisade browser partition are preserved. Notification delivery remains subject to Windows and conversation preferences. The panel never claims to override operating system permissions.
 

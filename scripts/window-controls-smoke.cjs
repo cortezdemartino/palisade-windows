@@ -31,10 +31,13 @@ app.whenReady().then(async () => {
   await remote.loadURL('data:text/html,<html><body style="background:%230d0f14">Palisade layout fixture</body></html>');
   assert.equal(await remote.executeJavaScript('typeof window.desktopControls'), 'undefined');
   assert.equal(await controls.executeJavaScript('typeof window.desktopControls.close'), 'function');
-  assert.equal(owner.contentView.children[0].getBounds().y, 0);
+  assert.equal(owner.contentView.children[0].getBounds().y, 36);
   owner.setContentSize(1000, 700); await pause(100);
-  assert.equal(owner.contentView.children[0].getBounds().height, 700);
+  assert.equal(owner.contentView.children[0].getBounds().height, 664);
   owner.showInactive(); await pause(500);
+  const pageBounds = owner.contentView.children[0].getBounds();
+  const controlsBounds = owner.contentView.children[1].getBounds();
+  assert.ok(controlsBounds.y + controlsBounds.height <= pageBounds.y, 'Desktop buttons must stay above web content');
   for (const button of ['settings', 'minimize', 'maximize', 'close']) {
     const capture = await captureControls(await controls.executeJavaScript(`(() => { const r=document.getElementById('${button}').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`));
     const pixels = capture.toBitmap();
@@ -95,6 +98,6 @@ app.whenReady().then(async () => {
   assert.equal(closed, true);
   owner.destroy(); await pause(100);
   assert.equal(remote.isDestroyed(), true); assert.equal(controls.isDestroyed(), true);
-  await fs.writeFile(resultFile, JSON.stringify({ passed: true, noTopBar: true, localBridgeOnly: true, minimizeMaximizeRestoreClose: true, blueHover: true, redHover: true, cleanup: true }));
+  await fs.writeFile(resultFile, JSON.stringify({ passed: true, separateControlsStrip: true, localBridgeOnly: true, minimizeMaximizeRestoreClose: true, blueHover: true, redHover: true, cleanup: true }));
   clearTimeout(deadline); app.exit(0);
 }).catch((error) => { syncFs.writeFileSync(resultFile, JSON.stringify({ passed: false, error: error.stack })); owner?.destroy(); clearTimeout(deadline); app.exit(1); });
