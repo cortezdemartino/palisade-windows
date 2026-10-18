@@ -153,7 +153,7 @@ function createMainWindow(profile) {
   refreshDeviceSettings = desktop.refreshSettings;
   window = desktop.window;
   const contents = mainContents = desktop.contents;
-  installChatNotifications(window, contents, { notify: notifyDesktop, openWindow });
+  installChatNotifications(window, contents, { notify: notifyDesktop, openWindow, setUnreadIndicator: image => tray?.setImage(image) });
   contents.setWindowOpenHandler(({ url }) => {
     if (isPalisadeUrl(url)) {
       // In-app enrollment and verification links remain in the one trusted window.

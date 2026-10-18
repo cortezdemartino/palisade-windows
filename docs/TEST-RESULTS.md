@@ -64,3 +64,9 @@ Real-account chat arrival, physical Windows taskbar rendering, native banner dis
 ## Version 0.2.5
 
 45 automated tests pass, including notification identity registration, development-runtime isolation, registration failures, foreground/background taskbar attention, focus clearing and notification throttling. The archive smoke suite checks the shell-readable notification logo outside app.asar. Visual Windows notification headers and physical taskbar flashing remain operator checks; no passing visual result is claimed.
+
+## Version 0.2.6
+
+45 automated tests pass, including system tray unread/reset behavior, a plain taskbar icon, and existing attention flashing. Physical tray rendering remains an operator check.
+
+Windows x64 packaging and packaged-archive window/chat smoke checks passed. Local release manifests verified against the pinned public key and installer digests.
