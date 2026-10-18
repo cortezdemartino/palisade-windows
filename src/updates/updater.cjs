@@ -1,7 +1,6 @@
 'use strict';
 const { app, dialog, powerMonitor } = require('electron');
 const { fetchRelease } = require('./release.cjs');
-const STARTUP_DELAY = 10_000;
 const CHECK_INTERVAL = 6 * 60 * 60 * 1000;
 const RETRY_DELAY = 15 * 60 * 1000;
 const path = require('node:path');
@@ -11,7 +10,7 @@ const { spawn } = require('node:child_process');
 // The client verifies release metadata. Downloads and installation stay in the manager.
 function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = () => {}, fetchFn = globalThis.fetch, now = Date.now } = {}) {
   let managerBusy = false, checking = false, started = false, stopped = false;
-  let startupTimer, intervalTimer, retryTimer, request;
+  let intervalTimer, retryTimer, request;
   let lastAttempt = null, failures = 0, notifiedVersion = null;
   const supported = () => app.isPackaged && process.platform === 'win32';
   function notify(options) {
@@ -113,7 +112,7 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
   }
   function stop() {
     stopped = true; started = false;
-    clearTimeout(startupTimer); clearTimeout(retryTimer); clearInterval(intervalTimer);
+    clearTimeout(retryTimer); clearInterval(intervalTimer);
     request?.abort();
     powerMonitor.removeListener('resume', resume);
     app.removeListener('before-quit', stop);
@@ -122,11 +121,11 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
     if (started || !supported()) return;
     started = true; stopped = false;
     onStatus('Updates: automatic checks enabled');
-    startupTimer = setTimeout(() => { void check(); }, STARTUP_DELAY);
     intervalTimer = setInterval(() => { void check(); }, CHECK_INTERVAL);
-    startupTimer.unref?.(); intervalTimer.unref?.();
+    intervalTimer.unref?.();
     powerMonitor.on('resume', resume);
     app.once('before-quit', stop);
+    void check();
   }
   return { check, openManager, start, stop };
 

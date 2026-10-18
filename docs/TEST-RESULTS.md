@@ -82,3 +82,7 @@ Windows x64 packaging and packaged-archive window/chat smoke checks passed. Loca
 ## Version 0.2.9
 
 45 automated tests passed, including separate web/control bounds, resize handling, fullscreen restoration and existing IPC security checks. Source and packaged Windows window/chat smoke checks and x64 packaging passed. The packaged check asserts that desktop buttons do not overlap the web view. Local signed manifests and installer hashes verified. Real-account visual layout remains an operator check.
+
+## Version 0.2.10
+
+45 automated tests passed, including immediate startup checks, no duplicate schedules, retries, overdue resume and cancellation of a startup request on shutdown. Windows x64 packaging, packaged UI/chat checks, and local release signature/hash verification passed.

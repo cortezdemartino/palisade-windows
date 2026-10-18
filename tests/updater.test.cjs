@@ -74,11 +74,12 @@ test('missing manager keeps client running and reports recovery without executin
   assert.equal(h.quit(), 0); assert.equal(h.calls.some(x => x[0] === 'spawn'), false);
   assert.equal(h.prompts.at(-1).type, 'warning'); assert.equal(h.calls.at(-1)[0], 'cleanup');
 });
-test('startup checks after ten seconds and polls every six hours without duplicate schedules', async () => {
+test('startup checks immediately and polls every six hours without duplicate schedules', async () => {
   const h = await harness(); h.controller.start(); h.controller.start();
   assert.equal(h.networkCalls(), 0); assert.equal(h.intervals.length, 1);
   assert.equal(h.intervals[0].delay, 21600000);
-  await h.runTimer(10000); assert.equal(h.networkCalls(), 1);
+  assert.equal(h.timers.length, 0);
+  await h.settle(); assert.equal(h.networkCalls(), 1);
   h.intervals[0].fn(); await h.settle(); assert.equal(h.networkCalls(), 2);
   assert.equal(h.prompts.length, 0); assert.equal(h.calls.length, 0);
   assert.match(h.statuses.at(-1), /up to date/); h.controller.stop();
@@ -94,14 +95,14 @@ test('verified offers notify once per version without launching or downloading a
 
 test('network or verification failures retry with backoff and never announce an update', async () => {
   const h = await harness({ networkFail: true }); h.controller.start();
-  await h.runTimer(10000); assert.equal(h.offers.length, 0); assert.equal(h.prompts.length, 0);
+  await h.settle(); assert.equal(h.offers.length, 0); assert.equal(h.prompts.length, 0);
   await h.runTimer(900000); assert.equal(h.networkCalls(), 2);
   assert.ok(h.timers.some(timer => timer.active && timer.delay === 1800000));
   assert.match(h.statuses.at(-1), /failed/); assert.equal(h.calls.length, 0); h.controller.stop();
 });
 
 test('resume checks only when overdue and stops scheduling on shutdown', async () => {
-  const h = await harness(); h.controller.start(); await h.runTimer(10000);
+  const h = await harness(); h.controller.start(); await h.settle();
   h.setClock(1000); h.powerMonitor.emit('resume'); await h.settle(); assert.equal(h.networkCalls(), 1);
   h.setClock(21600001); h.powerMonitor.emit('resume'); await h.settle(); assert.equal(h.networkCalls(), 2);
   h.app.emit('before-quit'); assert.equal(h.powerMonitor.listenerCount('resume'), 0);
@@ -111,8 +112,8 @@ test('resume checks only when overdue and stops scheduling on shutdown', async (
 
 test('concurrent checks are coalesced and shutdown aborts an in-flight request', async () => {
   const h = await harness({ pending: true });
-  const first = h.controller.check(); await h.settle(); await h.controller.check();
-  assert.equal(h.networkCalls(), 1); h.controller.stop(); await first;
+  h.controller.start(); await h.settle(); await h.controller.check();
+  assert.equal(h.networkCalls(), 1); h.controller.stop(); await h.settle();
   assert.equal(h.signals[0].aborted, true); assert.equal(h.offers.length, 0);
   assert.equal(h.timers.filter(timer => timer.active).length, 0);
 });
