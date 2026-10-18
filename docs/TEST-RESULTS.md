@@ -70,3 +70,7 @@ Real-account chat arrival, physical Windows taskbar rendering, native banner dis
 45 automated tests pass, including system tray unread/reset behavior, a plain taskbar icon, and existing attention flashing. Physical tray rendering remains an operator check.
 
 Windows x64 packaging and packaged-archive window/chat smoke checks passed. Local release manifests verified against the pinned public key and installer digests.
+
+## Version 0.2.7
+
+45 automated tests and Windows x64 packaging passed. Rebuilt PNG/ICO artwork was visually inspected with white shield markings. Packaged window/chat smoke checks passed on rerun after an unread-state timing assertion failed once. Local signed manifests and installer digests verified. Physical shell artwork remains an operator check.
