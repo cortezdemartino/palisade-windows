@@ -126,6 +126,7 @@ test('tray close keeps the session alive, notification click restores the app, a
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'), process: { platform: 'win32', arch: 'x64', versions: { electron: '44.7.2' } }, require(name) {
     if (name === 'electron') return electron;
     if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote }; } };
+    if (name === './windows-notification-branding.cjs') return { APP_ID: 'org.onyxops.palisade', ensureNotificationBranding: async () => {} };
     if (name === './chat-notifications.cjs') return { installChatNotifications() {} };
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {} }) };
@@ -146,6 +147,7 @@ test('tray close keeps the session alive, notification click restores the app, a
   assert.ok(appMenu[0].submenu.some((item) => item.label === 'Minimize and close to tray'));
   let prevented = false;
   window.emit('close', { preventDefault: () => { prevented = true; } });
+  await new Promise(resolve => setImmediate(resolve));
   assert.equal(prevented, true); assert.equal(hidden, 1); assert.equal(notices.length, 1);
   notices[0].emit('click'); assert.equal(shown, 1); assert.equal(focused, 1);
   window.emit('minimize'); assert.equal(hidden, 2); assert.equal(notices.length, 1);

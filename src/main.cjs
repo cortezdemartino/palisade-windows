@@ -2,6 +2,7 @@
 
 const { app, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
 const path = require('node:path');
+const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
 const { installChatNotifications } = require('./chat-notifications.cjs');
@@ -30,10 +31,11 @@ let quitting = false;
 let lastExternalPromptAt = 0;
 let updaterController = null;
 let updateStatus = 'Updates: idle';
+let notificationBranding = Promise.resolve();
 let notificationStatus = 'No desktop notifications sent yet.';
 
 app.setName('Palisade');
-if (process.platform === 'win32') app.setAppUserModelId('org.onyxops.palisade');
+if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -57,6 +59,11 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    notificationBranding = ensureNotificationBranding({ packaged: app.isPackaged }).then(() => true).catch(() => {
+      notificationStatus = 'Windows notification branding could not be registered.';
+      refreshDeviceSettings?.();
+      return false;
+    });
     keepRunningInTray = loadSettings(app.getPath('userData')).keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
     installSessionPolicy(profile);
@@ -230,15 +237,19 @@ function openWindow() {
   mainContents?.focus();
 }
 
-function notifyDesktop(body, onClick = openWindow) {
+async function notifyDesktop(body, onClick = openWindow) {
+  try {
+  if (await notificationBranding === false) return;
   if (!Notification.isSupported()) { notificationStatus = 'Desktop notifications are unavailable on this Windows session.'; refreshDeviceSettings?.(); return; }
-  const notification = new Notification({ title: 'Palisade', body, icon: ICON, silent: false });
+  const notification = new Notification({ title: 'Palisade', body,
+    icon: app.isPackaged ? path.join(process.resourcesPath, 'notification-icon.png') : ICON, silent: false });
   activeNotifications.add(notification);
   notification.on('click', onClick);
   notification.on('close', () => activeNotifications.delete(notification));
   notification.on('show', () => { notificationStatus = 'Windows accepted the last notification.'; refreshDeviceSettings?.(); });
   notification.on('failed', () => { activeNotifications.delete(notification); notificationStatus = 'Windows could not display the notification. Check Windows notification settings.'; refreshDeviceSettings?.(); });
   notification.show();
+  } catch { notificationStatus = 'Windows could not create the notification.'; refreshDeviceSettings?.(); }
 }
 
 function hideToTray() {

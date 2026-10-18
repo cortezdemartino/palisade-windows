@@ -42,3 +42,5 @@ A red ring surrounds the taskbar logo while there are unread messages. Reading t
 The gear before minimize opens the device settings panel. Change tray behavior or launch on login, send a test notification, open the update manager, or view the installed version there. Close the panel with its close button, the gear, or Escape.
 
 Device settings has three sections: **General** for tray, login and notification testing; **Permissions** for the fixed Windows notification and microphone pages; and **About & updates** for the manager, page reload and a diagnostic summary. The summary excludes account data, messages, profile paths and credentials. Windows privacy settings and Palisade conversation preferences still govern access and delivery.
+
+From v0.2.5, incoming unread increases request native Windows taskbar flashing while the app is unfocused. Windows controls its attention color. Focusing Palisade or clearing unread messages stops the flashing. Notifications register the Palisade display name and an external logo under the existing application ID before sending; upgrade and restart to apply the branding repair.

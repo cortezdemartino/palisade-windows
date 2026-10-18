@@ -60,3 +60,7 @@ Windows packaging, packaged-archive UI verification, signed release artifact ver
 The client passes 43 automated tests, including virtual-clock polling and retry schedules, authenticated update offers, cancellation, unread IPC sender validation, preview suppression, count aggregation and notification rate limiting. The Windows smoke suite now includes a real isolated preload fixture that changes unread labels, verifies baseline/read transitions and the red ring image, and verifies that no desktop bridge is exposed to the page. The source visual smoke check uses software rendering to avoid occlusion-dependent capture failures.
 
 Real-account chat arrival, physical Windows taskbar rendering, native banner display, multi-hour sleep/resume and authenticated installation upgrades still require operator checks. Fixture success is not a passing result for those checks.
+
+## Version 0.2.5
+
+45 automated tests pass, including notification identity registration, development-runtime isolation, registration failures, foreground/background taskbar attention, focus clearing and notification throttling. The archive smoke suite checks the shell-readable notification logo outside app.asar. Visual Windows notification headers and physical taskbar flashing remain operator checks; no passing visual result is claimed.

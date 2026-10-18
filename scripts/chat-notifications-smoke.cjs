@@ -22,6 +22,10 @@ app.whenReady().then(async () => {
   await desktop.contents.executeJavaScript('document.getElementById("dm").setAttribute("aria-label", "Direct messages")');
   await pause(300); assert.equal(snapshots.at(-1).count, 0);
   const unread = nativeImage.createFromPath(path.join(root, 'assets/icon-unread.png'));
+  if (process.env.PALISADE_WINDOW_SMOKE_ASAR) {
+    const brandingIcon = nativeImage.createFromPath(path.join(path.dirname(root), 'notification-icon.png'));
+    assert.equal(brandingIcon.isEmpty(), false, 'Windows notification logo must exist outside the application archive');
+  }
   assert.equal(unread.isEmpty(), false); owner.setIcon(unread);
   const pixels = unread.toBitmap();
   let red = 0; for (let i = 0; i < pixels.length; i += 4) if (pixels[i+2] > 200 && pixels[i+1] < 120 && pixels[i] < 120 && pixels[i+3] > 0) red++;
