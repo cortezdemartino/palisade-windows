@@ -8,7 +8,7 @@ The client delegates manual updates and repairs to the companion Palisade Instal
 
 Download the exact manager asset from the pinned GitHub release into .manager, or set PALISADE_MANAGER_EXE to that verified executable outside the source tree. The packaging hook rejects missing, truncated or substituted manager executables. No sibling checkout is required. Both Actions workflows retrieve and verify this dependency before packaging.
 
-For the initial 0.2.3 publication, the verified manager asset is staged on the matching draft release. Once published, future builds retrieve the same pinned dependency from that stable release. Replacing the dependency requires a reviewed pin change; never silently replace an existing public release asset. The release job verifies the dependency again before publication.
+The verified manager is published as the manager-v1.0.1 prerelease build component. Stable desktop update checks ignore that component release. Read-only builds can retrieve the pinned public dependency without accessing draft releases. Replacing the dependency requires a reviewed pin change; never silently replace an existing public release asset. The release job verifies the dependency again before publication.
 
 ## Verification and packaging
 
