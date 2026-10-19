@@ -86,3 +86,7 @@ Windows x64 packaging and packaged-archive window/chat smoke checks passed. Loca
 ## Version 0.2.10
 
 45 automated tests passed, including immediate startup checks, no duplicate schedules, retries, overdue resume and cancellation of a startup request on shutdown. Windows x64 packaging, packaged UI/chat checks, and local release signature/hash verification passed.
+
+## Version 0.2.11
+
+45 automated tests passed. A new rendered root drag-region boundary assertion failed against the previous layout and passed after excluding the controls footprint. Source and packaged window/chat checks, Windows x64 packaging and local signature/hash verification passed. Physical mouse routing was not tested because the Computer Use runtime was unavailable; direct button actions and rendered geometry do not establish native input behavior.

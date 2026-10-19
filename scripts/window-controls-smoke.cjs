@@ -38,6 +38,14 @@ app.whenReady().then(async () => {
   const pageBounds = owner.contentView.children[0].getBounds();
   const controlsBounds = owner.contentView.children[1].getBounds();
   assert.ok(controlsBounds.y + controlsBounds.height <= pageBounds.y, 'Desktop buttons must stay above web content');
+  const rootInspector = owner.webContents.debugger;
+  rootInspector.attach('1.3');
+  const { root: stripRoot } = await rootInspector.sendCommand('DOM.getDocument');
+  const { nodeId: stripBody } = await rootInspector.sendCommand('DOM.querySelector', { nodeId: stripRoot.nodeId, selector: 'body' });
+  const { model: dragBox } = await rootInspector.sendCommand('DOM.getBoxModel', { nodeId: stripBody });
+  assert.ok(dragBox.border[2] <= controlsBounds.x, 'Root drag region must stop before desktop controls');
+  assert.ok(dragBox.border[5] <= pageBounds.y, 'Root drag region must stay above hosted content');
+  rootInspector.detach();
   for (const button of ['settings', 'minimize', 'maximize', 'close']) {
     const capture = await captureControls(await controls.executeJavaScript(`(() => { const r=document.getElementById('${button}').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`));
     const pixels = capture.toBitmap();

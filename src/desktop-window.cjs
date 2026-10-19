@@ -22,6 +22,7 @@ function installControlsProtocol(session) {
 const CONTROLS_WIDTH = 136;
 const CONTROLS_HEIGHT = 32;
 const CONTROLS_STRIP_HEIGHT = 36;
+const CONTROLS_RIGHT_INSET = 18;
 const CONTROL_CHANNEL = 'palisade:window-control';
 const STATE_CHANNEL = 'palisade:window-state';
 const SECURE_WEB_PREFERENCES = Object.freeze({
@@ -68,7 +69,7 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
     const top = window.isFullScreen() ? 0 : CONTROLS_STRIP_HEIGHT;
     view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
     const panelWidth = settingsOpen ? 400 : CONTROLS_WIDTH;
-    controls.setBounds({ x: Math.max(0, width - panelWidth - 18), y: 4, width: panelWidth, height: settingsOpen ? Math.min(560, height - 8) : CONTROLS_HEIGHT });
+    controls.setBounds({ x: Math.max(0, width - panelWidth - CONTROLS_RIGHT_INSET), y: 4, width: panelWidth, height: settingsOpen ? Math.min(560, height - 8) : CONTROLS_HEIGHT });
     controls.setVisible(!window.isFullScreen());
   };
   const publishState = () => {
@@ -103,7 +104,7 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
   lockLocalContents(window.webContents);
   lockLocalContents(controls.webContents);
   // Only the local empty strip is draggable; hosted page elements remain interactive.
-  void window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;"><style>html,body{margin:0;width:100%;height:36px;background:#0d0f14;app-region:drag;-webkit-app-region:drag}</style>'));
+  void window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;"><style>html{margin:0;width:100%;height:36px;background:#0d0f14}body{margin:0;width:calc(100% - ' + (CONTROLS_WIDTH + CONTROLS_RIGHT_INSET) + 'px);height:36px;app-region:drag;-webkit-app-region:drag}</style>'));
   void controls.webContents.loadURL(controlsUrl);
   return { window, contents: view.webContents, refreshSettings: publishState };
 }
