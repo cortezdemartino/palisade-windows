@@ -1,11 +1,15 @@
 'use strict';
 
-const { app, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
+const { app, desktopCapturer, powerMonitor, screen, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
 const path = require('node:path');
 const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
 const { installSessionPolicy } = require('./session-policy.cjs');
+const { installAssistBridge } = require('./assist/bridge.cjs');
+const { createCaptureController } = require('./assist/capture.cjs');
+const { chooseSource } = require('./assist/source-picker.cjs');
+const { captureEnabled } = require('./assist/build-policy.cjs');
 const { installChatNotifications } = require('./chat-notifications.cjs');
 const { createDesktopWindow } = require('./desktop-window.cjs');
 const {
@@ -14,13 +18,15 @@ const {
   normaliseExternalUrl,
 } = require('./security-policy.cjs');
 
-// The hosted client has only a one-way unread observer, with no page-accessible IPC bridge.
+// The hosted client has an unread observer and the canonical description-only Assist v1 API.
 // Only the isolated local window-controls view has a narrowly scoped control bridge.
 // The web client remains responsible for Matrix auth, Rust cryptography, and E2EE.
 const PARTITION = 'persist:palisade-desktop';
 const ICON = path.join(__dirname, '..', 'assets', 'icon.ico');
 let window = null;
 let mainContents = null;
+let assistCapture = null;
+let assistBridge = null;
 let refreshDeviceSettings = null;
 let trayNoticeShown = false;
 const activeNotifications = new Set();
@@ -65,7 +71,6 @@ if (!app.requestSingleInstanceLock()) {
     });
     keepRunningInTray = loadSettings(app.getPath('userData')).keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
-    installSessionPolicy(profile, () => mainContents);
     createMainWindow(profile);
     createTray();
     updaterController = createUpdateController(() => window, (status) => {
@@ -119,6 +124,22 @@ function createMainWindow(profile) {
   refreshDeviceSettings = desktop.refreshSettings;
   window = desktop.window;
   const contents = mainContents = desktop.contents;
+  assistCapture = createCaptureController({ enabled: captureEnabled, getContents: () => contents, getWindow: () => window,
+    enumerate: options => desktopCapturer.getSources(options), choose: chooseSource, onState: () => updateTrayMenu(),
+    revoke: () => { if (!contents.isDestroyed()) { contents.forcefullyCrashRenderer(); contents.reload(); } } });
+  installSessionPolicy(profile, () => mainContents, assistCapture);
+  assistBridge = installAssistBridge(contents, { desktopVersion: app.getVersion(), captureAvailable: assistCapture.available });
+  for (const name of ['minimize', 'hide', 'close', 'unresponsive']) window.on(name, assistCapture.stop);
+  contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) assistCapture?.stop(); });
+  contents.on('render-process-gone', () => assistCapture?.stop());
+  const revokeCapture = () => assistCapture?.stop();
+  for (const name of ['lock-screen', 'suspend', 'shutdown']) powerMonitor.on(name, revokeCapture);
+  for (const name of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(name, revokeCapture);
+  window.once('closed', () => {
+    assistBridge?.dispose(); assistCapture?.dispose();
+    for (const name of ['lock-screen', 'suspend', 'shutdown']) powerMonitor.removeListener(name, revokeCapture);
+    for (const name of ['display-added', 'display-removed', 'display-metrics-changed']) screen.removeListener(name, revokeCapture);
+  });
   installChatNotifications(window, contents, { notify: notifyDesktop, openWindow, setUnreadIndicator: image => tray?.setImage(image) });
   contents.setWindowOpenHandler(({ url }) => {
     if (isPalisadeUrl(url)) {
@@ -257,6 +278,7 @@ function updateTrayMenu() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Palisade', click: openWindow },
+      { label: 'Stop screen sharing and reload Palisade', enabled: assistCapture?.busy() === true, click: () => assistCapture?.stop() },
       trayPreferenceItem(),
       { type: 'separator' },
       { label: 'Send test notification', click: () => notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.') },

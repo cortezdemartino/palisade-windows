@@ -1,0 +1,7 @@
+{
+  "repository": "cortezdemartino/project-palisade",
+  "commit": "6c7ab894862ca3767b1239594e37c322e96ff2c4",
+  "path": "apps/web/src/platform/desktopAssistBridge.ts",
+  "sha256": "3a7ba6e58726270977d812a05fdf4ac108d6ad8f61553e2d8e48851112ccb40e",
+  "purpose": "Unmodified canonical web contract fixture; tests only, not packaged."
+}

@@ -1,7 +1,7 @@
 'use strict';
 const { isPalisadeUrl, mayGrantPermission } = require('./security-policy.cjs');
 
-function installSessionPolicy(profile, getContents) {
+function installSessionPolicy(profile, getContents, capture = null) {
   function trustedRequester(requester, details) {
     const contents = getContents();
     if (!contents || requester !== contents || contents.isDestroyed() ||
@@ -15,14 +15,15 @@ function installSessionPolicy(profile, getContents) {
   });
   profile.setPermissionRequestHandler((contents, permission, callback, details) => {
     callback(trustedRequester(contents, details) && typeof details.requestingUrl === 'string' &&
-      mayGrantPermission(permission, contents.getURL(), details.mediaTypes));
+      (mayGrantPermission(permission, contents.getURL(), details.mediaTypes) ||
+        (permission === 'display-capture' && capture?.available() === true)));
   });
   profile.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
     if (!trustedRequester(contents, details) || !isPalisadeUrl(requestingOrigin)) return false;
-    return permission === 'notifications' || (permission === 'media' && details.mediaType === 'audio');
+    return (permission === 'display-capture' && capture?.available() === true) || permission === 'notifications' || (permission === 'media' && details.mediaType === 'audio');
   });
-  // M4G-WEB has no committed bridge contract yet. Never enumerate or grant a desktop source.
-  profile.setDisplayMediaRequestHandler((_request, callback) => callback(null), { useSystemPicker: false });
+  // Capture stays denied unless the separately gated controller is available.
+  profile.setDisplayMediaRequestHandler((request, callback) => capture?.available() === true ? capture.handle(request, callback) : callback(null), { useSystemPicker: false });
   profile.setDevicePermissionHandler(() => false);
 }
 

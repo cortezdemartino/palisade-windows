@@ -122,7 +122,7 @@ test('tray close keeps the session alive, notification click restores the app, a
     whenReady: () => Promise.resolve(), getPath: () => 'fixture-profile', getLoginItemSettings: () => ({ openAtLogin: false }), getVersion: () => '0.2.2', quit: () => app.emit('before-quit') });
   class Notice extends EventEmitter { static isSupported() { return true; } constructor(options) { super(); this.options = options; } show() { notices.push(this); } }
   class Tray extends EventEmitter { setToolTip() {} setContextMenu(menu) { this.menu = menu; } }
-  const electron = { app, clipboard: { writeText: text => { diagnosticText = text; } }, Notification: Notice, Tray, nativeImage: { createFromPath: () => ({}) }, session: { fromPartition: () => profile },
+  const electron = { app, powerMonitor: new EventEmitter(), screen: new EventEmitter(), clipboard: { writeText: text => { diagnosticText = text; } }, Notification: Notice, Tray, nativeImage: { createFromPath: () => ({}) }, session: { fromPartition: () => profile },
     Menu: { getApplicationMenu: () => ({ items: [{ submenu: { popup: (options) => { settingsPopup = options; } } }] }), buildFromTemplate: (value) => value, setApplicationMenu: (value) => { appMenu = value; } }, dialog: { showMessageBox: async () => ({ response: 1 }) }, shell: { openExternal: async url => { externalSettings.push(url); } } };
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'), process: { platform: 'win32', arch: 'x64', versions: { electron: '44.7.2' } }, require(name) {
     if (name === 'electron') return electron;
@@ -130,6 +130,10 @@ test('tray close keeps the session alive, notification click restores the app, a
     if (name === './windows-notification-branding.cjs') return { APP_ID: 'org.onyxops.palisade', ensureNotificationBranding: async () => {} };
     if (name === './chat-notifications.cjs') return { installChatNotifications() {} };
     if (name === './session-policy.cjs') return require('../src/session-policy.cjs');
+    if (name === './assist/bridge.cjs') return { installAssistBridge: () => ({ dispose() {} }) };
+    if (name === './assist/source-picker.cjs') return { chooseSource() {} };
+    if (name === './assist/capture.cjs') return require('../src/assist/capture.cjs');
+    if (name === './assist/build-policy.cjs') return require('../src/assist/build-policy.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {} }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');

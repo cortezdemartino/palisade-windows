@@ -83,7 +83,7 @@ test('navigation, destruction and contents replacement invalidate permission aut
   assert.equal(blocked, false);
 });
 
-test('display requests never select or enumerate sources while the web contract is absent', () => {
+test('display requests never select or enumerate sources while capture is disabled', () => {
   const h = fixture();
   assert.equal(h.profile.options.useSystemPicker, false);
   for (const request of [null, {}, { frame: h.contents, securityOrigin: PALISADE_URL, userGesture: true,
@@ -92,4 +92,10 @@ test('display requests never select or enumerate sources while the web contract 
     h.profile.display(request, streams => { count++; assert.equal(streams, null); });
     assert.equal(count, 1);
   }
+});
+test('an available controller cannot turn ambiguous empty media requests into capture permission', () => {
+  const h = fixture();
+  installSessionPolicy(h.profile, () => h.contents, { available: () => true, handle: (_request, done) => done(null) });
+  assert.equal(h.request(h.contents, 'media', { ...h.details, mediaTypes: [] }), false);
+  assert.equal(h.profile.check(h.contents, 'media', PALISADE_URL, { ...h.details, mediaType: 'unknown' }), false);
 });

@@ -1,12 +1,12 @@
 {
   "name": "@palisade/desktop",
   "private": true,
-  "version": "0.2.12",
+  "version": "0.3.0",
   "description": "Windows desktop client for Palisade",
   "license": "Apache-2.0",
   "main": "src/main.cjs",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "start": "electron .",

@@ -4,8 +4,11 @@ const { readFile } = require('node:fs/promises');
 const { BrowserWindow, WebContentsView, ipcMain, protocol } = require('electron');
 protocol.registerSchemesAsPrivileged([{ scheme: 'palisade-controls', privileges: { standard: true, secure: true } }]);
 const CONTROLS_URL = 'palisade-controls://app/window-chrome.html';
+const installedSessions = new WeakSet();
 function installControlsProtocol(session) {
-  const types = { '/window-chrome.html': 'text/html', '/window-chrome.css': 'text/css', '/window-chrome.js': 'text/javascript' };
+  if (installedSessions.has(session)) return;
+  installedSessions.add(session);
+  const types = { '/window-chrome.html': 'text/html', '/window-chrome.css': 'text/css', '/window-chrome.js': 'text/javascript', '/assist-picker.html': 'text/html', '/assist-picker.css': 'text/css', '/assist-picker.js': 'text/javascript' };
   session.protocol.handle('palisade-controls', async (request) => {
     const url = new URL(request.url);
     const type = types[url.pathname];
@@ -108,4 +111,4 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
   void controls.webContents.loadURL(controlsUrl);
   return { window, contents: view.webContents, refreshSettings: publishState };
 }
-module.exports = { createDesktopWindow, CONTROLS_WIDTH, CONTROLS_HEIGHT };
+module.exports = { createDesktopWindow, CONTROLS_WIDTH, CONTROLS_HEIGHT, installControlsProtocol };
