@@ -90,3 +90,19 @@ Windows x64 packaging and packaged-archive window/chat smoke checks passed. Loca
 ## Version 0.2.11
 
 45 automated tests passed. A new rendered root drag-region boundary assertion failed against the previous layout and passed after excluding the controls footprint. Source and packaged window/chat checks, Windows x64 packaging and local signature/hash verification passed. Physical mouse routing was not tested because the Computer Use runtime was unavailable; direct button actions and rendered geometry do not establish native input behavior.
+
+## M4G-WINDOWS preparation — 2026-10-24
+
+Status: Blocked by the missing committed M4G-WEB desktop contract. This is security preparation, not a working Assist host or qualified cross-client bridge. Audit reference: web 231e96b83230834c7419779c311236b3330dc3bc; Windows started at a72055f8270eca79a17d0b64b3b85c768fe65748.
+
+- npm ci --no-audit --no-fund: passed with locked dependencies; existing transitive development-package deprecation warnings.
+- npm run check: 49 tests passed on Windows x64, Node 24.20.0, OS release 10.0.26300. Existing signing CLI/key-rotation/hash, installer-helper, profile/settings, updater, tray, controls and notification tests retained.
+- npm audit --omit=dev --audit-level=high: zero reported vulnerabilities.
+- Source Electron 44.7.2 checks: controls, unread observer and synthetic permission fixture passed.
+- npm run package:win: Windows x64 NSIS candidate 0.2.12 built successfully. Windows Authenticode remains optional and was not applied. No production release manifests were signed.
+- Packaged ASAR checks: controls, unread observer and permission fixture passed. Synthetic microphone allowed and stopped; notification permission granted without a toast; camera, combined audio/video, display capture, same-origin subframe microphone, wrong-contents microphone and external navigation denied. Page has no Node/process/local-controls globals.
+- Local candidate installer SHA-256: 61ba6166f02fa54bb3614ca089fb41b717c97e45bf5c9227e21262649a171217. This digest is local build evidence, not a release signature or installation approval.
+
+The Electron fixture intercepts HTTPS with local test HTML and synthetic devices. It does not establish physical screen/window capture, installed-client upgrades, authenticated account/device preservation during an upgrade, real notifications, cross-client Assist authorization/E2EE, browser regression or performance. Those remain Not Verified. No OS screen, native input, real account, Matrix key or secret was accessed.
+
+No tag, release, installation, production activation or web source change is included. Exact-SHA main CI must be read after the checkpoint push; its outcome is recorded in Windows issue #1 and the final handoff. See ASSIST-INTEGRATION.md and M4G-WINDOWS-REPORT.md.

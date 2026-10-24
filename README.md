@@ -2,7 +2,7 @@
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
-**Source version: 0.2.2 (unreleased).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
+**Source candidate: 0.2.12 (unpublished security preparation).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
 
 ## Features
 
@@ -13,6 +13,8 @@ Palisade's Windows desktop client runs the existing Palisade service in a restri
 - Microphone audio and notification permissions; other device permissions denied
 - Automatic update checks through [GitHub Releases](https://github.com/cortezdemartino/palisade-windows/releases)
 - Ed25519-signed release metadata and SHA-256 and SHA-512 installer verification
+
+Assist desktop integration is blocked by the missing committed web handoff. This candidate adds no Assist bridge, source picker or capture grant. See the integration guide for exact revisions and remaining acceptance gates.
 
 ## Install
 
@@ -30,11 +32,11 @@ npm test
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.2.2-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.2.12-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
 
 ## Updates
 
-The app checks for updates shortly after startup and every six hours. **Check for updates** is also available in the application menu and tray menu. When an update is available, the client verifies the release manifest using a public key embedded in the application, downloads the installer from the GitHub release, checks its hash and size, then asks for permission to install it.
+The installed app checks for updates immediately when ready and every six hours. **Check for updates** is also available in the application menu and tray menu. The client verifies available release metadata using its pinned public key. Confirmed installation opens the bundled update manager, which downloads and verifies the installer before installation. Polling itself never downloads or installs.
 
 The signing key is separate from Windows Authenticode. A GitHub account is not required to download updates from this public repository. If signature or integrity checks fail, the current version remains installed.
 
@@ -42,6 +44,8 @@ The repository contains no backend service, web assets or Matrix authentication 
 
 ## Documentation
 
+- [Windows Assist contract audit and preparation](docs/ASSIST-INTEGRATION.md)
+- [M4G-WINDOWS checkpoint report](docs/M4G-WINDOWS-REPORT.md)
 - [User guide](docs/USER-GUIDE.md)
 - [Build and release operations](docs/OPERATIONS.md)
 - [Signing, authenticated key rotation and recovery](docs/UPDATE-SIGNING.md)

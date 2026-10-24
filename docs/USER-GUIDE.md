@@ -44,3 +44,7 @@ The gear before minimize opens the device settings panel. Change tray behavior o
 Device settings has three sections: **General** for tray, login and notification testing; **Permissions** for the fixed Windows notification and microphone pages; and **About & updates** for the manager, page reload and a diagnostic summary. The summary excludes account data, messages, profile paths and credentials. Windows privacy settings and Palisade conversation preferences still govern access and delivery.
 
 From v0.2.5, incoming unread increases request native Windows taskbar flashing while the app is unfocused. Windows controls its attention color. Focusing Palisade or clearing unread messages stops the flashing. Notifications register the Palisade display name and an external logo under the existing application ID before sending; upgrade and restart to apply the branding repair.
+
+## Assist in the Windows client
+
+Native Assist screen/window sharing is not supported in this candidate. Use an approved browser for enabled browser Assist; Windows viewing has not been qualified. A desktop capture denial is expected and must not be bypassed. The client exposes no remote keyboard/mouse capability. See [the integration status and browser workflow](ASSIST-INTEGRATION.md).

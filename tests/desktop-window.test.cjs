@@ -115,9 +115,9 @@ test('local preload exposes only fixed controls and strips Electron events from 
 test('tray close keeps the session alive, notification click restores the app, and Quit really exits', async () => {
   const notices = []; const externalSettings = []; let diagnosticText;
   let hidden = 0, shown = 0, focused = 0, appMenu, openSettings, deviceAction;
-  const remote = Object.assign(new EventEmitter(), { getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() {}, focus: () => focused++ });
+  const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() {}, focus: () => focused++ });
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
-  const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, flushStorageData() {} };
+  const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, setDisplayMediaRequestHandler(fn) { this.display = fn; }, flushStorageData() {} };
   const app = Object.assign(new EventEmitter(), { setName() {}, setAppUserModelId() {}, requestSingleInstanceLock: () => true,
     whenReady: () => Promise.resolve(), getPath: () => 'fixture-profile', getLoginItemSettings: () => ({ openAtLogin: false }), getVersion: () => '0.2.2', quit: () => app.emit('before-quit') });
   class Notice extends EventEmitter { static isSupported() { return true; } constructor(options) { super(); this.options = options; } show() { notices.push(this); } }
@@ -129,6 +129,7 @@ test('tray close keeps the session alive, notification click restores the app, a
     if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote }; } };
     if (name === './windows-notification-branding.cjs') return { APP_ID: 'org.onyxops.palisade', ensureNotificationBranding: async () => {} };
     if (name === './chat-notifications.cjs') return { installChatNotifications() {} };
+    if (name === './session-policy.cjs') return require('../src/session-policy.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {} }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');
@@ -153,11 +154,11 @@ test('tray close keeps the session alive, notification click restores the app, a
   notices[0].emit('click'); assert.equal(shown, 1); assert.equal(focused, 1);
   window.emit('minimize'); assert.equal(hidden, 2); assert.equal(notices.length, 1);
   let granted;
-  profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: remote.getURL() });
+  profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: remote.getURL(), isMainFrame: true });
   assert.equal(granted, true);
   profile.request({}, 'notifications', (value) => { granted = value; }, { requestingUrl: remote.getURL() });
   assert.equal(granted, false);
-  profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: 'https://evil.test/' });
+  profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: 'https://evil.test/', isMainFrame: true });
   assert.equal(granted, false);
   const quit = appMenu[0].submenu.find((item) => item.label === 'Quit');
   assert.equal(quit.accelerator, 'CmdOrCtrl+Q'); quit.click();

@@ -1,5 +1,14 @@
 # Release notes
 
+## 0.2.12 (unpublished preparation)
+
+- Audit the committed web Assist contract dependency; no desktop handoff is present.
+- Restrict session permissions to the current trusted main frame and audio-only media checks.
+- Explicitly deny display capture without source enumeration or new privileged IPC.
+- Add real Electron and packaged permission-boundary checks and integration guidance.
+
+Assist capture and cross-client E2EE acceptance remain blocked or Not Verified. No release or production activation is approved by this candidate.
+
 ## 0.2.2 (2026-10-17)
 
 - Integrated the supplied Ed25519 public key for the authorized manual test-client bootstrap.

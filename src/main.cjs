@@ -5,14 +5,13 @@ const path = require('node:path');
 const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
+const { installSessionPolicy } = require('./session-policy.cjs');
 const { installChatNotifications } = require('./chat-notifications.cjs');
 const { createDesktopWindow } = require('./desktop-window.cjs');
 const {
   PALISADE_URL,
-  PALISADE_ORIGIN,
   isPalisadeUrl,
   normaliseExternalUrl,
-  mayGrantPermission,
 } = require('./security-policy.cjs');
 
 // The hosted client has only a one-way unread observer, with no page-accessible IPC bridge.
@@ -66,7 +65,7 @@ if (!app.requestSingleInstanceLock()) {
     });
     keepRunningInTray = loadSettings(app.getPath('userData')).keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
-    installSessionPolicy(profile);
+    installSessionPolicy(profile, () => mainContents);
     createMainWindow(profile);
     createTray();
     updaterController = createUpdateController(() => window, (status) => {
@@ -87,39 +86,6 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => {
     if (!keepRunningInTray) app.quit();
   });
-}
-
-function isMainContents(webContents) {
-  return Boolean(window && webContents === mainContents);
-}
-
-function trustedRequester(webContents, details) {
-  if (!isMainContents(webContents) || !isPalisadeUrl(webContents.getURL())) return false;
-  // Electron may supply one or both fields depending on the permission type.
-  const requestedFrom = details?.requestingUrl || details?.securityOrigin;
-  return requestedFrom ? isPalisadeUrl(requestedFrom) : true;
-}
-
-function installSessionPolicy(profile) {
-  // A frame navigated by script cannot escape into an arbitrary top-level website.
-  profile.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
-    callback({ cancel: details.resourceType === 'mainFrame' && !isPalisadeUrl(details.url) });
-  });
-
-  profile.setPermissionRequestHandler((webContents, permission, callback, details) => {
-    callback(
-      trustedRequester(webContents, details) &&
-        mayGrantPermission(permission, webContents.getURL(), details?.mediaTypes),
-    );
-  });
-  profile.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-    if (!trustedRequester(webContents, details)) return false;
-    if (requestingOrigin && !isPalisadeUrl(requestingOrigin)) return false;
-    // The media request handler above checks audio-only mediaTypes. Permission checks
-    // don't consistently carry mediaTypes, so deny every *other* device capability.
-    return permission === 'media' || permission === 'notifications';
-  });
-  profile.setDevicePermissionHandler(() => false);
 }
 
 function createMainWindow(profile) {

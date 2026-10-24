@@ -15,3 +15,7 @@ The hosted website has no privileged bridge. Only the isolated local controls vi
 Unit tests cover sender validation, settings actions, fixed Windows destinations, diagnostic fields and manager dependency substitution. The Windows smoke test loads the packaged archive with release file-protocol restrictions, checks each icon's visible pixels, switches panel sections, exercises a tray setting, dispatches diagnostics and verifies panel closing and window actions. The release workflow requires these checks before signing and publishing.
 
 Version 0.2.4 adds a manual update check alongside the manager, live polling status, and notification delivery status. Automatic checks never install an update. A separate isolated preload observes unread badges without exposing desktop controls to the hosted page. It sends counts only, which drive the red unread markings and generic native notifications.
+
+## Assist availability
+
+This candidate has no native Assist capture setting or source chooser. Capture remains denied pending the committed web bridge/lifecycle contract. Do not interpret the existing microphone setting or notification test as screen-sharing consent. See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md).

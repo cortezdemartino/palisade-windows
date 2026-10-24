@@ -18,7 +18,7 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Output: `out/Palisade-Setup-0.2.2-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Candidate output: `out/Palisade-Setup-0.2.12-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
@@ -71,3 +71,7 @@ Validate artifacts locally with `node scripts/verify-release.cjs out`. This requ
 The reproducible upgrade procedure is in [UPGRADE-TEST.md](UPGRADE-TEST.md). The current execution evidence and release prerequisites are in [TEST-RESULTS.md](TEST-RESULTS.md).
 
 The sole earlier test client requires the explicitly authorized manual v0.2.2 bootstrap because its original private key was lost. The old tagged public key does not authenticate the new key. See the signing guide for fingerprints, operator scope and the production publication gates. After future rotation, retain the bootstrap private key as the protected legacy-signing secret while compatibility clients exist.
+
+## M4G-WINDOWS preparation gate
+
+The current candidate is blocked by the committed web contract dependency documented in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md). Main builds include packaged permission-boundary checks. Do not tag, publish, install or activate this candidate without the required owner approval. CI artifacts are testing evidence, not approved releases. Physical capture and cross-client E2EE acceptance remain unexecuted.
