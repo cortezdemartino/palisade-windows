@@ -3,7 +3,7 @@
 ## Requirements
 
 - Windows x64 build runner (GitHub Actions uses `windows-latest`)
-- Node.js 22 or later and npm
+- Node.js 22.13 or later and npm
 - A private Ed25519 update signing key matching `assets/update-public-key.pem`
 - GitHub repository write permissions to create version tags and releases
 
@@ -18,7 +18,7 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Candidate output: `out/Palisade-Setup-0.2.12-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Candidate output: `out/Palisade-Setup-0.3.0-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
@@ -74,4 +74,4 @@ The sole earlier test client requires the explicitly authorized manual v0.2.2 bo
 
 ## M4G-WINDOWS preparation gate
 
-The current candidate is blocked by the committed web contract dependency documented in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md). Main builds include packaged permission-boundary checks. Do not tag, publish, install or activate this candidate without the required owner approval. CI artifacts are testing evidence, not approved releases. Physical capture and cross-client E2EE acceptance remain unexecuted.
+The current candidate has a compatible v1 bridge but is blocked by the Electron capture permission review, native approval and expanded data-contract dependencies documented in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md). Main builds include packaged permission-boundary checks. Do not tag, publish, install or activate this candidate without the required owner approval. CI artifacts are testing evidence, not approved releases. Physical capture and cross-client E2EE acceptance remain unexecuted.

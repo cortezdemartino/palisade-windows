@@ -18,4 +18,4 @@ Version 0.2.4 adds a manual update check alongside the manager, live polling sta
 
 ## Assist availability
 
-This candidate has no native Assist capture setting or source chooser. Capture remains denied pending the committed web bridge/lifecycle contract. Do not interpret the existing microphone setting or notification test as screen-sharing consent. See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md).
+This candidate has no native Assist capture setting or source chooser. Capture remains denied pending the Electron permission-path review and lifecycle qualification. The v1 description API reports unavailable. Do not interpret the existing microphone setting or notification test as screen-sharing consent. See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md).

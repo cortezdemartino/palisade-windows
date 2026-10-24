@@ -106,3 +106,16 @@ Status: Blocked by the missing committed M4G-WEB desktop contract. This is secur
 The Electron fixture intercepts HTTPS with local test HTML and synthetic devices. It does not establish physical screen/window capture, installed-client upgrades, authenticated account/device preservation during an upgrade, real notifications, cross-client Assist authorization/E2EE, browser regression or performance. Those remain Not Verified. No OS screen, native input, real account, Matrix key or secret was accessed.
 
 No tag, release, installation, production activation or web source change is included. Exact-SHA main CI must be read after the checkpoint push; its outcome is recorded in Windows issue #1 and the final handoff. See ASSIST-INTEGRATION.md and M4G-WINDOWS-REPORT.md.
+
+## M4G-WINDOWS-FULL 0.3.0 candidate
+
+- Starting Windows ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c; canonical web contract 6c7ab894862ca3767b1239594e37c322e96ff2c4, protocol palisade.assist.bridge v1.
+- npm run check: 65 tests passed locally, including the actual pinned web adapter, boundary validation, capture components and non-injecting lease/input/data helpers. Existing signing, update, installer/profile/UI tests retained.
+- npm audit --omit=dev --audit-level=high: zero reported vulnerabilities.
+- Source Electron 44.7.2 suite passed controls, unread, permissions and the new bridge/local picker tests. Production modern and legacy capture attempts were denied; local renderer termination was observed.
+- An initial positive native fixture failed with NotAllowedError before the display handler. Instrumentation showed mediaTypes: []; pinned Electron source confirmed ambiguity with legacy desktop/tab capture. This remains a security blocker (#3), not a passing capture test. No empty-media workaround was applied.
+- Final package/ASAR and exact-SHA CI evidence is recorded with the committed checkpoint in Windows #1. No release/activation is authorized by CI.
+
+No actual native input, OS clipboard or file transfer, live MatrixRTC/LiveKit or data E2EE, real cross-client/browser regression, installed upgrade or workload performance was tested. No personal desktop source or private clipboard/file contents were captured. Production captureEnabled remains false. The earlier missing-v1-contract blocker is superseded by the committed web v1 handoff; expanded data protocol and native review remain open.
+
+Final local 0.3.0 Windows x64 packaging and packaged-ASAR controls/unread/permissions/Assist fixtures passed. Local installer SHA-256: 90d3c144f8040c2be703b91bc83fc9fbffe4757075e25913bccada07eb7aea40. Authenticode and production release manifests were not applied. The passing suite includes intentional capture denial, not a passing native capture test.

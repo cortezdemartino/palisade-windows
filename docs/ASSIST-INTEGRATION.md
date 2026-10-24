@@ -1,5 +1,57 @@
 # Windows Assist integration
 
+## Current M4G-WINDOWS-FULL checkpoint
+
+**Candidate 0.3.0, unpublished. Overall product: Blocked.** Starting Windows SHA: ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c. The committed web v1 contract is now available at **6c7ab894862ca3767b1239594e37c322e96ff2c4**. The earlier missing-contract audit below is historical, not current status.
+
+### Implemented canonical v1 bridge
+
+The hosted main frame exposes exactly window.palisadeDesktopAssist with protocol, getCapabilities(request), and onCapabilitiesChanged(listener). Protocol is palisade.assist.bridge, version 1. Main uses the exact handoff channels palisade:assist-capabilities and palisade:assist-capabilities-changed. Only a bounded integer version list reaches main; no tokens, Matrix identities, session IDs, paths or native commands cross this API.
+
+The seven report fields are protocol, version, desktopVersion, capture, nativeEndpoint, localRevocation and emergencyStop. This candidate reports capture unavailable, nativeEndpoint absent, localRevocation false and emergencyStop false. The 0.3.0 desktop version meets the web minimum. No other control/data operation is added to v1.
+
+Main validates exact hosted WebContents, current trusted main frame and URL, payload keys/version bounds, 12 requests/second and navigation state. The isolated preload bounds requests/subscriptions, has a 2.5-second timeout inside the web adapter 3-second deadline, strips Electron events and removes listeners on unload. Main removes its handler at contents destruction. The pinned actual web TypeScript adapter is retained as a test fixture with a SHA-256 assertion; tests execute its parser/adapter against our reports. Node 22.13+ is required for this test compiler API; CI uses the current Node 22 release.
+
+### Capture components and security blocker
+
+Implemented components include the getDisplayMedia controller, explicit local screen/window picker, thumbnails, keyboard radio selection, Share/Cancel, source revalidation, one pending request, no automatic selection, video only, cancellation/timeout/generation guards and a 15-minute local upper bound. The controller rejects background/minimized windows, wrong frame/origin, absent gesture, audio requests and concurrent sharing. It re-enumerates the chosen source before granting. Source names/previews stay in the trusted local picker; titles are rendered as text under a fixed CSP. No source list is exposed to the hosted page.
+
+**Production capture is disabled in src/assist/build-policy.cjs. Do not toggle that flag alone.** An actual Windows Electron 44.7.2 display request arrived as media with mediaTypes: [] before the display handler. Its public RequestMediaAccessPermission implementation uses the same empty shape for modern display and legacy desktop/tab capture, and MediaAccessAllowed routes legacy capture outside ChooseDisplayMediaDevice. Allowing empty media requests would bypass picker enforcement. The unchanged microphone-only rule refuses them. A safe runtime/API architecture must be independently reviewed in [Windows #3](https://github.com/cortezdemartino/palisade-windows/issues/3).
+
+Reference: [pinned Electron permission implementation](https://github.com/electron/electron/blob/v44.7.2/shell/browser/web_contents_permission_helper.cc). The failed positive capture experiment is retained as a finding, not reported as capture success. The real Electron suite proves production modern/legacy denial and the separate local picker UI. It does not establish native capture, physical mouse routing, installed-client sharing or E2EE.
+
+Local stop is wired to a tray action, minimize/hide/close/unresponsive, renderer navigation/crash, Windows lock/suspend/shutdown and display changes. If a source had been granted, the conservative mechanism terminates the renderer and reloads Palisade; it does not rely on page cooperation and ends calls as well. The action is inactive when no grant/picker exists. Renderer termination was tested; active-capture termination and the OS lifecycle matrix remain Not Verified. Booleans remain false. Canonical web session expiry/revocation still owns its tracks; v1 gives native no session-scoped cancellation event, so immediate native dismissal of a picker after remote session end requires further contract work. Existing web late-track guards must never be bypassed.
+
+### Independently implemented non-injecting components
+
+- lease.cjs: mandatory independent-verifier seam, exact participant/device/endpoint/session binding, bounded capability subset, separate in-memory local consent, 15-minute maximum, expiry timer, replay/generation/rate/clock checks and terminal revocation.
+- input-model.cjs: content/source rectangle translation with negative origins and rotation, bounded key/button plans, reviewed-shortcut proposal and release-all ledger. No SendInput, keyboard hook, Unicode injector or virtual-keyboard UI exists.
+- data-model.cjs: bounded UTF-8/PNG envelope handling, opt-in in-memory deduplication, Windows basename/size/hash validation and bounded writable-stream reception with cancellation, positive authorization checks and final integrity. No OS clipboard operation, filesystem path, file dialog/save broker, encryption or network transfer exists.
+
+These helpers are not imported by any production operation handler. Tests use synthetic independent authority, in-memory streams and planner outputs; they do not establish endpoint identity or native execution. Host-owned input/clipboard/file consent UI and trusted verifier/transport remain Blocked. Annotations/pointers must reuse the actual existing Olm to-device annotation implementation, after the service grants Assist collaboration.
+
+### Product and acceptance status
+
+| Capability | Classification |
+| --- | --- |
+| v1 description API and pinned web parser compatibility | Implemented; actual Electron fixture passed |
+| Trusted picker and capture controller components | Implemented / Experimental; production gate off |
+| Secure native screen/window capture and all encrypted cross-client sharing | Blocked / Not Verified |
+| Native endpoint, OS mouse/keyboard/shortcuts/virtual keyboard, real emergency stop | Blocked on independent approval project-palisade#33 |
+| Clipboard/files/annotations and encrypted data transport | Helpers implemented; end-to-end Blocked on Windows #4 |
+| Mixed-DPI monitors, secure desktop, actual input/lock/clipboard/file acceptance, WAN/performance | Not Verified |
+
+The full user workflow requires separately consented viewing, control, clipboard directions and file send/receive. No functional unsupported buttons or hidden native operations are exposed now. Use the existing approved browser view-only flow where enabled; do not attempt to enable input or clipboard through v1 or bypass desktop capture denial. On disconnection, future sensitive channels must terminate and require fresh proof/consent, never silently resume.
+
+Current scope, proposed types/examples/states and companion integration points: [ASSIST-CONTROL-HANDOFF.md](ASSIST-CONTROL-HANDOFF.md). Native process/OS/consent decision: [ASSIST-ENDPOINT-REVIEW.md](ASSIST-ENDPOINT-REVIEW.md). Threats/evidence/risks: [ASSIST-THREAT-MODEL.md](ASSIST-THREAT-MODEL.md). Full results and known limitations: [M4G-WINDOWS-REPORT.md](M4G-WINDOWS-REPORT.md) and [TEST-RESULTS.md](TEST-RESULTS.md).
+
+Windows 10/11 x64 remains the declared target; qualification across those platforms is not claimed. Application identity, persist:palisade-desktop, signed-update trust, manager pin and security fuses remain unchanged. src/**/* packages the new local picker/preloads/modules; fixtures/tests are not shipped. No new dependency or native executable is added. A build artifact is not approval to install or activate.
+
+## Earlier 0.2.12 checkpoint: retained audit history
+
+The following dated material described the previous web revision before the v1 handoff was committed. The current status above supersedes its missing-v1-contract statements.
+
+
 ## Status and audited revisions
 
 2026-10-24: **Blocked by the missing M4G-WEB contract.** Version 0.2.12 is an unpublished security-preparation candidate. It does not implement a desktop Assist bridge, source picker or screen-sharing host. Do not treat capability detection or a packaged build as Assist acceptance.

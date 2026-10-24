@@ -1,5 +1,15 @@
 # Release notes
 
+## 0.3.0 (unpublished Assist component candidate)
+
+- Implement the canonical description-only Assist v1 bridge and pin the actual web adapter in contract tests.
+- Add a local screen/window picker and inactive capture controller; keep capture denied because of the Electron permission ambiguity/legacy bypass finding.
+- Add isolated lease, coordinate/key-state, clipboard-envelope and file-stream validation components without native or network execution.
+- Add Electron picker/bridge/legacy-denial checks, a full-scope handoff and an endpoint/threat review packet.
+
+Native execution, actual sharing, cross-client E2EE, clipboard/files and production activation are not qualified or released.
+
+
 ## 0.2.12 (unpublished preparation)
 
 - Audit the committed web Assist contract dependency; no desktop handoff is present.

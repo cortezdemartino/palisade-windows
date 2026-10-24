@@ -2,19 +2,19 @@
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
-**Source candidate: 0.2.12 (unpublished security preparation).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
+**Source candidate: 0.3.0 (unpublished Assist component candidate).** Windows 10/11, x64. The client is under active development and has not undergone an independent security audit.
 
 ## Features
 
 - Dedicated application window, single-instance behavior and system tray
 - Existing Palisade account and Matrix device support
-- Sandboxed web renderer without Node.js integration or an IPC bridge
+- Sandboxed web renderer without Node.js integration; narrow versioned Assist description API
 - HTTPS navigation restrictions and confirmation for external links
 - Microphone audio and notification permissions; other device permissions denied
 - Automatic update checks through [GitHub Releases](https://github.com/cortezdemartino/palisade-windows/releases)
 - Ed25519-signed release metadata and SHA-256 and SHA-512 installer verification
 
-Assist desktop integration is blocked by the missing committed web handoff. This candidate adds no Assist bridge, source picker or capture grant. See the integration guide for exact revisions and remaining acceptance gates.
+The canonical Assist v1 description bridge and inactive local picker/controller are implemented. Capture remains disabled pending the Electron permission review. Remote input, clipboard/files and cross-client E2EE remain blocked or unverified; isolated planners/validators do not constitute a functioning remote-control endpoint. See the integration guide and review packet.
 
 ## Install
 
@@ -24,7 +24,7 @@ Windows may display an unknown-publisher warning for unsigned installers. This p
 
 ## Build
 
-Install Node.js 22 or later and npm. From the repository root:
+Install Node.js 22.13 or later and npm. From the repository root:
 
 ```powershell
 npm ci --no-audit --no-fund
