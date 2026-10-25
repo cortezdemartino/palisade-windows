@@ -50,7 +50,9 @@ fn wall() -> Result<u64, &'static str> {
         .map_err(|_| "clock-invalid")
 }
 fn main() {
-    if run().is_err() {
+    if let Err(error) = run() {
+        // Only fixed internal error codes, never input payloads, identities or keys.
+        eprintln!("guardian: {error}");
         std::process::exit(125)
     }
 }

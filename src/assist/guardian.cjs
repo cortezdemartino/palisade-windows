@@ -23,18 +23,23 @@ async function verifyGuardian(binary, manifestFile) {
 async function openGuardian({ binary, manifestFile, probe = false }) {
   await verifyGuardian(binary, manifestFile);
   const child = spawn(binary, [probe ? '--probe' : '--guardian', String(process.pid)], {
-    windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], shell: false,
+    windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
   });
   let buffered = Buffer.alloc(0), sequence = 0, pending = null, ended = false;
-  let heartbeat;
+  let heartbeat, reason = '';
   const fail = error => {
     if (ended) return;
     ended = true; clearInterval(heartbeat);
     if (pending) { clearTimeout(pending.timer); pending.reject(error); pending = null; }
-    child.stdin.destroy(); child.stdout.destroy(); child.kill();
+    child.stdin.destroy(); child.stdout.destroy(); child.stderr.destroy(); child.kill();
   };
   child.on('error', () => fail(new Error('Assist helper launch failed')));
-  child.on('exit', () => fail(new Error('Assist helper ended')));
+  child.stderr.on('data', chunk => {
+    if (reason.length + chunk.length <= 128) reason += chunk.toString('utf8');
+  });
+  child.stderr.on('error', () => {});
+  child.on('exit', () => fail(new Error('Assist helper ended' +
+    (/^guardian: [a-z-]+\s*$/.test(reason) ? ' (' + reason.trim().slice(10) + ')' : ''))));
   child.stdin.on('error', () => fail(new Error('Assist helper pipe failed')));
   child.stdout.on('error', () => fail(new Error('Assist helper pipe failed')));
   child.stdout.on('data', chunk => {

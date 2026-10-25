@@ -72,7 +72,7 @@ impl Parent {
             {
                 return Err("session-binding");
             }
-            if !same_user_unelevated(handle)? {
+            if !same_user(handle, probe)? {
                 return Err("user-binding");
             }
             if !probe {
@@ -162,7 +162,11 @@ unsafe fn token_info(
     }
     Ok(storage)
 }
-unsafe fn same_user_unelevated(parent: HANDLE) -> Result<bool, &'static str> {
+fn permitted_elevation(own: bool, parent: bool, probe: bool) -> bool {
+    // Probe has no identity/resource/execution authority, even on a hosted admin runner.
+    probe || (!own && !parent)
+}
+unsafe fn same_user(parent: HANDLE, probe: bool) -> Result<bool, &'static str> {
     struct Token(HANDLE);
     impl Drop for Token {
         fn drop(&mut self) {
@@ -174,11 +178,14 @@ unsafe fn same_user_unelevated(parent: HANDLE) -> Result<bool, &'static str> {
     unsafe {
         let own = Token(token(GetCurrentProcess())?);
         let parent = Token(token(parent)?);
-        for handle in [own.0, parent.0] {
+        let mut elevations = [false; 2];
+        for (index, handle) in [own.0, parent.0].into_iter().enumerate() {
             let elevation = token_info(handle, TokenElevation)?;
-            if (*(elevation.as_ptr().cast::<TOKEN_ELEVATION>())).TokenIsElevated != 0 {
-                return Ok(false);
-            }
+            elevations[index] =
+                (*(elevation.as_ptr().cast::<TOKEN_ELEVATION>())).TokenIsElevated != 0;
+        }
+        if !permitted_elevation(elevations[0], elevations[1], probe) {
+            return Ok(false);
         }
         let own = token_info(own.0, TokenUser)?;
         let parent = token_info(parent.0, TokenUser)?;
@@ -186,5 +193,18 @@ unsafe fn same_user_unelevated(parent: HANDLE) -> Result<bool, &'static str> {
             (*(own.as_ptr().cast::<TOKEN_USER>())).User.Sid,
             (*(parent.as_ptr().cast::<TOKEN_USER>())).User.Sid,
         ) != 0)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn elevated_tokens_are_refused_in_normal_mode_without_exception() {
+        for own in [false, true] {
+            for parent in [false, true] {
+                assert_eq!(permitted_elevation(own, parent, false), !own && !parent);
+                assert!(permitted_elevation(own, parent, true));
+            }
+        }
     }
 }

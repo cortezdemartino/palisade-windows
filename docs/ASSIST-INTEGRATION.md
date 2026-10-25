@@ -6,6 +6,8 @@
 
 The owner approved the native architecture on 2026-10-25 and added [stream-bound group assistance](ASSIST-STREAM-SESSIONS.md): viewers can request to assist, streamers can ask a group or selected user, permissions/time are host-owned up to two hours, and stream end terminates access. The companion has since added pairwise control v1 at ee9c2763f19e62b405bbf9a9c97f187bc5a1291a; a versioned stream/group amendment, independent review and native acceptance are still required. Current Windows code does not yet implement that model or longer lifetime.
 
+Latest companion refresh during guardian verification: 2d2dcc1970d087f3a44f2f7d40e4d8d5121a0db0 adds browser peer-exchange fixes/evidence and four proposed endpoint operations in docs/46 section 9. The installed web adapter remains description-only v1; exact native schemas, independent liveness and stream/group authority remain outstanding. Windows did not execute the companion browser acceptance tests.
+
 ### Native guardian foundation
 
 The non-injecting [Rust guardian](ASSIST-NATIVE-GUARDIAN.md) implements current-user protected endpoint identity, real canonical control-v1 verification, bounded private-pipe diagnostics, independent watchdog/Windows message handling and packaged binary integrity. It remains unlaunched and unadvertised. Verification diagnostics always return authorized false; no issuer trust enrollment, native consent/acknowledgment or current stream authority is admitted. The shared fixtures now execute in both TypeScript and Rust. Independent review approved only this foundation. Full Assist remains blocked by the separately negotiated native bridge, endpoint-authenticated lifecycle, versioned stream/group model, capture and acceptance.
