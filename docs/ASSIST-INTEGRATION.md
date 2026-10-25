@@ -4,6 +4,8 @@
 
 **Desktop version 0.3.0. Overall Assist product: Blocked.** The desktop release retains disabled Assist capture/input/data routes; publication does not activate or qualify them. Starting Windows SHA: ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c. The committed web v1 contract is now available at **6c7ab894862ca3767b1239594e37c322e96ff2c4**. The earlier missing-contract audit below is historical, not current status.
 
+The owner approved the native architecture on 2026-10-25 and added [stream-bound group assistance](ASSIST-STREAM-SESSIONS.md): viewers can request to assist, streamers can ask a group or selected user, permissions/time are host-owned up to two hours, and stream end terminates access. The companion has since added pairwise control v1 at ee9c2763f19e62b405bbf9a9c97f187bc5a1291a; a versioned stream/group amendment, independent review and native acceptance are still required. Current Windows code does not yet implement that model or longer lifetime.
+
 ### Implemented canonical v1 bridge
 
 The hosted main frame exposes exactly window.palisadeDesktopAssist with protocol, getCapabilities(request), and onCapabilitiesChanged(listener). Protocol is palisade.assist.bridge, version 1. Main uses the exact handoff channels palisade:assist-capabilities and palisade:assist-capabilities-changed. Only a bounded integer version list reaches main; no tokens, Matrix identities, session IDs, paths or native commands cross this API.
@@ -41,7 +43,7 @@ These helpers are not imported by any production operation handler. Tests use sy
 | v1 description API and pinned web parser compatibility | Implemented; actual Electron fixture passed |
 | Trusted picker and capture controller components | Implemented / Experimental; production gate off |
 | Secure native screen/window capture and all encrypted cross-client sharing | Blocked / Not Verified |
-| Native endpoint, OS mouse/keyboard/shortcuts/virtual keyboard, real emergency stop | Blocked on independent approval project-palisade#33 |
+| Native endpoint, OS mouse/keyboard/shortcuts/virtual keyboard, real emergency stop | Owner design approved; independent review, implementation and acceptance pending under project-palisade#33 |
 | Clipboard/files/annotations and encrypted data transport | Helpers implemented; end-to-end Blocked on Windows #4 |
 | Mixed-DPI monitors, secure desktop, actual input/lock/clipboard/file acceptance, WAN/performance | Not Verified |
 

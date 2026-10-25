@@ -6,6 +6,8 @@ Baseline: Windows `ed6f1628a927c5e08ee8d8b71be8dd4b4b4091dc`; web contract `6c7a
 
 ## Recommended route
 
+Owner-approved amendment, 2026-10-25: [stream-bound group sessions](ASSIST-STREAM-SESSIONS.md) supersede the proposed future product's fixed pairwise/fifteen-minute model. Allow viewer requests and streamer invitations, host-selected permissions and up to two hours, with terminal revocation when the exact stream ends. Owner architecture approval is recorded in #33; independent review remains outstanding. Existing fifteen-minute code/contracts below describe legacy/current behavior and must not be silently relaxed before the new canonical version is integrated.
+
 Resolve capture admission first while the companion protocol, endpoint identity review and disposable test lab are prepared in parallel. Qualify real encrypted viewing before adding input. Build independent local stop before enabling the first native input event. Add manual clipboard transfer and simple accepted files before automatic sync, drag-and-drop or resume.
 
 ```mermaid
@@ -205,12 +207,12 @@ The owner has delegated routine technical choices to engineering. Use the follow
 
 | Area | Selected default |
 | --- | --- |
-| Joining Assist | A private in-app invitation for the selected authenticated person and device. No copied access key or permanent remote-control password. |
+| Joining Assist | Eligible viewer request, streamer invitation to a specific person or group help solicitation. The streamer selects the helper/device and grants permission; a broadcast grants nothing. No copied key or permanent remote-control password. |
 | Invitation and session authority | A single-use invitation establishes a session; separately scoped grants authorize actions. Bind grants to both accounts/devices, the native endpoint, session, permissions, generation and original absolute deadline. |
 | Device verification | Require independently verified host approval and proof from the selected guest device. Possession of an invitation or forwarded token alone cannot grant control. Engineering must reconcile the proof mechanism with the canonical Matrix/device contract and shared negative tests. |
 | Key handling | Use reviewed cryptographic implementations and authenticated device enrollment. Keep native private keys in per-user OS-protected storage; keep endpoint keys out of the hosted renderer. Separate identity, session/data and updater-signing keys. No custom encryption or reliance on obfuscation. |
 | Consent and visibility | Start view-only. Request mouse/keyboard permissions separately from viewing; authorize clipboard/file directions independently. Keep identity, actual permissions, expiry and local stop visible while key exchange happens automatically. |
-| Lifetime and recovery | Stay within the original fifteen-minute session deadline. Revocation, expiry, endpoint uncertainty and connection loss stop affected authority. Reconnection or unlock cannot silently restore native control. |
+| Lifetime and recovery | New stream-bound sessions have a host-selected immutable deadline up to two hours and end earlier with the stream. Preserve legacy v1's fifteen-minute ceiling until a compatible new contract exists. Revocation, expiry, endpoint uncertainty and connection loss stop authority; reconnect/unlock/republish cannot restore it. |
 | Native scope | A per-user, non-elevated component with narrow authenticated local communication and independent consent/stop. Window viewing does not imply window-confined input. Broader control requires explicit consent to an enforceable desktop scope. |
 | Data transport | Prefer authenticated peer WebRTC data transport with TURN packet relay, subject to the shared security review. Preserve existing MatrixRTC/LiveKit media E2EE and authenticate data peers independently. |
 | Clipboard and files | Clipboard sharing is off by default. Deliver manual text and explicit single-file send/receive first, with trusted local selection/save, no overwrite or automatic execution. Add image decoding, sync, multiple files, drag-and-drop and resume only after their own tests. |
@@ -222,8 +224,8 @@ These are engineering responsibilities. Language/library selection, protocol det
 
 There is no technical questionnaire for the owner to answer now. Engineering prepares concrete, reviewable proposals before requesting the remaining decisions:
 
-1. Record the required native implementation approval in #33 after independent review of the exact design and scope. Engineering owns preparing that design, addressing findings and explaining the decision in plain language.
-2. Authorize companion repository changes in a separately permitted scope when the exact handoff is ready; this assignment keeps that repository read-only.
+1. Owner architecture/scope approval is already recorded in #33. Engineering must complete independent review and resolve findings before privileged input implementation; request a new owner decision only for a material design/scope change.
+2. Keep this chat's companion repository read-only and use the Claude handoff workflow the owner selected; return compatible contract SHAs and fixtures for Windows integration.
 3. Supply or authorize disposable test resources and approve test-build installation when the test candidate and procedure are ready.
 4. Approve production activation/release after the required evidence is complete.
 

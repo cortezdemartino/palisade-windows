@@ -1,6 +1,6 @@
 # Windows Assist endpoint review packet
 
-Status: **Planned / Blocked**, awaiting the explicit owner and independent architecture decision in [project-palisade#33](https://github.com/cortezdemartino/project-palisade/issues/33). The full-scope request authorizes preparation, not a waiver of that decision. No native executor, service, input hook, named pipe, clipboard broker or filesystem broker is installed or listening.
+Status: **Owner architecture/scope approved; independent review and implementation pending.** The owner explicitly approved the proposed design on 2026-10-25, recorded in [project-palisade#33](https://github.com/cortezdemartino/project-palisade/issues/33#issuecomment-6399951819). The approved product amendment adds viewer/group requests, streamer invitations, per-session permissions and a duration up to two hours, all ending with the exact stream. See [stream-bound sessions](ASSIST-STREAM-SESSIONS.md). Do not request the same owner design approval again. Independent review and the compatible authoritative contract remain required before privileged input implementation. No native executor, service, input hook, named pipe, clipboard broker or filesystem broker is installed or listening.
 
 ## Proposed boundary
 
@@ -33,6 +33,6 @@ The owner has delegated routine technical decisions. Engineering owns selecting 
 
 ## Review and verification procedure
 
-Review the exact Windows checkpoint and [threat model](ASSIST-THREAT-MODEL.md), reconcile [the proposed handoff](ASSIST-CONTROL-HANDOFF.md) with the companion service, and record approve/reject plus named permitted repository/components in #33. Resolve findings before writing an executor. Then test local controls, frozen-renderer stop, all key/button releases, loss/expiry/replay/flood, cross-user/session/UIPI/secure-desktop restrictions and file/clipboard negatives on disposable devices. Unit state simulations are not those tests.
+Review the exact Windows checkpoint, [stream-scope amendment](ASSIST-STREAM-SESSIONS.md) and [threat model](ASSIST-THREAT-MODEL.md), reconcile [the proposed handoff](ASSIST-CONTROL-HANDOFF.md) with the companion service, and record independent review findings and their resolution in #33 against exact revisions/components. Owner architecture approval is already recorded; seek a new owner decision only for a material scope change. Resolve findings before writing an executor. Then test local controls, frozen-renderer stop, all key/button releases, loss/expiry/replay/flood, stream-end cancellation, cross-user/session/UIPI/secure-desktop restrictions and file/clipboard negatives on disposable devices. Unit state simulations are not those tests.
 
 No review packet, issue comment or green CI run grants approval by itself. No installation or production activation follows automatically from approval to implement.

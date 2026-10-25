@@ -155,3 +155,9 @@ Risk: High, offline authorization and stream lifecycle. Starting Windows revisio
 - Local installer SHA-256: 1903c191faf46f871d7c9d6413c9357d34772afdbeea80ff34c7a52a01297ba5. This is build evidence for the current untagged source checkpoint, not an authenticated release or permission to reuse v0.3.0.
 
 Exact-SHA CI and issue handoff evidence is recorded in Windows #1 after push. No native endpoint, real device verifier, encrypted data transport, positive selected-source capture, native input/stop, real clipboard/files, installed upgrade or full cross-client acceptance was executed or qualified. No production signing key was read, manifest signed, installer run, tag changed, release published or feature activated.
+
+## Approved stream/group direction, 2026-10-25
+
+The owner explicitly approved the native architecture and changed the intended product to stream-bound viewer/group requests and streamer invitations, host-selected permissions, up to two hours and terminal stream-end revocation. Approval was recorded in project-palisade#33; independent review, installation/activation and acceptance remain separate. Companion ee9c2763f19e62b405bbf9a9c97f187bc5a1291a now includes pairwise fifteen-minute control v1. The new model needs an explicit versioned amendment and shared fixtures.
+
+This checkpoint changes requirements, review status and the Claude handoff only. Executable code and existing fifteen-minute validation are unchanged. Group requests, two-hour boundary cases, atomic controller selection and authoritative stream-end native revocation are Planned / Not Verified, not new passing tests. Prior 80-test and packaged-build evidence belongs to 6da6c5ef46f78d4a69f60caf7cc0a876dae095f8; exact-SHA CI for this documentation checkpoint is recorded in Windows #1 after push. No native functionality or release is activated.

@@ -2,6 +2,8 @@
 
 Status: **Planned contract, not a production protocol.** Windows components implement only offline admission, planning and bounded-stream helpers. No endpoint, input, clipboard or file channel consumes these messages. The compatible current web revision is `6c7ab894862ca3767b1239594e37c322e96ff2c4` for the description-only v1 bridge, not for the proposed operations below.
 
+Update, 2026-10-25: companion ee9c2763f19e62b405bbf9a9c97f187bc5a1291a now contains the canonical palisade.assist.control v1 contract in docs/47, service grants, shared fixtures and data/input components. It is pairwise and capped at fifteen minutes. The conceptual Windows types below are not a competing wire format and must be reconciled with that actual contract. The owner has approved the native architecture and the [stream/group session amendment](ASSIST-STREAM-SESSIONS.md): viewer requests or streamer invitations, host-selected permissions and up to two hours, terminal on stream end. That amendment needs a compatible versioned companion contract; do not relax legacy v1 validation or trust its published fixture-only issuer key in production.
+
 Do not append operations or capability fields to `palisade.assist.bridge` v1. Its three members and seven-field report remain unchanged. The companion team must reconcile this proposal with a new canonical service/data contract and supply executable shared fixtures before integration. Track [Windows #4](https://github.com/cortezdemartino/palisade-windows/issues/4) and [parent #18](https://github.com/cortezdemartino/project-palisade/issues/18).
 
 ## Recommended invitation and access-pass behavior
