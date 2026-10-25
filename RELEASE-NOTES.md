@@ -2,6 +2,9 @@
 
 ## 0.3.0 (unpublished)
 
+- Build an inactive, independently reviewed Rust Assist guardian with protected endpoint identity, canonical signature diagnostics, bounded private pipes and an independent watchdog.
+- Require locked native tests/audit, binary integrity and dependency license packaging before release signing. Full Assist remains disabled and unqualified.
+
 - Implement the canonical description-only Assist v1 bridge and pin the actual web adapter in contract tests.
 - Add a local screen/window picker and inactive capture controller; keep capture denied because of the Electron permission ambiguity/legacy bypass finding.
 - Add isolated lease, coordinate/key-state, clipboard-envelope and file-stream validation components without native or network execution.

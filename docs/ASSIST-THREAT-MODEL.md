@@ -1,6 +1,6 @@
 # Windows Assist threat model
 
-Status: internal design and implementation assessment, **not an independent security audit**. Scope: v1 description bridge, inactive capture components and isolated admission/input/data helpers. Production input, clipboard/files and network transport are absent. Physical/E2EE/release acceptance remains blocked. Fully compromised local hosts with sufficient privileges are outside the claimed protection boundary.
+Status: internal design and implementation assessment, **not an independent security audit**. Scope: v1 description bridge, inactive capture components, isolated helpers and the non-injecting guardian. Production input, clipboard/files and network transport are absent. Physical/E2EE/release acceptance remains blocked. Fully compromised local hosts with sufficient privileges are outside the claimed protection boundary.
 
 | Threat / boundary and precondition | Required authority | Enforcement now / proposed endpoint boundary | Negative evidence | Remaining risk |
 | --- | --- | --- | --- | --- |
@@ -24,6 +24,8 @@ Status: internal design and implementation assessment, **not an independent secu
 | Compromised backend | Independent device/endpoint proof and local consent | No current native authority from backend; proposed issuer trust unresolved | No operation through v1; synthetic verifier refuses bad proof | Do not claim resistance to a compromised authority until independently reviewed design exists |
 | Compromised SFU / relay | Authenticated end-to-end media/data confidentiality | Existing web media E2EE retained; no data transport activated | No new media/data route; actual E2EE Not Verified here | Media encryption does not prove clipboard/file/control confidentiality |
 | Malicious update artifact | Existing pinned Ed25519 chain and verified installer hashes | Existing verifier/manager, fuses and app identity unchanged | Existing signature/key rotation/hash/installer tests retained | Signing-key or sufficiently privileged host compromise remains material |
-| Native module tampering | Reviewed binary provenance, authenticated IPC and package integrity | No new native binary or runtime download | Packaged files inspected; native endpoint absent | Future native signing/integrity and removal tests pending |
+| Native module tampering | Reviewed binary provenance, authenticated IPC and package integrity | Locked inactive guardian binary; ASAR-protected hash manifest checked before diagnostic launch; no runtime download | Package hash/source/notice tests; endpoint still unavailable to the web | Future native signing/integrity and removal tests pending |
 
 Permission visibility, a bridge version or source hash is not authorization. Encryption alone is not identity or consent. File SHA-256 detects corruption but supplies neither confidentiality nor peer authentication. No product-level acceptance follows from a table row marked as a unit/helper test.
+
+Guardian-specific limits: issuance diagnostics cannot authorize operations; process heartbeats are not authoritative liveness. DPAPI protects stored seeds for the current user, not a compromised same-user account. File-handle reparse refusal does not eliminate ancestor-directory races. Notifications do not prove an unlocked Default desktop at startup. No input injector exists, so stuck-key recovery is still a future native test requirement. Independent component review approved only the inactive foundation, not the full threat model or product.

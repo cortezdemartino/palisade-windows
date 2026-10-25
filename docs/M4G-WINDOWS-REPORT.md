@@ -52,3 +52,9 @@ The resolution plan and control/data handoff now select routine engineering defa
 38. Next actions: resolve the narrow runtime finding and review packet, approve/reconcile the proposed contract into the companion repository, then implement only the authorized endpoint/data paths, execute full real-service/native/cross-client negative/E2EE tests on disposable devices and request separate release approval.
 
 See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md), [ASSIST-CONTROL-HANDOFF.md](ASSIST-CONTROL-HANDOFF.md), [ASSIST-ENDPOINT-REVIEW.md](ASSIST-ENDPOINT-REVIEW.md), [ASSIST-THREAT-MODEL.md](ASSIST-THREAT-MODEL.md) and [TEST-RESULTS.md](TEST-RESULTS.md).
+
+## Native guardian implementation checkpoint, 2026-10-25
+
+Starting Windows SHA: 1880d08dec49e780f90878f86b1a3bcd4b21a54b. Companion inspected: ee9c2763f19e62b405bbf9a9c97f187bc5a1291a, control v1. The non-injecting Rust guardian, DPAPI identity, canonical Ed25519 diagnostics, bounded pipe broker, independent process/Windows lifecycle watchdog and integrity/license packaging are Implemented components. Independent review approved this scope after concrete findings were fixed. The current application still reports endpoint absent and never starts the helper. Signed issuance is never accepted as current authorization.
+
+Earlier numbered absence statements describe their historical checkpoint. Full remote control, physical emergency stop, selected-source capture, clipboard/files, encrypted cross-client interoperability and performance remain Blocked / Not Verified. The new stream/group/two-hour contract and native bridge/liveness authority require the read-only companion handoff. Exact local test/build evidence is in TEST-RESULTS.md; final SHA and CI are recorded in Windows #1. No production manifest, tag, release, installation or activation is performed by this checkpoint.

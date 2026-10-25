@@ -48,3 +48,7 @@ The missing web desktop contract blocks any Assist API or native capture grant. 
 ## M4G-WINDOWS-FULL candidate
 
 The current v1 Assist API describes capabilities only and is accepted by the pinned actual web adapter. Capture remains disabled; empty media permission requests are denied because Electron 44.7.2 cannot distinguish modern display from legacy desktop/tab capture there. No input, clipboard, files or generic native IPC route exists. Isolated lease/planning/data helpers confer no production authority. See the current [integration guide](ASSIST-INTEGRATION.md), [threat model](ASSIST-THREAT-MODEL.md) and [endpoint review packet](ASSIST-ENDPOINT-REVIEW.md); earlier missing-v1-contract notes are historical.
+
+## Inactive native guardian
+
+The [guardian foundation](ASSIST-NATIVE-GUARDIAN.md) adds current-user DPAPI identity, strict Ed25519 issuance diagnostics, bounded inherited pipes, parent/user/session checks and an independent watchdog. It accepts no current Assist authority and is not started by production main/preload. Its binary hash manifest is inside the integrity-protected ASAR; native dependency audit and package verification are required before signing. Identity corruption fails closed without automatic reset. Directory replacement races by same-user malware, initial input-desktop qualification and eventual held-key crash recovery remain unqualified. No remote input, capture, OS clipboard or file transfer is activated.

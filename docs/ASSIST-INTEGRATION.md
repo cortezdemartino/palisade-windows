@@ -6,6 +6,10 @@
 
 The owner approved the native architecture on 2026-10-25 and added [stream-bound group assistance](ASSIST-STREAM-SESSIONS.md): viewers can request to assist, streamers can ask a group or selected user, permissions/time are host-owned up to two hours, and stream end terminates access. The companion has since added pairwise control v1 at ee9c2763f19e62b405bbf9a9c97f187bc5a1291a; a versioned stream/group amendment, independent review and native acceptance are still required. Current Windows code does not yet implement that model or longer lifetime.
 
+### Native guardian foundation
+
+The non-injecting [Rust guardian](ASSIST-NATIVE-GUARDIAN.md) implements current-user protected endpoint identity, real canonical control-v1 verification, bounded private-pipe diagnostics, independent watchdog/Windows message handling and packaged binary integrity. It remains unlaunched and unadvertised. Verification diagnostics always return authorized false; no issuer trust enrollment, native consent/acknowledgment or current stream authority is admitted. The shared fixtures now execute in both TypeScript and Rust. Independent review approved only this foundation. Full Assist remains blocked by the separately negotiated native bridge, endpoint-authenticated lifecycle, versioned stream/group model, capture and acceptance.
+
 ### Implemented canonical v1 bridge
 
 The hosted main frame exposes exactly window.palisadeDesktopAssist with protocol, getCapabilities(request), and onCapabilitiesChanged(listener). Protocol is palisade.assist.bridge, version 1. Main uses the exact handoff channels palisade:assist-capabilities and palisade:assist-capabilities-changed. Only a bounded integer version list reaches main; no tokens, Matrix identities, session IDs, paths or native commands cross this API.

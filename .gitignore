@@ -13,3 +13,6 @@ secrets/
 
 .manager/
 out-unified/
+native/assist/target/
+.assist/
+src/assist/guardian-integrity.json

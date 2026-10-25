@@ -43,6 +43,21 @@ jobs:
           }
       - name: Install dependencies
         run: npm ci --no-audit --no-fund
+      - name: Install pinned native toolchain
+        run: rustup toolchain install 1.98.1 --profile minimal --component rustfmt --component clippy
+      - name: Verify and audit native guardian
+        shell: pwsh
+        run: |
+          npm run test:assist-native
+          if ($LASTEXITCODE -ne 0) { throw 'Native verification failed.' }
+          npm run build:assist
+          if ($LASTEXITCODE -ne 0) { throw 'Native compilation failed.' }
+          npm run test:assist-process
+          if ($LASTEXITCODE -ne 0) { throw 'Native process verification failed.' }
+          cargo install cargo-audit --locked --version 0.22.2
+          if ($LASTEXITCODE -ne 0) { throw 'Native audit tool unavailable.' }
+          cargo audit --file native/assist/Cargo.lock --deny warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Native dependency audit failed.' }
       - name: Test and audit
         shell: pwsh
         run: |
@@ -74,6 +89,8 @@ jobs:
       - name: Verify packaged window controls
         shell: pwsh
         run: |
+          npm run verify:assist-package
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged native integrity verification failed.' }
           $env:PALISADE_WINDOW_SMOKE_ASAR = (Resolve-Path 'out/win-unpacked/resources/app.asar').Path
           try {
             npm run test:window-controls

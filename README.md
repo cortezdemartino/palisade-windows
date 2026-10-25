@@ -24,11 +24,14 @@ Windows may display an unknown-publisher warning for unsigned installers. This p
 
 ## Build
 
-Install Node.js 22.13 or later and npm. From the repository root:
+Install Node.js 22.13 or later, npm, the Visual Studio C++ linker and the Rust toolchain pinned in rust-toolchain.toml. Packaging builds the inactive native guardian from locked sources. From the repository root:
 
 ```powershell
 npm ci --no-audit --no-fund
-npm test
+npm run check
+npm run test:assist-native
+npm run build:assist
+npm run test:assist-process
 npm run package:win
 ```
 
@@ -59,3 +62,5 @@ The repository contains no backend service, web assets or Matrix authentication 
 ## License
 
 The Windows client source is available under the [Apache License, Version 2.0](LICENSE). Copyright 2026 Onyx Operations Group. The Palisade name, logo and other brand identifiers remain the property of their respective owner; no trademark license is granted. The separately hosted Palisade service and website are not covered by this repository's license. See [third-party notices](THIRD-PARTY-NOTICES.md).
+
+The inactive [native guardian](docs/ASSIST-NATIVE-GUARDIAN.md) now provides protected endpoint identity, canonical signature diagnostics, process/watchdog isolation and binary integrity verification. It is not started or advertised by the application. Full Assist still requires the canonical native bridge, independently authenticated lifecycle, safe capture and Windows/cross-client acceptance.
