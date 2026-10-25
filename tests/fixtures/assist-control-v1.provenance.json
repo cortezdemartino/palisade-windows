@@ -1,0 +1,17 @@
+{
+  "repository": "cortezdemartino/project-palisade",
+  "commit": "ee9c2763f19e62b405bbf9a9c97f187bc5a1291a",
+  "files": [
+    {
+      "local": "assist-control-v1.web.ts",
+      "source": "apps/web/src/assist/control/protocol.ts",
+      "sha256": "5bedb4df7b3b9b022566fa134a537f11ad2946e53d21d717f2e9ab2a6b9fdccd"
+    },
+    {
+      "local": "assist-control-v1.json",
+      "source": "docs/assist-control/v1/fixtures.json",
+      "sha256": "37039a161fd89bfabf5cf0e33dc19b6f2cfa9a79df30c8d259d0c125688a2a22"
+    }
+  ],
+  "purpose": "Unmodified canonical source and public-key fixtures, LF-normalized for hashing. Tests only; fixture issuer is never a production trust anchor."
+}
