@@ -8,15 +8,19 @@ Owner-approved product direction, 2026-10-25. Architecture approval is recorded 
 - The streamer can ask the current group for help or invite one specific eligible user.
 - Requests can propose permissions and a duration. The streamer makes the final decision on the helper, exact device, permissions and time limit.
 - A group solicitation invites responses. It never grants control to the group, the first respondent or every viewer automatically.
-- Keep one native controller active at a time. Selecting a replacement requires a new explicit decision and invalidates the previous controller before the replacement can act. Simultaneous acceptances must be resolved atomically by the service.
+- Keep one native controller active per Windows host endpoint across its streams. Selecting a replacement requires a new explicit decision and invalidates the previous controller before the replacement can act. Simultaneous acceptances must be resolved atomically by the service and the endpoint must independently refuse conflicting control.
 
 Existing room/call/stream visibility and membership policy still applies. An invitation does not bypass access rules. Request spam needs bounded queues, deduplication, rate limits and expiry; requests cannot interrupt a stream with automatic native approval prompts.
+
+Requests can come from eligible browser or Windows viewers. Native control requires an approved endpoint on the streamer's device; a browser-only host without one cannot receive OS input. Keep unsupported controls unavailable.
 
 ## Permission and time scope
 
 Viewing, visual pointers/annotations, mouse, keyboard, clipboard directions and file directions remain separate. Streamer-selected permissions are an upper bound; native local consent can refuse or narrow them. Every receiving file still requires its own acceptance/save decision.
 
 The accepted Assist session has a positive streamer-selected duration of at most two hours from approval. Default to fifteen minutes and let the streamer explicitly choose a shorter or longer limit up to two hours. Its absolute deadline is fixed when accepted. Grants cannot exceed that deadline, native connectivity leases or the active stream lifetime. No silent renewal, reconnect or new grant extends the same session's original deadline. More time requires a new explicit session decision while an eligible stream is still active.
+
+Assist is a child session of the existing stream. Its expiry or a helper's revocation ends that assistance and its capabilities, not the group stream, room or voice call. Other eligible viewers retain their normal viewing access. The stream may continue beyond the Assist deadline.
 
 Every grant must be authenticated and bound to the exact stream incarnation, publisher account/device, room/call, helper account/device, endpoint, capabilities, generation and deadline. Canonical field names and encoding belong to the companion contract, not this document. Room membership, role, request text, display name or a renderer boolean is not native authority.
 
