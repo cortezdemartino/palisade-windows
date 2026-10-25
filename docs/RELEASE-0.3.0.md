@@ -1,5 +1,7 @@
 # Palisade Windows 0.3.0
 
+Unpublished. The release attempt was stopped at the owner's request. The existing v0.3.0 tag is not a published release and must not be moved or reused for a different candidate.
+
 - Add restricted Assist capability reporting compatible with the Palisade web application.
 - Harden permission handling so a capture feature flag cannot grant screen access or bypass source selection.
 - Add inactive source-picker and session/data validation components for continued Assist development.

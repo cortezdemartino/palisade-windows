@@ -1,6 +1,6 @@
 'use strict';
 const { createHash } = require('node:crypto');
-const { once } = require('node:events');
+const { finished } = require('node:stream/promises');
 function fileMetadata(value) {
   if (!value || Object.keys(value).sort().join(',') !== 'name,sha256,size' ||
       typeof value.name !== 'string' || value.name.length < 1 || value.name.length > 180 ||
@@ -40,35 +40,45 @@ class ClipboardWindow {
 async function receiveFile({ metadata, chunks, destination, signal, authorize, onProgress = () => {} }) {
   const file = fileMetadata(metadata), hash = createHash('sha256');
   let total = 0;
-  const iterator = (chunks[Symbol.asyncIterator] || chunks[Symbol.iterator]).call(chunks);
-  let rejectAbort, complete = false;
+  let iterator, rejectAbort, complete = false;
   const interrupted = new Promise((_resolve, reject) => { rejectAbort = reject; });
+  // Cancellation can happen synchronously inside an authorization callback.
+  // Its original error still propagates through the operation below.
+  void interrupted.catch(() => {});
+  const completed = finished(destination, { readable: false, cleanup: true });
+  void completed.catch(() => rejectAbort(new Error('Transfer destination failed')));
   const abort = () => { destination.destroy(); rejectAbort(new Error("Transfer cancelled")); };
-  destination.on("error", () => {}); signal.addEventListener("abort", abort, { once: true });
+  signal.addEventListener("abort", abort, { once: true });
+  function requireAuthorization() {
+    if (signal.aborted) throw new Error('Transfer cancelled');
+    if (authorize() !== true) throw new Error('Transfer not authorized');
+    if (signal.aborted) throw new Error('Transfer cancelled');
+  }
   try {
-    if (signal.aborted) abort();
+    requireAuthorization();
+    if (destination.destroyed || destination.writableEnded) throw new Error('Transfer destination closed');
+    iterator = (chunks[Symbol.asyncIterator] || chunks[Symbol.iterator]).call(chunks);
     while (true) {
+      requireAuthorization();
       const next = await Promise.race([Promise.resolve(iterator.next()), interrupted]);
       if (next.done) { complete = true; break; }
       const chunk = next.value;
-      if (signal.aborted) throw new Error('Transfer cancelled');
-      if (authorize() !== true) throw new Error("Transfer not authorized");
+      requireAuthorization();
       if (!(chunk instanceof Uint8Array) || chunk.length === 0 || chunk.length > 65536 || total + chunk.length > file.size) throw new Error('Invalid file chunk');
       const bytes = Buffer.from(chunk);
       total += bytes.length; hash.update(bytes);
       await Promise.race([new Promise((resolve, reject) => destination.write(bytes, error => error ? reject(error) : resolve())), interrupted]);
       onProgress({ received: total, size: file.size });
     }
-    if (signal.aborted) throw new Error('Transfer cancelled');
-    if (authorize() !== true) throw new Error("Transfer not authorized");
+    requireAuthorization();
     if (total !== file.size || hash.digest('hex') !== file.sha256) throw new Error('File integrity failed');
-    const ended = once(destination, 'finish', { signal }); destination.end(); await ended;
-    if (signal.aborted || authorize() !== true) throw new Error('Transfer not authorized');
+    destination.end(); await Promise.race([completed, interrupted]);
+    requireAuthorization();
     return { size: total, sha256: file.sha256 };
   } catch (error) { destination.destroy(); throw error; }
   finally {
     signal.removeEventListener('abort', abort);
-    if (!complete && iterator.return) void Promise.resolve(iterator.return()).catch(() => {});
+    if (!complete && iterator?.return) void Promise.resolve().then(() => iterator.return()).catch(() => {});
   }
 }
 module.exports = { fileMetadata, clipboardPayload, ClipboardWindow, receiveFile };

@@ -2,7 +2,7 @@
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
-**Version: 0.3.0.** Windows 10/11, x64. Assist screen sharing and remote control remain disabled. The client is under active development and has not undergone an independent security audit.
+**Development version: 0.3.0, unpublished.** Windows 10/11, x64. Assist screen sharing and remote control remain disabled. The client is under active development and has not undergone an independent security audit.
 
 ## Features
 

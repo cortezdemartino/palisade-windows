@@ -199,6 +199,8 @@ The final gate requires complete high-risk CI for exact revisions, independent f
 
 ## Engineering defaults
 
+The October 25 lifecycle follow-up implements the original-deadline, live-consent and granular cancellation requirements in the existing non-injecting helpers. Transfer authorization is checked before opening a source, and destination failure cancels stalled reception. This advances the offline admission/stream components; it does not resolve capture admission, native approval, device proof, real transport or cross-client acceptance. The [focused companion prompt](ASSIST-COMPANION-HANDOFF-PROMPT.md) requests the canonical contract/fixtures and review needed next while this chat keeps the companion repository read-only.
+
 The owner has delegated routine technical choices to engineering. Use the following design defaults when preparing the implementation and independent review. These decisions do not change the current feature gates or constitute approval of native input, companion repository writes, installation or release.
 
 | Area | Selected default |

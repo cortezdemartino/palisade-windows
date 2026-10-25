@@ -28,9 +28,9 @@ Local stop is wired to a tray action, minimize/hide/close/unresponsive, renderer
 
 ### Independently implemented non-injecting components
 
-- lease.cjs: mandatory independent-verifier seam, exact participant/device/endpoint/session binding, bounded capability subset, separate in-memory local consent, 15-minute maximum, expiry timer, replay/generation/rate/clock checks and terminal revocation.
+- lease.cjs: mandatory independent-verifier seam, exact participant/device/endpoint/session binding, independently supplied original session deadline, bounded capability subset, separate live in-memory consent, 15-minute maximum, expiry timer, replay/generation/rate/clock checks, scoped cancellation and terminal revocation. Revoked scopes cannot be restored on the same lease.
 - input-model.cjs: content/source rectangle translation with negative origins and rotation, bounded key/button plans, reviewed-shortcut proposal and release-all ledger. No SendInput, keyboard hook, Unicode injector or virtual-keyboard UI exists.
-- data-model.cjs: bounded UTF-8/PNG envelope handling, opt-in in-memory deduplication, Windows basename/size/hash validation and bounded writable-stream reception with cancellation, positive authorization checks and final integrity. No OS clipboard operation, filesystem path, file dialog/save broker, encryption or network transfer exists.
+- data-model.cjs: bounded UTF-8/PNG envelope handling, opt-in in-memory deduplication, Windows basename/size/hash validation and bounded writable-stream reception with pre-read authorization, scoped cancellation, failed-destination interruption and final integrity/lifecycle checks. No OS clipboard operation, filesystem path, file dialog/save broker, encryption or network transfer exists.
 
 These helpers are not imported by any production operation handler. Tests use synthetic independent authority, in-memory streams and planner outputs; they do not establish endpoint identity or native execution. Host-owned input/clipboard/file consent UI and trusted verifier/transport remain Blocked. Annotations/pointers must reuse the actual existing Olm to-device annotation implementation, after the service grants Assist collaboration.
 
