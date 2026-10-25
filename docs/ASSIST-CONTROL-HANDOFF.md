@@ -4,6 +4,16 @@ Status: **Planned contract, not a production protocol.** Windows components impl
 
 Do not append operations or capability fields to `palisade.assist.bridge` v1. Its three members and seven-field report remain unchanged. The companion team must reconcile this proposal with a new canonical service/data contract and supply executable shared fixtures before integration. Track [Windows #4](https://github.com/cortezdemartino/palisade-windows/issues/4) and [parent #18](https://github.com/cortezdemartino/project-palisade/issues/18).
 
+## Recommended invitation and access-pass behavior
+
+Engineering defaults use an in-app invitation addressed to one authenticated person/device. The invitation can establish one session; the accepted session has separate scoped grants for viewing, mouse, keyboard, clipboard directions and file directions. Users do not copy raw keys. Consent shows the actual participant/device, permissions, deadline and local stop; automatic key exchange never makes access invisible.
+
+An invitation or forwarded token alone cannot authorize a different device. The native endpoint must independently verify host approval and guest-device possession using the reviewed Matrix/device trust contract, plus its own current local consent. Reconcile this proof with supported identity APIs; do not invent a second identity authority or accept renderer assertions. Use standard reviewed cryptography and separate endpoint/session keys from updater-signing keys. Native endpoint private keys stay in per-user OS-protected storage and outside the hosted renderer.
+
+Invitation redemption must be atomic and bounded; retries must not establish duplicate sessions. Grants retain the original Assist deadline, endpoint/session/device bindings and replay/revocation scope below. Expiration, local stop and connection uncertainty end affected authority. A refreshed transport or unlocked desktop cannot restore control without fresh valid authorization and consent. Single invitation redemption is distinct from validating every action during the resulting session.
+
+These defaults are review input, not committed web/backend behavior. Shared fixtures must cover forwarded invitations, wrong devices/endpoints, duplicate redemption, replay, permission expansion, expiry, revocation and attempted restoration. Companion source remains read-only in this assignment.
+
 ## Proposed authority types
 
 The following types are review input. They are not trusted JSON accepted from the current page. A future independently implemented verifier must authenticate the envelope and derive these fields, including the endpoint/peer proof. An object claiming `verified: true`, a bridge report, a media token or the Palisade domain cannot substitute for that verifier.

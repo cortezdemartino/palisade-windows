@@ -127,8 +127,8 @@ function createMainWindow(profile) {
   assistCapture = createCaptureController({ enabled: captureEnabled, getContents: () => contents, getWindow: () => window,
     enumerate: options => desktopCapturer.getSources(options), choose: chooseSource, onState: () => updateTrayMenu(),
     revoke: () => { if (!contents.isDestroyed()) { contents.forcefullyCrashRenderer(); contents.reload(); } } });
-  installSessionPolicy(profile, () => mainContents, assistCapture);
-  assistBridge = installAssistBridge(contents, { desktopVersion: app.getVersion(), captureAvailable: assistCapture.available });
+  installSessionPolicy(profile, () => mainContents);
+  assistBridge = installAssistBridge(contents, { desktopVersion: app.getVersion() });
   for (const name of ['minimize', 'hide', 'close', 'unresponsive']) window.on(name, assistCapture.stop);
   contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) assistCapture?.stop(); });
   contents.on('render-process-gone', () => assistCapture?.stop());

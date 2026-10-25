@@ -1,7 +1,7 @@
 'use strict';
 const { isPalisadeUrl, mayGrantPermission } = require('./security-policy.cjs');
 
-function installSessionPolicy(profile, getContents, capture = null) {
+function installSessionPolicy(profile, getContents) {
   function trustedRequester(requester, details) {
     const contents = getContents();
     if (!contents || requester !== contents || contents.isDestroyed() ||
@@ -15,15 +15,16 @@ function installSessionPolicy(profile, getContents, capture = null) {
   });
   profile.setPermissionRequestHandler((contents, permission, callback, details) => {
     callback(trustedRequester(contents, details) && typeof details.requestingUrl === 'string' &&
-      (mayGrantPermission(permission, contents.getURL(), details.mediaTypes) ||
-        (permission === 'display-capture' && capture?.available() === true)));
+      mayGrantPermission(permission, contents.getURL(), details.mediaTypes));
   });
   profile.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
     if (!trustedRequester(contents, details) || !isPalisadeUrl(requestingOrigin)) return false;
-    return (permission === 'display-capture' && capture?.available() === true) || permission === 'notifications' || (permission === 'media' && details.mediaType === 'audio');
+    return permission === 'notifications' || (permission === 'media' && details.mediaType === 'audio');
   });
-  // Capture stays denied unless the separately gated controller is available.
-  profile.setDisplayMediaRequestHandler((request, callback) => capture?.available() === true ? capture.handle(request, callback) : callback(null), { useSystemPicker: false });
+  // Availability cannot authorize capture: generic display permission also admits
+  // legacy requests that bypass the picker. Keep all paths closed until native
+  // request provenance and source selection can be enforced together.
+  profile.setDisplayMediaRequestHandler((_request, callback) => callback(null), { useSystemPicker: false });
   profile.setDevicePermissionHandler(() => false);
 }
 

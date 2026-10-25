@@ -99,3 +99,23 @@ test('an available controller cannot turn ambiguous empty media requests into ca
   assert.equal(h.request(h.contents, 'media', { ...h.details, mediaTypes: [] }), false);
   assert.equal(h.profile.check(h.contents, 'media', PALISADE_URL, { ...h.details, mediaType: 'unknown' }), false);
 });
+
+test('controller availability alone cannot authorize modern or legacy display capture', () => {
+  const h = fixture();
+  let delegated = 0;
+  installSessionPolicy(h.profile, () => h.contents, {
+    available: () => true,
+    handle: () => { delegated++; },
+  });
+  for (const mediaTypes of [[], ['video'], ['audio'], ['audio', 'video'], undefined]) {
+    const details = { ...h.details, mediaTypes };
+    assert.equal(h.request(h.contents, 'display-capture', details), false);
+    assert.equal(h.profile.check(h.contents, 'display-capture', PALISADE_URL, details), false);
+  }
+  let replies = 0;
+  h.profile.display({ frame: h.contents, userGesture: true, videoRequested: true }, streams => {
+    replies++; assert.equal(streams, null);
+  });
+  assert.equal(replies, 1);
+  assert.equal(delegated, 0);
+});

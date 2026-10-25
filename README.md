@@ -32,7 +32,7 @@ npm test
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.2.12-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.3.0-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
 
 ## Updates
 
@@ -45,6 +45,7 @@ The repository contains no backend service, web assets or Matrix authentication 
 ## Documentation
 
 - [Windows Assist contract audit and preparation](docs/ASSIST-INTEGRATION.md)
+- [Assist resolution plan and engineering defaults](docs/ASSIST-RESOLUTION-PLAN.md)
 - [M4G-WINDOWS checkpoint report](docs/M4G-WINDOWS-REPORT.md)
 - [User guide](docs/USER-GUIDE.md)
 - [Build and release operations](docs/OPERATIONS.md)

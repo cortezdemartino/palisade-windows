@@ -2,6 +2,12 @@
 
 Candidate **0.3.0, unpublished**. Overall product classification: **Blocked**. The canonical v1 description bridge and independently testable components are implemented; production capture and sensitive execution/data routes remain disabled or absent. The full product definition of done is not met.
 
+## Capture-admission follow-up
+
+Starting checkpoint ed6f1628a927c5e08ee8d8b71be8dd4b4b4091dc. Session policy now denies display capture independently of controller availability, and main cannot advertise capture from its build flag alone. A regression failed before this fix and passes afterward. Sixty-six automated tests, production dependency audit, source and packaged Electron fixtures, Windows x64 NSIS packaging and packaged policy/fuse checks passed. A thirty-case fixture also passed on the official Electron 45.0.0 comparison runtime; the application dependency remains 44.7.2. TEST-RESULTS.md records the precise negative-test scope and installer digest. Current exact-SHA CI and issue evidence are recorded in Windows #1 after push.
+
+The resolution plan and control/data handoff now select routine engineering defaults, including seamless private invitations and device-bound grants. No new authority, native execution or companion protocol is implemented. Native input approval, enforceable positive capture, companion implementation and real cross-client qualification remain open. The original numbered report below describes the earlier checkpoint; this section supersedes its test count and capture-admission status.
+
 ## Revision and component report
 
 1. Starting Windows SHA: ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c; main was clean and reconciled with origin before editing.

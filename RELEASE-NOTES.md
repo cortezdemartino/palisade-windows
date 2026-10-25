@@ -6,6 +6,8 @@
 - Add a local screen/window picker and inactive capture controller; keep capture denied because of the Electron permission ambiguity/legacy bypass finding.
 - Add isolated lease, coordinate/key-state, clipboard-envelope and file-stream validation components without native or network execution.
 - Add Electron picker/bridge/legacy-denial checks, a full-scope handoff and an endpoint/threat review packet.
+- Keep capture permission denied independently of controller availability; a feature flag alone cannot enable modern or legacy capture.
+- Add a 30-case Windows capture-admission fixture and record the official-runtime comparison, implementation order and session access-pass design defaults.
 
 Native execution, actual sharing, cross-client E2EE, clipboard/files and production activation are not qualified or released.
 

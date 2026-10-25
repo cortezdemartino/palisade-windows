@@ -10,7 +10,9 @@ The Electron renderer remains sandboxed and cannot obtain raw IPC, command execu
 
 The endpoint must verify independently issued proof and device/peer possession, plus its own trusted local consent. Backend relay/session assertions alone must not authorize input. Issuer keys, endpoint enrollment and trust storage are unresolved companion/security decisions. The injectable verifier in `AssistLease` is a test seam, not that authority. No default verifier, renderer-supplied approval boolean or update-signing key is reused.
 
-## Decisions required before executor implementation
+## Engineering design required before executor implementation
+
+The owner has delegated routine technical decisions. Engineering owns selecting and justifying these mechanisms, reconciling the canonical companion contract and preparing a concrete review packet. The [resolution plan](ASSIST-RESOLUTION-PLAN.md#engineering-defaults) records the recommended defaults, including private device-bound invitations and independently scoped session grants. The owner is not being asked to design cryptography or diagnose Electron. The explicit owner/independent approval gate above still applies to the completed design and permitted scope.
 
 - Endpoint identity enrollment, issuer/device trust, key separation and rotation/recovery.
 - Authenticated local IPC design, process/SID binding, binary integrity and parent-death behavior.

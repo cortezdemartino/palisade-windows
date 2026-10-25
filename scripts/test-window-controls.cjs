@@ -11,7 +11,7 @@ async function main() {
     await flipFuses(executable, { version: FuseVersion.V1, [fuse]: false });
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
-    for (const script of ['window-controls-smoke.cjs', 'chat-notifications-smoke.cjs', 'session-policy-smoke.cjs', 'assist-smoke.cjs']) {
+    for (const script of ['window-controls-smoke.cjs', 'chat-notifications-smoke.cjs', 'session-policy-smoke.cjs', 'assist-smoke.cjs', 'capture-admission-smoke.cjs']) {
       const code = await new Promise((resolve, reject) => {
         const child = spawn(executable, [path.join(__dirname, script)], {
           cwd: path.join(__dirname, '..'), env, stdio: 'inherit', windowsHide: true,
