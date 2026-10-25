@@ -1,6 +1,6 @@
 # M4G-WINDOWS-FULL implementation checkpoint
 
-Candidate **0.3.0, unpublished**. Overall product classification: **Blocked**. The canonical v1 description bridge and independently testable components are implemented; production capture and sensitive execution/data routes remain disabled or absent. The full product definition of done is not met.
+Desktop version **0.3.0**. Overall Assist product classification: **Blocked**. The canonical v1 description bridge and independently testable components are implemented; production capture and sensitive execution/data routes remain disabled or absent. The owner authorized the desktop update release with those restrictions; the full Assist product definition of done is not met. The numbered checkpoint evidence below retains its original release status, with publication evidence tracked separately in Windows issue #1.
 
 ## Capture-admission follow-up
 

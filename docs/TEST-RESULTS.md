@@ -135,3 +135,7 @@ Risk: High, permission boundary. Starting Windows checkpoint: ed6f1628a927c5e08e
 - Local candidate installer SHA-256: 57cfa8c62311cfeb79d112678b26c98db61e4f757a8f424b7739ee03616b4590. This is build evidence, not a release signature. No private signing key was read, production manifest signed, installer run, tag pushed or release published.
 
 Fixture reports remain local under ignored out/. Exact-SHA Windows CI is recorded in Windows #1 after push. Real Matrix/Synapse/LiveKit integration, cross-client E2EE, selected-source capture, physical input/stop, clipboard/files, installed upgrades and performance remain Not Verified. This conservative denial change does not qualify the complete Assist product or waive the required approvals.
+
+## Desktop 0.3.0 release authorization
+
+The owner subsequently authorized publishing the desktop update while Assist capture/input/data routes remain disabled. Release preparation changes public documentation and adds docs/RELEASE-0.3.0.md; executable source, package version, dependency lock, profile paths, fuses and trust anchors remain those verified at 79e4d310c3cbb8f99077a3aa8aba6c6f05f9c4c9. The tag-based protected release workflow repeats locked tests, source/packaged boundary checks, audit, packaging and signature/installer verification on its exact revision before publishing. Final workflow and downloaded-asset verification evidence is recorded in Windows issue #1. Release authorization does not establish the unexecuted Assist or installed-upgrade tests above.

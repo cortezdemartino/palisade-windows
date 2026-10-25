@@ -42,8 +42,8 @@ The signing script confirms the private key matches the public key shipped with 
 4. Tag the exact reviewed commit and push the tag:
 
 ```powershell
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
 The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs all three manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
@@ -74,4 +74,4 @@ The sole earlier test client requires the explicitly authorized manual v0.2.2 bo
 
 ## M4G-WINDOWS preparation gate
 
-The current candidate has a compatible v1 bridge but is blocked by the Electron capture permission review, native approval and expanded data-contract dependencies documented in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md). Main builds include packaged permission-boundary checks. Do not tag, publish, install or activate this candidate without the required owner approval. CI artifacts are testing evidence, not approved releases. Physical capture and cross-client E2EE acceptance remain unexecuted.
+The desktop has a compatible v1 bridge but Assist remains blocked by the Electron capture permission review, native approval and expanded data-contract dependencies documented in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md). Main builds include packaged permission-boundary checks. The owner authorized publishing the 0.3.0 desktop update with Assist capture/input/data routes disabled. That authorization does not approve native endpoint implementation, installation or activation, or accept the complete Assist product. Future releases still require their own applicable approval and verification. CI artifacts alone are testing evidence, not approved releases. Physical capture and cross-client E2EE acceptance remain unexecuted.

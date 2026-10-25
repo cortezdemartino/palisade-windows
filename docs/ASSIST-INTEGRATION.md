@@ -2,7 +2,7 @@
 
 ## Current M4G-WINDOWS-FULL checkpoint
 
-**Candidate 0.3.0, unpublished. Overall product: Blocked.** Starting Windows SHA: ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c. The committed web v1 contract is now available at **6c7ab894862ca3767b1239594e37c322e96ff2c4**. The earlier missing-contract audit below is historical, not current status.
+**Desktop version 0.3.0. Overall Assist product: Blocked.** The desktop release retains disabled Assist capture/input/data routes; publication does not activate or qualify them. Starting Windows SHA: ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c. The committed web v1 contract is now available at **6c7ab894862ca3767b1239594e37c322e96ff2c4**. The earlier missing-contract audit below is historical, not current status.
 
 ### Implemented canonical v1 bridge
 

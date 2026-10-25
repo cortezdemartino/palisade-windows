@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.3.0 (unpublished Assist component candidate)
+## 0.3.0
 
 - Implement the canonical description-only Assist v1 bridge and pin the actual web adapter in contract tests.
 - Add a local screen/window picker and inactive capture controller; keep capture denied because of the Electron permission ambiguity/legacy bypass finding.
@@ -9,7 +9,7 @@
 - Keep capture permission denied independently of controller availability; a feature flag alone cannot enable modern or legacy capture.
 - Add a 30-case Windows capture-admission fixture and record the official-runtime comparison, implementation order and session access-pass design defaults.
 
-Native execution, actual sharing, cross-client E2EE, clipboard/files and production activation are not qualified or released.
+Native Assist execution, actual sharing, cross-client Assist E2EE and clipboard/files are not qualified or enabled. This desktop release retains the existing messaging and native integrations while those Assist capabilities remain disabled. See [the release notes](docs/RELEASE-0.3.0.md) for the exact availability and verification limits.
 
 
 ## 0.2.12 (unpublished preparation)

@@ -47,8 +47,8 @@ From v0.2.5, incoming unread increases request native Windows taskbar flashing w
 
 ## Assist in the Windows client
 
-Native Assist screen/window sharing is not supported in this candidate. Use an approved browser for enabled browser Assist; Windows viewing has not been qualified. A desktop capture denial is expected and must not be bypassed. The client exposes no remote keyboard/mouse capability. See [the integration status and browser workflow](ASSIST-INTEGRATION.md).
+Native Assist screen/window sharing is not supported in this release. Use an approved browser for enabled browser Assist; Windows viewing has not been qualified. A desktop capture denial is expected and must not be bypassed. The client exposes no remote keyboard/mouse capability. See [the integration status and browser workflow](ASSIST-INTEGRATION.md).
 
-## Full Assist candidate availability
+## Full Assist availability
 
 The device now reports Assist v1 capabilities, with capture and native endpoint unavailable. This build cannot control another desktop or transfer clipboard/files. No guest virtual keyboard, control approval, clipboard sync or file save workflow is active. Those actions require separately approved native/backend capabilities; do not interpret accepting a call as permission. The inactive screen-sharing stop action is not a certified native-input emergency stop. Continue using the approved browser view-only workflow where enabled, and end assistance to leave it. See the integration guide for blocked/unverified states and owner review steps.
