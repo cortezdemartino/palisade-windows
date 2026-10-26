@@ -109,3 +109,43 @@ test('independent watchdog terminates a silent or blocked parent pipe', async ()
   for (let sequence = 1; sequence <= 4000; sequence++) blockedOutput.push(frame({ type: 'status' }, sequence));
   await terminated(Buffer.concat(blockedOutput), { idle: true, drain: false });
 });
+async function executorProbe() {
+  const child=spawn(binary,['--executor-probe',String(process.pid),'73371'],{windowsHide:true,stdio:['pipe','pipe','ignore']});
+  child.stdin.on('error',()=>{});const exited=once(child,'exit');let buffer=Buffer.alloc(0),waiter,queued=[];
+  child.stdout.on('data',chunk=>{
+    buffer=Buffer.concat([buffer,chunk]);
+    while(buffer.length>=4&&buffer.length>=buffer.readUInt32LE(0)+4){
+      const size=buffer.readUInt32LE(0);assert(size>0&&size<=16384);
+      const value=JSON.parse(buffer.subarray(4,size+4).toString('utf8'));buffer=buffer.subarray(size+4);
+      if(waiter){const resolve=waiter;waiter=null;resolve(value);}else queued.push(value);
+    }
+  });
+  const next=()=>Promise.race([queued.length?Promise.resolve(queued.shift()):new Promise(resolve=>{assert(!waiter);waiter=resolve;}),exited.then(()=>{throw Error('executor ended before reply');})]);
+  // Bound every fixture independently so a defect cannot leave a child behind.
+  const timer=setTimeout(()=>child.kill(),6500);
+  const ready=await Promise.race([next(),exited.then(()=>{throw Error('executor failed before ready');})]);
+  assert.equal(ready.sequence,0xffffffff);assert.equal(ready.accepted,true);
+  const at=performance.now();let sequence=0;
+  return {child,exited,ready,next,
+    send:(action=null,extra={})=>{const value={sequence:sequence++,expires:ready.uptime+Math.floor(performance.now()-at)+75,source:{x:0,y:0,width:100,height:100,generation:1},action,...extra};child.stdin.write(frame(JSON.stringify(value)));},
+    close:()=>{clearTimeout(timer);child.kill();},
+  };
+}
+test('executor probe keeps an idle private pipe alive with no-input heartbeats, then closes on EOF', async () => {
+  const p=await executorProbe();try{
+    for(let i=0;i<12;i++){p.send();assert.equal((await p.next()).accepted,true);await new Promise(resolve=>setTimeout(resolve,200));}
+    p.send({Key:{code:'ControlLeft',down:true}});assert.equal((await p.next()).accepted,true);
+    p.send({Key:{code:'ControlLeft',down:false}});assert.equal((await p.next()).accepted,true);
+    p.child.stdin.end();assert.equal((await p.exited)[0],125);
+  }finally{p.close();}
+});
+test('executor probe rejects malformed frames, replayed or expired packets and idle parent loss', async () => {
+  for(const mode of ['malformed','replay','expired','idle']){
+    const p=await executorProbe();try{
+      if(mode==='malformed')p.child.stdin.write(frame('{"sequence":0,"unexpected":true}'));
+      if(mode==='replay'){p.send();await p.next();p.send(null,{sequence:0});}
+      if(mode==='expired')p.send(null,{expires:p.ready.uptime-1});
+      assert.equal((await p.exited)[0],125,mode);
+    }finally{p.close();}
+  }
+});

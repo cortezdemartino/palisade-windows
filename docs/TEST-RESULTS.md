@@ -1,5 +1,18 @@
 # Validation
 
+## Native stream/resource component checkpoint, October 26, 2026
+
+Windows 10.0.26300 x64, Node.js 24.20.0, pinned Rust 1.98.1, Electron 44.7.2. Starting Windows SHA: c76d3370a770e811e4997d61cab738a9a9a90d3e. Companion source/fixtures: c0778935a6a08303bf7a9d7de8f2fa75aa8ef536, read-only.
+
+- App regression/conformance suite: 104 tests passed, including both canonical protocol generations and real Ed25519 fixtures.
+- Rust default/all-features checks compile the sensitive adapters and exercise only fake input sinks, owned hidden windows, temporary identities and temporary NTFS files. Idle grant expiry and Drop cleanup are tested. No real input or clipboard operation is performed by these tests.
+- Seven actual subprocess groups passed on default and all-features binaries: guardian identity/bounds/liveness and executor readiness, no-input heartbeats, EOF, malformed frames, expiry, replay and idle parent loss. Probe paths remain non-authorizing in either build.
+- Temporary filesystem tests passed for immutability, hash/size, no overwrite, MOTW, quotas, cancellation, parent rename refusal and OS cleanup on process exit without Rust Drop.
+- Independent review ran 13 Rust and 12 JavaScript focused tests, all passed, and approved committing the disabled components. It did not approve activation.
+- Locked Rust dependency audit passed with no reported advisory. Windows x64 NSIS packaging succeeded with default features. Final package integrity, Electron checks and exact-SHA CI are recorded after the candidate push.
+
+No native input, physical emergency shortcut, live clipboard, cross-client session, installer execution, upgrade, protected-desktop recovery or performance benchmark was executed. Complete Assist remains Blocked, with integration and disposable-device qualification still outstanding. The installer is a build artifact, not a full Assist release candidate.
+
 ## Signing integration, October 17, 2026
 
 - `npm run check`: 29 tests passed on Windows with Node.js 24.20.0, including predecessor-authenticated rotation, transition tampering, key-history rollback, untrusted keys, signed download locations, modified installers and both signing CLIs.

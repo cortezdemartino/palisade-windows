@@ -1,54 +1,57 @@
-# Native Assist guardian
+# Native Assist components
 
-Status: **Implemented, inactive component**. The application neither starts the guardian nor advertises an available endpoint. This is not a full Assist release candidate. It implements no mouse/keyboard injection, capture, clipboard, file transfer, listener, service or remote command execution.
+Status, October 26, 2026: **Experimental, inactive**. Production main/preload do not start or expose these components. The packaged helper has no sensitive Cargo features. This is not a full Assist test candidate.
 
-## Process boundary
+## Process and authority
 
-`native/assist` builds an unelevated Rust x64 executable from the pinned toolchain and Cargo.lock. The internal main-process broker verifies its size and SHA-256 against a build-generated manifest inside the integrity-protected ASAR. There are no runtime binary downloads. The normal guardian checks its actual creator PID and creation time, the fixed adjacent packaged Palisade executable path, matching user SID/nonzero session and absence of elevation. It retains the parent handle and removes pipe-handle inheritance. These checks establish a local process relationship, not Assist authority. Compromised main processes and sufficiently capable same-user malware remain outside this boundary.
+The Rust helper checks creator PID/creation time, packaged path, user SID, nonzero session, elevation and private pipes. Its original diagnostic protocol remains v1, with 16,384-byte frames and no generic command API. Diagnostic verification always returns authorized false.
 
-The private diagnostic protocol is `palisade.assist.guardian` v1, distinct from web contracts. Frames have a four-byte little-endian length and at most 16,384 UTF-8 bytes. Empty, oversized, incomplete, duplicate/unknown-field and out-of-sequence requests terminate the process. A single bounded channel slot limits queued frames. A challenge/response handshake is required within five seconds. It correlates the instance and grants no remote authority.
+The control-v2 verifier uses strict Ed25519 verification over canonical sorted-key UTF-8. It pins the deadline, distinguishes grant/lease generations, refuses revoked grants and binds permits to instance, action, epoch, source generation and a 100ms lifetime. Idle grant expiration invalidates held-input authority even under a fresh lease. Legacy v1 retains its fifteen-minute limit.
 
-Fixed commands are hello, status, verify-grant, enrollment-challenge, stop and shutdown. Probe mode refuses enrollment signing. The internal broker exposes only status, issuance diagnostics and terminal stop/close, with one outstanding request, size limits and deadlines. No generic command API is exposed to a renderer; production main/preload do not import it.
+The coordinator joins local consent, endpoint-key-authenticated five-second polling and an independent input worker. WinHTTP keeps OS TLS/revocation checking at the fixed Palisade HTTPS origin, disables redirects/cookies/automatic authentication and bounds responses/timeouts. No Matrix credentials are extracted. Clock skew cannot extend a lease beyond twenty monotonic seconds from request start.
 
-## Identity and verification
+Consent displays helper account/device, capability and absolute expiry. Deny has default focus. Only the exact native Allow button notification approves. The worker revalidates the grant, source and epoch before recording consent. Acknowledgement signs the native grant after that decision. A page callback cannot approve it.
 
-An optional enrollment identity uses Windows system randomness and current-user DPAPI at `%LOCALAPPDATA%\Palisade\Assist\endpoint-v1.dpapi`. No machine-wide DPAPI, plaintext seed persistence, updater keys or Matrix keys are used. Seed/decrypted buffers are cleared; dalek enables key zeroization. Only an exactly 32-byte enrollment challenge can be signed. There is no grant acknowledgment signer and no page/broker enrollment route yet.
+Endpoint identity persists under current-user DPAPI at %LOCALAPPDATA%/Palisade/Assist/endpoint-v1.dpapi. The issuer-v2 pin implementation confirms the fetched fingerprint on first use and refuses changes. This is TOFU with HTTPS, not an independently authenticated release pin. Production enrollment still requires reviewed trust policy. Never automatically delete corrupt identities or changed pins. Recovery must revoke old service enrollment/grants before establishing new authority. Private identity material never crosses the pipe.
 
-Corrupt, inaccessible, conflicting or malformed identity files fail closed and are never silently replaced. File opens disallow write/delete sharing and do not follow a final reparse point. Directory reparse checks add refusal checks, but do not fully prevent ancestor-directory replacement races by same-user filesystem attackers. This is not a general handle-safe filesystem broker.
+## Input executor
 
-The Rust verifier uses strict Ed25519 verification over canonical control v1 sorted-key bytes. It validates exact fields, capability/endpoint consistency, account/device/transport binding, expected endpoint, deadline and generation. Legacy v1 remains capped at fifteen minutes. Shared companion signatures are tested unchanged. Caller-supplied diagnostic issuer/context inputs authenticate issuance only: every diagnostic result returns `authorized: false`. No fixture key or diagnostic key is enrolled as production trust or local consent.
+The guardian owns the authorization gate and a write-ahead ledger. A child accepts bounded, sequenced, short-lived primitive steps over creator-bound inherited pipes. It has no listener, command launcher or elevated service. Before self-spawn, the helper checks the protected expected binary hash and retains no-write/no-delete image/ancestor locks.
 
-## Independent stop
+The child has another local ledger, a local activity monitor and independent parent/idle watchdog. Heartbeats contain no input. Shutdown stops steps before cleanup. Guardian cleanup fences/reaps the child before mirrored UP events. Owner Drop retains native cleanup on failures. If its guardian dies, the child retains only owned release authority, refuses protected-desktop injection and retries when Default returns. Simultaneous process/OS failure is not claimed to be recoverable.
 
-A separate watchdog checks parent death, backward/invalid wall clocks, missing handshake and five seconds without completed parent activity. It never waits on frame reads, stdout writes or the renderer. EOF, malformed input and stop are terminal. A separate Windows message thread registers session/power notifications. Normal mode requires a visible Stop Assist window and Ctrl+Alt+Shift+F10 registration. Registration, timer or message-loop loss prevents continued operation. Window creation and destruction stay on their owning thread.
+The adapter validates physical monitor bounds, source generation, virtual-desktop coordinates, per-monitor DPI, session, target SID and elevation. It denies OS/Meta keys, Alt+Tab, secure-attention/elevation shortcuts, unknown scan codes and unowned UP events. Pre-existing local mouse holds cannot become remote drags. Physical layouts, AltGr/dead keys/IME, modifier interference, crash recovery and protected-window transitions remain unqualified. This checkpoint conservatively ends the session on child/activity loss; resource continuity during input suspension remains integration work.
 
-Probe tests post messages to an owned hidden window and intentionally skip global hotkey registration. They are not physical hotkey, lock, sleep or protected-desktop tests. Notifications do not establish that startup occurred on an unlocked Default desktop. Initial and per-dispatch OS desktop validation is still required before input. No held-key crash cleanup is claimed: a future executor needs a surviving release authority/mirrored ledger and actual disposable-device tests.
+Probe mode simulates steps/cleanup. It does not register activity hooks, enroll identities or execute resource/input APIs, including in all-features builds. Actual subprocess checks cover readiness, no-input keepalive, EOF, idle loss, malformed frames, expiry and replay. These do not qualify physical stop shortcuts or real input.
 
-## Reproducible verification
+## Clipboard and files
 
-On Windows x64 with the Visual Studio C++ linker and the toolchain in `rust-toolchain.toml`:
+The trusted-main clipboard broker has publisher/helper directions, positive authority checks, directional cancellation, default Off and a local copy action. Sync requires a negotiated agreement on every operation. Epoch checks stop paused in-flight work. It stores one bounded incoming text item without history or content logging. OS/peer integration is pending.
 
-```powershell
+Native file selection exposes opaque handles. It accepts ordinary files on fixed NTFS volumes, checks/locks each ancestor without delete sharing and resolves subsequent opens from volume-GUID handles. Sources cannot change while held. Limits are 1GiB/file, one transfer/direction and 4GiB accepted bytes/store-session; canceled attempts remain charged. Operation cancellation closes dialogs and refuses late opens.
+
+Receivers use unpredictable exclusive private staging, current-user/SYSTEM ACLs and delete-on-close. Zone.Identifier contains ZoneId=3. Size/SHA-256 must match before atomic handle rename with no replacement. Delete-on-close remains through marking/rename and clears only on successful commit. Failed/canceled operations delete only their owned handle. Temporary NTFS tests cover immutability, tampering, collisions, cancellation, quotas, parent rename refusal, zero bytes, download marking and OS staging cleanup after child exit without Rust Drop. No personal files or clipboard were used.
+
+## Reproducible checks
+
+On Windows x64 with the pinned toolchain and Visual Studio linker:
+
+~~~powershell
 npm ci
+npm run check
 npm run test:assist-native
 npm run build:assist
 npm run test:assist-process
-npm run check
-cargo install cargo-audit --locked --version 0.22.2
 cargo audit --file native/assist/Cargo.lock --deny warnings
 npm run package:win
 npm run verify:assist-package
 $env:PALISADE_WINDOW_SMOKE_ASAR = (Resolve-Path out/win-unpacked/resources/app.asar).Path
 npm run test:window-controls
 Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR
-```
+~~~
 
-Packaging rebuilds the locked helper, collects dependency/Rust runtime license texts and writes the ASAR manifest. CI and protected release preparation require native tests, actual child-process probes, dependency audit and packaged integrity checks. Missing compiler, audit, licenses or verification fails the build. Existing updater signing/verification, profile partition, application identity, installer paths and fuses are preserved. This procedure does not install or activate native control.
+Native tests compile both feature configurations, exercising fake sinks, owned hidden windows, temporary identities and fixture files. Process tests repeat non-authorizing probes against an all-features debug binary, which is not packaged. Packaging rebuilds the locked default helper, includes licenses and embeds hash/size in the integrity-protected ASAR. No runtime download or private release key is included.
 
-## Recovery and remaining gates
+## Integration gates
 
-Do not delete corrupt identities automatically. Future recovery must revoke the old endpoint/grants through the canonical authority and require explicit local re-enrollment. Do not substitute updater keys, Matrix tokens or another device's identity. Some account/password recovery operations can make DPAPI data unrecoverable; Matrix recovery remains separate.
-
-Independent design review approved this non-injecting foundation and retained these blockers: a negotiated native bridge, endpoint-authenticated polling or issuer-signed challenge-bound short liveness proofs, versioned stream/group/two-hour authority, enforceable capture provenance and disposable-device qualification. Renderer heartbeats cannot establish unrevoked authority. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md), [endpoint review](ASSIST-ENDPOINT-REVIEW.md) and [test results](TEST-RESULTS.md).
-
-CI diagnostic qualification: GitHub Windows runners use administrative tokens with UAC disabled. The non-authorizing --probe mode permits that existing token context, while preserving same-user/session/creator/pipe checks and refusing identity signing. Normal --guardian always refuses either elevated token. A tested mode predicate covers every elevation combination. These hosted diagnostics do not qualify least-privilege/UIPI/input acceptance. Only fixed internal error codes can be written to stderr.
+Complete the owned DTLS gateway, capture provenance and versioned page endpoint contract before exposing operations. Reuse one native stop owner. The live watchdog must invalidate/fence and retain cleanup rather than use diagnostic immediate exit. Enforce one controller across streams and source-end teardown. Preserve resources during input suspension and require fresh approval to resume control. Qualify consent, stop, input, lock/sleep, DPI, encryption and recovery on disposable Windows devices. Installation, activation and release need separate owner approval.

@@ -49,31 +49,31 @@ async function receiveFile({ metadata, chunks, destination, signal, authorize, o
   void completed.catch(() => rejectAbort(new Error('Transfer destination failed')));
   const abort = () => { destination.destroy(); rejectAbort(new Error("Transfer cancelled")); };
   signal.addEventListener("abort", abort, { once: true });
-  function requireAuthorization() {
+  async function requireAuthorization() {
     if (signal.aborted) throw new Error('Transfer cancelled');
-    if (authorize() !== true) throw new Error('Transfer not authorized');
+    if (await Promise.race([Promise.resolve().then(authorize), interrupted]) !== true) throw new Error('Transfer not authorized');
     if (signal.aborted) throw new Error('Transfer cancelled');
   }
   try {
-    requireAuthorization();
+    await requireAuthorization();
     if (destination.destroyed || destination.writableEnded) throw new Error('Transfer destination closed');
     iterator = (chunks[Symbol.asyncIterator] || chunks[Symbol.iterator]).call(chunks);
     while (true) {
-      requireAuthorization();
+      await requireAuthorization();
       const next = await Promise.race([Promise.resolve(iterator.next()), interrupted]);
       if (next.done) { complete = true; break; }
       const chunk = next.value;
-      requireAuthorization();
+      await requireAuthorization();
       if (!(chunk instanceof Uint8Array) || chunk.length === 0 || chunk.length > 65536 || total + chunk.length > file.size) throw new Error('Invalid file chunk');
       const bytes = Buffer.from(chunk);
       total += bytes.length; hash.update(bytes);
       await Promise.race([new Promise((resolve, reject) => destination.write(bytes, error => error ? reject(error) : resolve())), interrupted]);
       onProgress({ received: total, size: file.size });
     }
-    requireAuthorization();
+    await requireAuthorization();
     if (total !== file.size || hash.digest('hex') !== file.sha256) throw new Error('File integrity failed');
     destination.end(); await Promise.race([completed, interrupted]);
-    requireAuthorization();
+    await requireAuthorization();
     return { size: total, sha256: file.sha256 };
   } catch (error) { destination.destroy(); throw error; }
   finally {

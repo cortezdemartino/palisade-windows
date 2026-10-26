@@ -30,6 +30,16 @@ impl Parent {
         unsafe { WaitForSingleObject(self.0, 0) == WAIT_TIMEOUT }
     }
     pub fn validate(expected_pid: u32, probe: bool) -> Result<Self, &'static str> {
+        Self::validate_inner(expected_pid, probe, false)
+    }
+    pub fn validate_executor(expected_pid: u32, probe: bool) -> Result<Self, &'static str> {
+        Self::validate_inner(expected_pid, probe, true)
+    }
+    fn validate_inner(
+        expected_pid: u32,
+        probe: bool,
+        executor: bool,
+    ) -> Result<Self, &'static str> {
         unsafe {
             let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
             if snapshot == INVALID_HANDLE_VALUE {
@@ -81,15 +91,18 @@ impl Parent {
                 if QueryFullProcessImageNameW(handle, 0, image.as_mut_ptr(), &mut length) == 0 {
                     return Err("parent-image");
                 }
-                let expected = std::env::current_exe()
-                    .map_err(|_| "parent-image")?
-                    .parent()
-                    .and_then(|p| p.parent())
-                    .and_then(|p| p.parent())
-                    .ok_or("parent-image")?
-                    .join("Palisade.exe")
-                    .canonicalize()
-                    .map_err(|_| "parent-image")?;
+                let own = std::env::current_exe().map_err(|_| "parent-image")?;
+                let expected = if executor {
+                    own
+                } else {
+                    own.parent()
+                        .and_then(|p| p.parent())
+                        .and_then(|p| p.parent())
+                        .ok_or("parent-image")?
+                        .join("Palisade.exe")
+                }
+                .canonicalize()
+                .map_err(|_| "parent-image")?;
                 let image = PathBuf::from(
                     String::from_utf16(&image[..length as usize]).map_err(|_| "parent-image")?,
                 )
@@ -194,6 +207,9 @@ unsafe fn same_user(parent: HANDLE, probe: bool) -> Result<bool, &'static str> {
             (*(parent.as_ptr().cast::<TOKEN_USER>())).User.Sid,
         ) != 0)
     }
+}
+pub(crate) fn same_unelevated_user(process: HANDLE) -> bool {
+    unsafe { same_user(process, false).unwrap_or(false) }
 }
 #[cfg(test)]
 mod tests {

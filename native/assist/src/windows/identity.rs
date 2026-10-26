@@ -23,29 +23,40 @@ const ENTROPY: &[u8] = b"Palisade Assist endpoint identity v1";
 pub struct Identity(SigningKey);
 impl Identity {
     pub fn load_current_user() -> Result<Self, &'static str> {
-        let mut raw = ptr::null_mut();
-        // SAFETY: out pointer is owned by the shell, freed using CoTaskMemFree.
-        let path = unsafe {
-            if SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, ptr::null_mut(), &mut raw) < 0 {
-                return Err("identity-location");
-            }
-            let mut len = 0;
-            while *raw.add(len) != 0 {
-                len += 1;
-            }
-            let path = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(
-                raw, len,
-            )));
-            CoTaskMemFree(raw.cast());
-            path
-        };
-        let base = path.join("Palisade").join("Assist");
-        fs::create_dir_all(&base).map_err(|_| "identity-location")?;
-        for directory in [&path, &path.join("Palisade"), &base] {
-            refuse_reparse(directory)?;
-        }
-        Self::load(&base.join("endpoint-v1.dpapi"))
+        Self::load(&storage()?.join("endpoint-v1.dpapi"))
     }
+    pub fn public_key(&self) -> String {
+        URL_SAFE_NO_PAD.encode(self.0.verifying_key().as_bytes())
+    }
+    pub(crate) fn acknowledge(&self, grant: &crate::stream::StreamGrant) -> String {
+        URL_SAFE_NO_PAD.encode(self.0.sign(&grant.canonical()).to_bytes())
+    }
+}
+pub(crate) fn storage() -> Result<PathBuf, &'static str> {
+    let mut raw = ptr::null_mut();
+    // SAFETY: out pointer is owned by the shell, freed using CoTaskMemFree.
+    let path = unsafe {
+        if SHGetKnownFolderPath(&FOLDERID_LocalAppData, 0, ptr::null_mut(), &mut raw) < 0 {
+            return Err("identity-location");
+        }
+        let mut len = 0;
+        while *raw.add(len) != 0 {
+            len += 1;
+        }
+        let path = PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(
+            raw, len,
+        )));
+        CoTaskMemFree(raw.cast());
+        path
+    };
+    let base = path.join("Palisade").join("Assist");
+    fs::create_dir_all(&base).map_err(|_| "identity-location")?;
+    for directory in [&path, &path.join("Palisade"), &base] {
+        refuse_reparse(directory)?;
+    }
+    Ok(base)
+}
+impl Identity {
     // Private to the native module; no path-taking operation is exposed over IPC.
     fn load(path: &Path) -> Result<Self, &'static str> {
         match OpenOptions::new()
@@ -107,11 +118,22 @@ impl Identity {
             Err(_) => Err("identity-read"),
         }
     }
-    pub fn public_key(&self) -> String {
-        URL_SAFE_NO_PAD.encode(self.0.verifying_key().as_bytes())
-    }
     pub fn sign_enrollment_challenge(&self, challenge: &[u8; 32]) -> String {
         URL_SAFE_NO_PAD.encode(self.0.sign(challenge).to_bytes())
+    }
+    pub fn sign_lease_request(
+        &self,
+        endpoint: &str,
+        session: &str,
+        issued_at: u64,
+    ) -> Result<String, &'static str> {
+        if !crate::grant::token(endpoint, 8, 128) || !crate::grant::token(session, 8, 128) {
+            return Err("binding-mismatch");
+        }
+        let statement = format!(
+            "palisade.assist.control/endpoint-lease/v2\n{endpoint}\n{session}\n{issued_at}"
+        );
+        Ok(URL_SAFE_NO_PAD.encode(self.0.sign(statement.as_bytes()).to_bytes()))
     }
 }
 fn refuse_reparse(path: &Path) -> Result<(), &'static str> {
@@ -125,10 +147,10 @@ fn refuse_reparse(path: &Path) -> Result<(), &'static str> {
     }
     Ok(())
 }
-fn protect(data: &[u8]) -> Result<Vec<u8>, &'static str> {
+pub(crate) fn protect(data: &[u8]) -> Result<Vec<u8>, &'static str> {
     dpapi(data, false).map(|v| v.to_vec())
 }
-fn unprotect(data: &[u8]) -> Result<Zeroizing<Vec<u8>>, &'static str> {
+pub(crate) fn unprotect(data: &[u8]) -> Result<Zeroizing<Vec<u8>>, &'static str> {
     dpapi(data, true)
 }
 fn dpapi(data: &[u8], decrypt: bool) -> Result<Zeroizing<Vec<u8>>, &'static str> {

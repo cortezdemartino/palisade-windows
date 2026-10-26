@@ -17,8 +17,8 @@
     "release:sign": "node scripts/sign-release.cjs",
     "test:window-controls": "node scripts/test-window-controls.cjs",
     "build:assist": "node scripts/build-assist.cjs",
-    "test:assist-native": "cargo fmt --check --manifest-path native/assist/Cargo.toml && cargo clippy --locked --manifest-path native/assist/Cargo.toml --all-targets -- -D warnings && cargo test --locked --manifest-path native/assist/Cargo.toml",
-    "test:assist-process": "node --test tests/assist-guardian-process.native.cjs",
+    "test:assist-native": "cargo fmt --check --manifest-path native/assist/Cargo.toml && cargo clippy --locked --manifest-path native/assist/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --locked --manifest-path native/assist/Cargo.toml && cargo test --locked --manifest-path native/assist/Cargo.toml --all-features",
+    "test:assist-process": "node --test tests/assist-guardian-process.native.cjs && node scripts/test-assist-features.cjs",
     "verify:assist-package": "node scripts/verify-assist-package.cjs"
   },
   "devDependencies": {

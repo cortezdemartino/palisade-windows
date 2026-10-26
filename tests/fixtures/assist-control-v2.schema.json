@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://palisade.onyxops.org/schemas/assist-control/v2.json",
+  "title": "palisade.assist.control version 2 (stream-bound Assist, docs/48)",
+  "description": "Shapes only. Cross-field rules that JSON Schema cannot express are normative in docs/48 §2-§3 and exercised by fixtures.json: approvedAt < sessionDeadline <= approvedAt + 7200000 and sessionDeadline - approvedAt >= 60000; approvedAt <= issuedAt < expiresAt <= sessionDeadline; endpoint is non-null exactly for control_mouse and control_keyboard; helperAccount != publisherAccount; lease expiresAt - issuedAt <= 20000 and expiresAt <= sessionDeadline; lease grants strictly ascending. Signatures: Ed25519 over the keys in sorted order as compact JSON (UTF-8).",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9_-]{8,128}$" },
+    "nonce": { "type": "string", "pattern": "^[A-Za-z0-9_-]{16,128}$" },
+    "mxid": { "type": "string", "pattern": "^@[^\\s:]{1,255}:[^\\s]{1,255}$" },
+    "room": {
+      "type": "string",
+      "pattern": "^![A-Za-z0-9._~\\-+/=]{1,255}(:[A-Za-z0-9.\\-:[\\]]+)?$"
+    },
+    "track": { "type": "string", "pattern": "^TR_[A-Za-z0-9]{4,64}$" },
+    "device": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,64}$" },
+    "fingerprint": {
+      "type": "string",
+      "pattern": "^sha-256 (?:[0-9A-F]{2}:){31}[0-9A-F]{2}$"
+    },
+    "signature": { "type": "string", "pattern": "^[A-Za-z0-9_-]{86}$" },
+    "time": { "type": "integer", "minimum": 0, "maximum": 8640000000000000 },
+    "capability": {
+      "enum": [
+        "pointer",
+        "annotate",
+        "control_mouse",
+        "control_keyboard",
+        "clipboard_to_host",
+        "clipboard_to_guest",
+        "file_to_host",
+        "file_to_guest"
+      ]
+    },
+    "grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "approvedAt",
+        "capability",
+        "endpoint",
+        "expiresAt",
+        "generation",
+        "grantId",
+        "helperAccount",
+        "helperDevice",
+        "helperTransport",
+        "issuedAt",
+        "issuer",
+        "nonce",
+        "protocol",
+        "publisherAccount",
+        "publisherDevice",
+        "room",
+        "session",
+        "sessionDeadline",
+        "stream",
+        "version"
+      ],
+      "properties": {
+        "issuer": { "const": "palisade" },
+        "protocol": { "const": "palisade.assist.control" },
+        "version": { "const": 2 },
+        "grantId": { "$ref": "#/$defs/id" },
+        "session": { "$ref": "#/$defs/id" },
+        "room": { "$ref": "#/$defs/room" },
+        "stream": { "$ref": "#/$defs/track" },
+        "capability": { "$ref": "#/$defs/capability" },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "nonce": { "$ref": "#/$defs/nonce" },
+        "issuedAt": { "$ref": "#/$defs/time" },
+        "approvedAt": { "$ref": "#/$defs/time" },
+        "sessionDeadline": { "$ref": "#/$defs/time" },
+        "expiresAt": { "$ref": "#/$defs/time" },
+        "publisherAccount": { "$ref": "#/$defs/mxid" },
+        "publisherDevice": { "$ref": "#/$defs/device" },
+        "helperAccount": { "$ref": "#/$defs/mxid" },
+        "helperDevice": { "$ref": "#/$defs/device" },
+        "helperTransport": { "$ref": "#/$defs/fingerprint" },
+        "endpoint": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/id" }] }
+      }
+    },
+    "signedGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["grant", "signature"],
+      "properties": {
+        "grant": { "$ref": "#/$defs/grant" },
+        "signature": { "$ref": "#/$defs/signature" }
+      }
+    },
+    "lease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expiresAt",
+        "generation",
+        "grants",
+        "issuedAt",
+        "issuer",
+        "kind",
+        "protocol",
+        "session",
+        "sessionDeadline",
+        "stream",
+        "version"
+      ],
+      "properties": {
+        "issuer": { "const": "palisade" },
+        "protocol": { "const": "palisade.assist.control" },
+        "version": { "const": 2 },
+        "kind": { "const": "lease" },
+        "session": { "$ref": "#/$defs/id" },
+        "stream": { "$ref": "#/$defs/track" },
+        "generation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "grants": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/id" }
+        },
+        "issuedAt": { "$ref": "#/$defs/time" },
+        "expiresAt": { "$ref": "#/$defs/time" },
+        "sessionDeadline": { "$ref": "#/$defs/time" }
+      }
+    },
+    "signedLease": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lease", "signature"],
+      "properties": {
+        "lease": { "$ref": "#/$defs/lease" },
+        "signature": { "$ref": "#/$defs/signature" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/signedGrant" },
+    { "$ref": "#/$defs/signedLease" }
+  ]
+}

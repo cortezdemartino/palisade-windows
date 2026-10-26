@@ -1,5 +1,25 @@
 # M4G-WINDOWS-FULL implementation checkpoint
 
+## October 26 native component checkpoint
+
+Starting Windows revision: `c76d3370a770e811e4997d61cab738a9a9a90d3e`. Companion revision inspected read-only: `c0778935a6a08303bf7a9d7de8f2fa75aa8ef536`. Canonical control v2 source/schema/fixtures are pinned with Git blob and SHA-256 provenance. The earlier numbered report below is historical; this checkpoint supersedes its claims that no native input/resource components exist.
+
+**Implemented, inactive:** exact stream-v2 verification, unchanged legacy-v1 limits, one-use permit checks, replay/rate/expiry controls, directional clipboard and file broker components.
+
+**Experimental:** Win32 consent and acknowledgement, fixed-origin endpoint-key-authenticated lease polling, current-user issuer TOFU, SendInput mouse/keyboard/shortcut adapter, guardian/child private pipes, local activity stop, mirror cleanup, native file dialogs, protected NTFS handles, quotas, integrity/MOTW and no-overwrite commit. They are not imported or exposed by production main/preload.
+
+**Blocked / Planned:** app-owned DTLS gateway, enforceable positive capture path, finalized native page operations, full toolbar/virtual keyboard/annotation integration, live lifecycle wiring and one-controller enforcement across streams. TOFU is not independently authenticated production enrollment. Host activity currently conservatively ends the session rather than preserving independent resource permissions; that integration behavior still needs refinement.
+
+**Not Verified:** actual OS input/stop, international layouts/IME, mixed-DPI hardware, clipboard read/write, live peer transfer/encryption, cross-client scenarios, network performance, protected-desktop recovery, installation and upgrade acceptance. No personal desktop input or clipboard test was performed.
+
+The app suite passed 104 tests. Native checks passed both default and all-features compilation/test configurations; fake executor tests include idle held-key expiry and Drop cleanup. Seven actual non-authorizing subprocess groups passed against both the default helper and all-features debug helper. Temporary NTFS tests include OS staging cleanup after process exit without Rust Drop. Independent review separately passed 25 focused tests and approved committing only this disabled slice. Updated full check and packaging evidence is recorded in TEST-RESULTS.md and Windows issue #1 after push.
+
+The Windows x64 NSIS build succeeded with sensitive features disabled. No release manifest was signed, installer run, release published or production/native feature activated. Owner architecture approval is already recorded in project-palisade#33; integration review, disposable-device qualification and separate activation/release approval remain required. The current full Assist product is **Blocked**, with remaining Windows implementation as well as companion defects.
+
+Companion blockers: fail closed on media-roster exceptions/timeouts before issuing any new lease, and revalidate pending request state after awaited facts before approval commits. Native endpoint/capture schemas must include answer/cancel/status/lifecycle operations rather than leave them implicit. The companion prompt will include the exact Windows implementation revision after commit.
+
+## Historical checkpoints
+
 Desktop version **0.3.0**. Overall Assist product classification: **Blocked**. The canonical v1 description bridge and independently testable components are implemented; production capture and sensitive execution/data routes remain disabled or absent. The owner authorized the desktop update release with those restrictions; the full Assist product definition of done is not met. The numbered checkpoint evidence below retains its original release status, with publication evidence tracked separately in Windows issue #1.
 
 ## Capture-admission follow-up

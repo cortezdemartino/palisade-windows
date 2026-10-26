@@ -153,14 +153,15 @@ test('authority is invalidated and cancellation signalled before a failing clean
 test('revoking file permission cancels a stalled receive while mouse permission stays valid', async () => {
   const h = leaseFixture(); h.lease.bind('verified-fixture', h.binding, h.sessionDeadline);
   h.lease.consentTo(['file_receive', 'control_mouse']);
-  let returned = false;
-  const chunks = { [Symbol.asyncIterator]: () => ({ next: () => new Promise(() => {}),
+  let returned = false, started;
+  const opened = new Promise(resolve => { started = resolve; });
+  const chunks = { [Symbol.asyncIterator]: () => ({ next: () => { started(); return new Promise(() => {}); },
     return: () => { returned = true; return Promise.resolve({ done: true }); } }) };
   const destination = new Writable({ write(_chunk, _encoding, next) { next(); } });
   const pending = receiveFile({ metadata: { name: 'empty.txt', size: 0, sha256: createHash('sha256').digest('hex') },
     chunks, destination, signal: h.lease.signalFor('file_receive'),
     authorize: () => { h.lease.assertAuthorized('file_receive'); return true; } });
-  h.lease.revokeCapabilities(['file_receive']);
+  await opened; h.lease.revokeCapabilities(['file_receive']);
   await assert.rejects(pending, /cancelled/); assert.equal(destination.destroyed, true);
   assert.equal(returned, true); h.lease.check('control_mouse', h.message); h.lease.revoke();
 });

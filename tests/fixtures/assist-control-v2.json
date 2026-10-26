@@ -1,0 +1,1148 @@
+{
+  "note": "Shared fixtures for palisade.assist.control version 2, stream-bound Assist (docs/48). Keys come from PUBLISHED fixture-only seeds and must never be trusted outside tests. Per-case \"expect\" overrides merge into the top-level expectation.",
+  "issuerPublicKey": "pPCjJqdDagxJfWG1bud3XUc1jXrhfYl2GI8FkYpgIUM",
+  "approvedAt": 1800000000000,
+  "now": 1800000300000,
+  "expect": {
+    "session": "sassist_fixture_0001",
+    "room": "!voicechannel:palisade.test",
+    "stream": "TR_fixtureStream0001",
+    "publisherAccount": "@streamer:palisade.test",
+    "publisherDevice": "STREAMERDEVICE",
+    "helperAccount": "@helper:palisade.test",
+    "helperDevice": "HELPERDEVICE",
+    "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+    "sessionDeadline": 1800007200000,
+    "now": 1800000300000
+  },
+  "grants": {
+    "valid": [
+      {
+        "name": "clipboard to the publisher for exactly two hours",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "s7uWHy6oOoEIRvyr6mw0ncDqQQ53UKk95jQ01mY93_e27Zz3OV55kA0nU1Hg2yTiIbBwzqhSOzvN1ecSb9yKBA"
+        }
+      },
+      {
+        "name": "native mouse bound to the publisher endpoint",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0002",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "control_mouse",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0002",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": "endpoint_fixture_01"
+          },
+          "signature": "xBr4ktJ212bDAwiKQo46RFW-6M71Y1oyWlCV_4PwEIjA_eCmSvsvF684xACOXn79igIvMgM2himkrTH3dBN4Bg"
+        },
+        "expect": {
+          "endpoint": "endpoint_fixture_01"
+        }
+      },
+      {
+        "name": "default fifteen-minute session",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0003",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0003",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800000900000,
+            "expiresAt": 1800000900000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "kf5JzSIehVVB-XzZvuHoIdZ_k-vCo601VOirO3fT_CByUin0MHn88xOzGFHKjISyBNSjxoDpJUvnThsmZ_NQBQ"
+        },
+        "expect": {
+          "sessionDeadline": 1800000900000
+        }
+      },
+      {
+        "name": "room version 12 room ID (no server part)",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0004",
+            "session": "sassist_fixture_0001",
+            "room": "!Abc-def_GHI+jk/lmn=",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0004",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "1dG0vbR9VdGDKvD1mbeEj_UABFSFYttEiD6ed3bQkE6rnnnKWUyGrHIJ_HFPWrJ-Hr5f3XDqjilFN422P665Bg"
+        },
+        "expect": {
+          "room": "!Abc-def_GHI+jk/lmn="
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "two hours and one millisecond",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200001,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "ajjFspuV2UVTZNLh8haijOBdkzDjWjoSRVBaqOuHbr0ylkNfILzoM458SbOS-kcHYTCsR7LuID2IFGkatL8sCw"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "zero duration",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800000000000,
+            "expiresAt": 1800000000000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "Ty0ZNT0WLRkfAz2djNnceXxwLvIt6OFy3NifxplWG_XX98PlmEOod3rpMOfc2cvcJqDpUpOPaBHBIuAyCIwiAQ"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "negative duration",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1799999940000,
+            "expiresAt": 1800000060000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "c8_6_qNvp6pVOqEV1xmWmVp2rzCR8XwllH08IG8b8OT0R-8Dtv_U26XUV_t2SAP0etYBbuvQ-9dwtFwHVci2BQ"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "fractional deadline",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800003600000.5,
+            "expiresAt": 1800003600000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "EHlVux_sIdZfXmysrqf1NXcO_QqN5VysugJjSb7v_1JjzFUSwLW2S3SK_YGfybjhbwNFL_TIbL9XL2MOrYK7Aw"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "overflowing deadline",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1e300,
+            "expiresAt": 1800003600000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "g_pEyeVFLrUq23k_xysOm944j6WTKccdMx9pDZIOEx8kUID3jjxkBuoE3s_NoSOo3bnDAqOOVmTjIjAc6QphAQ"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "grant outlives its session deadline",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800003600000,
+            "expiresAt": 1800003600001,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "4QWncIbwJdsX_W6-K3mAJgleSt0Sr6SvYB4b6Ce3FMhcV-fdyKZpoePvJ_CHv7O1SnfAE22kecd4IGJnbmweAA"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "issued before approval",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1799999999999,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "RsdzF1ik1bmViFfzp6FlZe3XMUnW-gCq--b88X76r2LyOEFhZWPB8k2vAVfpQsS8r5DGNMIvFtAN3-8O8TFkCQ"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "refreshed grant moves the deadline",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000060000,
+            "approvedAt": 1800000060000,
+            "sessionDeadline": 1800007260000,
+            "expiresAt": 1800007260000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "m60GEbaZ40SVeAEwNUxuI-_XR0MZZRmg-6lQPmxO9EFKiNL0agxDTh3VMNGb8pMxx7kCdnUnb1hYxxsmKmhzBg"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "republished stream (other track)",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_republishedStream02",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "U4NWCsd5CilLcRUD4rzeJICucTktIVXQWbhSIDIgC6fScKlUaV7uhjH-8at9_NT8fYhqMd5C-wbzbnGetoWHCQ"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "other room",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!otherchannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "h5OBeDaLAmrGlUVhk4ooujps6ZoUruu-VkICt2mKI1U9OaInjSR9lp-KnP5a5RJRuGMM6ONbyRyfvpawF4LWBA"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "malformed room ID",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!bad room:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "2UEi2m3yJOVI1fapDAXKwXIg0Bqdnp2ZRr6qrEebkjfJpaNihzTCAzODYivGAd1_hH0E0Tp9TAekdgvgGOxjCQ"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "other publisher device",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "OTHERSTREAMER",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "qfk1Nh56SwcIivSAwJHPt9GSLXFGlXchh9ZlM7QCbvoo5mzi--JrjeWkcTbBjEZ5rXcChTUF4RArHdVqUoBhDQ"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "other publisher account",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@mallory:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "cK3LTV2u-StYH4l9KiWS6h_VkRRCq3oMvxahfsCGyPDCpkGmZ15f3TLM7IA3edLRiYyGpVHa5S6mYeWyNzATCA"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "forwarded to another helper device",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "OTHERHELPER",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "kt-2lpKnuywSJzaZSax41qFYdQABzr50sfWIWKN5eo42OTU6huwO_ikWDmpzIZSww-xq9nF39WUu8efhX5XDBw"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "helper transport substituted",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB:AB",
+            "endpoint": null
+          },
+          "signature": "kukeyXljnTvjqrJayI3ntCswhTy3AbIoKJHRX0mq3jQkVjdzlXWLTVn9O5jVzWmgdvj9CbLZc3_OBMh7Bc_WDQ"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "native grant for another endpoint",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0002",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "control_mouse",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0002",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": "endpoint_fixture_99"
+          },
+          "signature": "T4WSaqgfdNjYOwdPoXC-cFfE6dXPvdnz4-82FgYFtwOwfb25SEt4qbxMd_hyfxhsemhHBxS4ssAGCfZhdFEqBA"
+        },
+        "expect": {
+          "endpoint": "endpoint_fixture_01"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "replaced controller (older generation)",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0002",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "control_mouse",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0002",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": "endpoint_fixture_01"
+          },
+          "signature": "xBr4ktJ212bDAwiKQo46RFW-6M71Y1oyWlCV_4PwEIjA_eCmSvsvF684xACOXn79igIvMgM2himkrTH3dBN4Bg"
+        },
+        "expect": {
+          "endpoint": "endpoint_fixture_01",
+          "minimumGeneration": 4
+        },
+        "error": "stale-generation"
+      },
+      {
+        "name": "capability escalated after signing",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "file_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "s7uWHy6oOoEIRvyr6mw0ncDqQQ53UKk95jQ01mY93_e27Zz3OV55kA0nU1Hg2yTiIbBwzqhSOzvN1ecSb9yKBA"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "signed by another key",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "fC6gJ2PWK5ivEanZ8t0uvjNx_5JL-FA5lmO7Zrsqfkhw62N8vbAN5mfHNvbYJ19531VPhTNpOJYUKhLmPiK1Ag"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "native capability without endpoint",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "control_keyboard",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "pw7oaOMfdTNTcmDHRj_DqIdlzmQlSjM5Eh9cVA0p-WSVbT05RRoKDO40W-B8E0X0gpXUOWP5HgYaF7IGfnEMCg"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "helper is the publisher",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@streamer:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "Wx8BzGpHC1713yJOdOGHFwddEOwTwtPN5oCY6zfk2U79UcCslK4dLhC2cAbsm9MDtPC0N7Lh1VoMNohhI2u2CQ"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "expired",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0003",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0003",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800000900000,
+            "expiresAt": 1800000900000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "kf5JzSIehVVB-XzZvuHoIdZ_k-vCo601VOirO3fT_CByUin0MHn88xOzGFHKjISyBNSjxoDpJUvnThsmZ_NQBQ"
+        },
+        "expect": {
+          "sessionDeadline": 1800000900000,
+          "now": 1800000900000
+        },
+        "error": "expired"
+      },
+      {
+        "name": "extra field",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null,
+            "admin": true
+          },
+          "signature": "s7uWHy6oOoEIRvyr6mw0ncDqQQ53UKk95jQ01mY93_e27Zz3OV55kA0nU1Hg2yTiIbBwzqhSOzvN1ecSb9yKBA"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "legacy version 1 grant",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 1,
+            "grantId": "grant_fixture_0001",
+            "session": "call_fixture_0001",
+            "capability": "clipboard_to_host",
+            "generation": 1,
+            "nonce": "nonce_fixture_000000001",
+            "issuedAt": 1800000000000,
+            "expiresAt": 1800000600000,
+            "hostAccount": "@host:palisade.test",
+            "hostDevice": "HOSTDEVICE",
+            "guestAccount": "@guest:palisade.test",
+            "guestDevice": "GUESTDEVICE",
+            "guestTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "jy7t-yzeg9Aw5_UOAXVa1YsZoTCVNzzwUIrcZpn_oLfJjnmu-D3WYGaT41PjO-CyB_3q2NeOwdQSGwxNS63wCQ"
+        },
+        "error": "incompatible-protocol"
+      }
+    ],
+    "legacyVerifierRefuses": [
+      {
+        "name": "two-hour stream grant",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "grantId": "sgrant_fixture_0001",
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "capability": "clipboard_to_host",
+            "generation": 3,
+            "nonce": "nonce_stream_fixture_0001",
+            "issuedAt": 1800000000000,
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "endpoint": null
+          },
+          "signature": "s7uWHy6oOoEIRvyr6mw0ncDqQQ53UKk95jQ01mY93_e27Zz3OV55kA0nU1Hg2yTiIbBwzqhSOzvN1ecSb9yKBA"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "leaseExpect": {
+    "session": "sassist_fixture_0001",
+    "stream": "TR_fixtureStream0001",
+    "sessionDeadline": 1800007200000,
+    "now": 1800000300000
+  },
+  "leases": {
+    "valid": [
+      {
+        "name": "live lease listing two grants",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000315000,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "itXnV-OQRAzC08pkjE5MX_hms2KQwWtw5XiazXRkEQw6_R1IWWXzmhW0lOKdC41llrBqARDi_b5y4I1pr1eDBg"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "longer than twenty seconds",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000315001,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "jvuDK5Vzr9Nb0XlPqdZJOH1RWY0mWjg5LwCq_gqlQwJbKIJfbdLcXcNSzMTtfrvLmdYhZPqzCtTWrNSTkWtlAA"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "past the session deadline",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000310001,
+            "sessionDeadline": 1800000310000
+          },
+          "signature": "Asf_xscmFant_MVoORsc94BB8mgOcZmbDWuFN17GbrNatNVVoBK0Lw0NEZiUVY4AOgfNov7NwtZTBkBS2t1iCg"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "expired (frozen page or lost network)",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000280000,
+            "expiresAt": 1800000300000,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "PFgZY9AsGCC-zm66O7bsAeeggQwVzLl8nON5Fp0vyLyrVTmpR9SE3RlkH0nGiSasA2ROXd2o706hKbfpSBu8Bg"
+        },
+        "error": "expired"
+      },
+      {
+        "name": "other stream incarnation",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_republishedStream02",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000315000,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "w4hz_wOLhdjyeJ4g-n94sUqmAWkYYaPEi_a7BLE_2C0X_RHQ6ylHna5x6chlbCZdz6MgeguEZ8VUIRQizEtDDg"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "other session",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0099",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000315000,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "NkzM97TLFD4IxH_wzk6fbqbT8XSo_uCkitUitUneerUzAZiymcOAfV9LJ7qsbMMpK7o1G9iPjf2ykxpZ2LMwDg"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "unsorted grant list",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0002", "sgrant_fixture_0001"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000315000,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "Ytpwlbo8lasBUBlPcSyF7xQ_2fNb5hmwlLaRd9OgVSDPLpdsI_E5wDGZUw8FpgYM_fRQRH0GcCHE-2ZkXjpIBg"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "signed by another key",
+        "signed": {
+          "lease": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "kind": "lease",
+            "session": "sassist_fixture_0001",
+            "stream": "TR_fixtureStream0001",
+            "generation": 3,
+            "grants": ["sgrant_fixture_0001", "sgrant_fixture_0002"],
+            "issuedAt": 1800000295000,
+            "expiresAt": 1800000315000,
+            "sessionDeadline": 1800007200000
+          },
+          "signature": "bMFC6mn-h9xcnIgie_5r3hROnXDdNqfhMp9zg0Wo7A5gNy9aZYnV0vfv8RmN84ptAzPTsocawTp8ViHghqGRDQ"
+        },
+        "error": "binding-mismatch"
+      }
+    ],
+    "coverage": [
+      {
+        "name": "listed grant within the lease",
+        "grant": "sgrant_fixture_0001",
+        "now": 1800000300000,
+        "covered": true
+      },
+      {
+        "name": "grant not listed (revoked)",
+        "grant": "sgrant_fixture_0003",
+        "now": 1800000300000,
+        "covered": false
+      },
+      {
+        "name": "lease ran out",
+        "grant": "sgrant_fixture_0001",
+        "now": 1800000315000,
+        "covered": false
+      }
+    ]
+  },
+  "messages": {
+    "valid": [
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0001",
+        "gen": 3,
+        "seq": 1,
+        "kind": "clipboard-text",
+        "text": "synthetic clipboard text"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0001",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-offer",
+        "transfer": "transfer_fixture_0001",
+        "name": "notes.txt",
+        "size": 4096,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0001",
+        "gen": 3,
+        "seq": 1,
+        "kind": "pointer-move",
+        "x": 0.5,
+        "y": 0.25,
+        "sourceGen": 7
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0001",
+        "gen": 3,
+        "seq": 1,
+        "kind": "release-all"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "version 1 envelope in a stream session",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 1,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0001",
+          "gen": 3,
+          "seq": 1,
+          "kind": "release-all"
+        },
+        "error": "incompatible-protocol"
+      },
+      {
+        "name": "unknown kind",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0001",
+          "gen": 3,
+          "seq": 1,
+          "kind": "exec",
+          "command": "cmd.exe"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  }
+}

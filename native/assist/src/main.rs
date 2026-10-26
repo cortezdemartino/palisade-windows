@@ -67,6 +67,13 @@ fn run() -> Result<(), &'static str> {
         identity::Identity, lifecycle::NativeStop, parent::Parent,
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.len() == 3 && ["--executor", "--executor-probe"].contains(&args[0].as_str()) {
+        return palisade_assist_guardian::windows::process_input::run_child(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[2].parse().map_err(|_| "invalid-tag")?,
+            args[0] == "--executor-probe",
+        );
+    }
     if args.len() != 2 || !["--guardian", "--probe"].contains(&args[0].as_str()) {
         return Err("invalid-launch");
     }

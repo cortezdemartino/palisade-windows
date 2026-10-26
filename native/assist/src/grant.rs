@@ -3,7 +3,7 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 
 const SAFE_INTEGER: u64 = 9_007_199_254_740_991;
-const CAPABILITIES: [&str; 8] = [
+pub(crate) const CAPABILITIES: [&str; 8] = [
     "pointer",
     "annotate",
     "control_mouse",
@@ -37,7 +37,7 @@ pub struct Grant {
     pub version: u32,
 }
 
-fn required_endpoint<'de, D: serde::Deserializer<'de>>(
+pub(crate) fn required_endpoint<'de, D: serde::Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Option<String>, D::Error> {
     Option::<String>::deserialize(deserializer)
@@ -64,12 +64,12 @@ pub struct Expected {
     pub minimum_generation: u32,
 }
 
-fn token(s: &str, min: usize, max: usize) -> bool {
+pub(crate) fn token(s: &str, min: usize, max: usize) -> bool {
     (min..=max).contains(&s.len())
         && s.bytes()
             .all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
 }
-fn mxid(s: &str) -> bool {
+pub(crate) fn mxid(s: &str) -> bool {
     let Some(rest) = s.strip_prefix('@') else {
         return false;
     };

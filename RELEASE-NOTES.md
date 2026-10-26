@@ -2,6 +2,11 @@
 
 ## 0.3.0 (unpublished)
 
+- Add inactive canonical stream/group v2 verification, endpoint-authenticated lease polling, native consent and acknowledgement components.
+- Add dormant scoped Windows mouse/keyboard adapters and a private child executor with mirrored held-input cleanup, replay/expiry checks and independent local stop handling.
+- Add directional clipboard and native file brokers with cancellation, private staging, download marking and verified no-overwrite completion.
+- Compile sensitive adapters in CI and repeat non-authorizing process probes with all features compiled. Production packaging keeps those features disabled.
+
 - Build an inactive, independently reviewed Rust Assist guardian with protected endpoint identity, canonical signature diagnostics, bounded private pipes and an independent watchdog.
 - Require locked native tests/audit, binary integrity and dependency license packaging before release signing. Full Assist remains disabled and unqualified.
 

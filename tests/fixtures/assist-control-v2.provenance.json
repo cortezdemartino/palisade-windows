@@ -1,0 +1,31 @@
+{
+  "repository": "cortezdemartino/project-palisade",
+  "commit": "c0778935a6a08303bf7a9d7de8f2fa75aa8ef536",
+  "files": [
+    {
+      "local": "assist-control-v2.web.ts",
+      "source": "apps/web/src/assist/control/streamProtocol.ts",
+      "gitBlob": "f7c3f00dc206c91ab9214042b79113b91e4819c5",
+      "sha256": "638dc815d9ad343ae8019ac630c6cf2061bd501e76bf33a9afdc824335b228b7"
+    },
+    {
+      "local": "assist-control-v2.json",
+      "source": "docs/assist-control/v2/fixtures.json",
+      "gitBlob": "fa63a8e0d0fb3cb0941780beea2a8cffcfbe1caf",
+      "sha256": "01db46d3978507d6395f3c95030f880ca0f5a255e4edfa928d4317d8736e4f85"
+    },
+    {
+      "local": "assist-control-v2.schema.json",
+      "source": "docs/assist-control/v2/schema.json",
+      "gitBlob": "3d875119bf1132389ad2884aab44f40cca58f690",
+      "sha256": "965f61cb5534a4ba3ab5fb5e81d44144f609862c527d176d95e741555e223d0c"
+    },
+    {
+      "local": "assist-control-common.web.ts",
+      "source": "apps/web/src/assist/control/protocol.ts",
+      "gitBlob": "2d8482ea03e735ef5b3e3ed24e82c888148e141c",
+      "sha256": "eb660c0b29a764c389bba443e19eb72e489b717b609f701f3c31915ca2608a30"
+    }
+  ],
+  "purpose": "Canonical conformance fixtures only; published fixture keys are never production trust anchors."
+}

@@ -22,6 +22,7 @@ pub struct NativeStop {
     hwnd: usize,
     stop: Arc<AtomicBool>,
     thread: Option<thread::JoinHandle<()>>,
+    probe: bool,
 }
 struct Context {
     stop: Arc<AtomicBool>,
@@ -93,7 +94,11 @@ impl NativeStop {
                 CreateWindowExW(
                     0,
                     w!("STATIC"),
-                    w!("Native control is disabled in this build."),
+                    if cfg!(feature = "native-input") {
+                        w!("Session permissions end on Stop Assist.")
+                    } else {
+                        w!("Native control is disabled in this build.")
+                    },
                     WS_CHILD | WS_VISIBLE,
                     16,
                     12,
@@ -150,8 +155,15 @@ impl NativeStop {
                 hwnd: _hwnd,
                 stop,
                 thread: Some(worker),
+                probe,
             }),
         }
+    }
+    pub(crate) fn session_flag(&self) -> Result<Arc<AtomicBool>, &'static str> {
+        if self.probe || self.stop.load(Ordering::SeqCst) {
+            return Err("native-stop-unavailable");
+        }
+        Ok(self.stop.clone())
     }
     #[cfg(test)]
     fn post(&self, message: u32) {
