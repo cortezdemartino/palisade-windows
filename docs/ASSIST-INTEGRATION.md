@@ -8,7 +8,7 @@ The description-only `palisade.assist.bridge` v1 remains unchanged. Its three me
 
 Windows verifies the canonical stream/group control v2 contract at companion commit `c0778935a6a08303bf7a9d7de8f2fa75aa8ef536`. Exact source, schema and fixtures, with Git blob and LF-normalized SHA-256 provenance, are retained under tests/fixtures. Grants bind both accounts/devices, helper DTLS fingerprint, endpoint, room, stream SID, generation and an immutable deadline up to two hours. Separate twenty-second signed leases determine which grants may act. Native polling uses the endpoint key rather than Matrix tokens or page cookies.
 
-The companion source remains read-only. New service and web flows exist behind disabled experimental gates. Two authority defects need companion fixes: roster-check failures can renew leases, and requests can change state while approval awaits media facts. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+The companion source remains read-only. New service and web flows exist behind disabled experimental gates. Companion 97b2a4f0d0b9766ab5e56197f405b36d5e83e959 addresses roster-check lease failure and deferred decision races in source, independently reviewed. Official companion verification remains required. Native bridge v1 is now specified in docs/49 at 8f9c2a45da7017ee36a9567f76413da53bd76075; Windows integration is in progress. Resource transport/actions, helper authority, relay configuration and production pin setup remain dependencies. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
 
 ## Status
 
@@ -20,9 +20,9 @@ The companion source remains read-only. New service and web flows exist behind d
 | Mouse, keyboard and bounded shortcuts | Experimental | SendInput adapter, source/session/UIPI checks and owned-state cleanup; real input not qualified |
 | Guardian/child execution | Experimental | Private pipes, mirrored intent, fenced cleanup, heartbeat and probe tests; physical crash/lock recovery not qualified |
 | Clipboard text | Experimental | Separate directions, positive authority, manual copy and cancellation; OS/peer wiring pending |
-| Native files | Experimental | Local dialogs, opaque handles, quotas, private staging, integrity/MOTW/no-overwrite commit; temporary-file tests executed |
+| Native files | Experimental, inactive | Runtime-owned publisher requests, exact grant/direction/offer binding, independent cancellation, shared quota and protected staging; temp NTFS tests pass, native file confirmation is unqualified |
 | Native capture | Experimental, inactive | Existing picker, isolated provider, owned DTLS video, certificate/socket checks and app-owned window pixel/stop fixtures; canonical web publication adapter and acceptance pending |
-| Native bridge and owned DTLS gateway | Planned / Blocked | Must match a finalized versioned handoff; certificates must be observed by the owned peer |
+| Native bridge and owned DTLS gateway | In progress / Blocked | Core docs/49 handoff received; implement exact messages and labelled statements, then resolve resource/relay/trust dependencies and qualify the owned peer |
 | Virtual keyboard, full toolbar and annotations | Planned / Blocked | Reuse canonical web controls and existing annotations |
 | Complete cross-client Assist | Not Verified | No installed endpoint or real encrypted control/transfer session exercised |
 | Activation/release | Blocked | Integration review, disposable-device qualification and separate owner approval required |
@@ -38,6 +38,8 @@ Sensitive operations need current exact authorization, a fresh lease, local cons
 Clipboard defaults Off and supports bounded text only. Sync additionally requires a negotiated agreement. Pause/revocation cancels in-flight automatic work. Images, rich formats, transfer resume and unrestricted drag/drop are unsupported at this checkpoint. No remote path or automatic file execution is exposed.
 
 ## Verification and next integration
+
+The executable sequence, dependencies and release gates are in [ASSIST-RELEASE-PLAN.md](ASSIST-RELEASE-PLAN.md). The publisher-side resource adapter does not authorize a Windows helper's local files or clipboard; that role requires its own finalized native authority.
 
 See [isolated capture](ASSIST-CAPTURE.md), [native components](ASSIST-NATIVE-GUARDIAN.md), [test results](TEST-RESULTS.md), [threat model](ASSIST-THREAT-MODEL.md) and [milestone report](M4G-WINDOWS-REPORT.md). A passing build or probe does not qualify physical input, issuer enrollment, encrypted viewing or cross-client transfer.
 

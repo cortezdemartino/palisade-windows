@@ -2,6 +2,7 @@
 //! call it; no renderer assertion can set consent or replace its issuer.
 use super::{
     consent::{Decision, Prompt},
+    files::SessionFiles,
     identity::Identity,
     input::{Source, ordinary_desktop},
     input_owner::InputOwner,
@@ -47,6 +48,7 @@ pub struct StreamRuntime {
     work: mpsc::SyncSender<Work>,
     worker: Option<thread::JoinHandle<()>>,
     ready: Arc<AtomicBool>,
+    files: Option<Arc<SessionFiles>>,
 }
 impl StreamRuntime {
     pub fn begin(
@@ -85,6 +87,14 @@ impl StreamRuntime {
             gate.admit(grant, lease::now()?)?;
         }
         let gate = Arc::new(Mutex::new(gate));
+        let files = if cfg!(feature = "native-resources") {
+            Some(Arc::new(SessionFiles::publisher(
+                gate.clone(),
+                stop.clone(),
+            )?))
+        } else {
+            None
+        };
         let source = source.map(|s| Arc::new(Mutex::new(s)));
         let lost = stop.clone();
         let poller = LeasePoller::start(
@@ -279,6 +289,7 @@ impl StreamRuntime {
             work,
             worker: Some(worker),
             ready,
+            files,
         })
     }
     pub fn request_consent(&mut self, id: &str) -> Result<(), &'static str> {
@@ -375,6 +386,12 @@ impl StreamRuntime {
     pub fn ended(&self) -> bool {
         self.stop.load(Ordering::SeqCst)
     }
+    pub fn files(&self) -> Result<Arc<SessionFiles>, &'static str> {
+        if self.ended() {
+            return Err("revoked");
+        }
+        self.files.clone().ok_or("native-resources-disabled")
+    }
     pub fn input_ready(&self) -> bool {
         !self.ended()
             && !self.input_stop.load(Ordering::SeqCst)
@@ -392,6 +409,9 @@ impl StreamRuntime {
     }
     pub fn stop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
+        if let Some(files) = &self.files {
+            files.close();
+        }
         if let Ok(mut gate) = self.gate.lock() {
             gate.stop();
         }

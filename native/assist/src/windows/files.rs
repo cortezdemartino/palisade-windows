@@ -15,7 +15,7 @@ use std::{
     ptr,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
 use windows_sys::Win32::System::WindowsProgramming::DRIVE_FIXED;
@@ -28,9 +28,11 @@ use windows_sys::{
     },
     core::w,
 };
+mod bound;
+pub use bound::{FileRequest, FileSelection, SessionFiles};
 const FILE_LIMIT: u64 = 1024 * 1024 * 1024;
 const SESSION_LIMIT: u64 = 4 * FILE_LIMIT;
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Metadata {
     pub name: String,
@@ -110,6 +112,9 @@ fn identifier() -> Result<String, &'static str> {
     Ok(data.iter().map(|b| format!("{b:02x}")).collect())
 }
 struct Handle(HANDLE);
+// SAFETY: these are owned directory or token handles, not thread-affine UI
+// handles. Their only shared use is serialized by the owning file-store mutex.
+unsafe impl Send for Handle {}
 impl Drop for Handle {
     fn drop(&mut self) {
         unsafe {
@@ -255,18 +260,31 @@ impl Drop for Receive {
         }
     }
 }
-pub struct FileStore {
+struct FileStore {
     transfers: BTreeMap<String, Transfer>,
-    quota: u64,
+    quota: Arc<AtomicU64>,
     cancel: Arc<AtomicBool>,
 }
 impl FileStore {
-    pub fn new(cancel: Arc<AtomicBool>) -> Self {
+    #[cfg(test)]
+    fn new(cancel: Arc<AtomicBool>) -> Self {
+        Self::with_quota(cancel, Arc::new(AtomicU64::new(0)))
+    }
+    fn with_quota(cancel: Arc<AtomicBool>, quota: Arc<AtomicU64>) -> Self {
         Self {
             transfers: BTreeMap::new(),
-            quota: 0,
+            quota,
             cancel,
         }
+    }
+    fn charge(&self, bytes: u64) -> Result<(), &'static str> {
+        self.quota
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |used| {
+                used.checked_add(bytes)
+                    .filter(|total| *total <= SESSION_LIMIT)
+            })
+            .map(|_| ())
+            .map_err(|_| "transfer-quota")
     }
     fn live(&self) -> Result<(), &'static str> {
         if self.cancel.load(Ordering::SeqCst) {
@@ -351,12 +369,11 @@ impl FileStore {
         if !stat.is_file()
             || stat.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
             || stat.len() > FILE_LIMIT
-            || self.quota.saturating_add(stat.len()) > SESSION_LIMIT
         {
             return Err("invalid-file");
         }
         // Failed and cancelled attempts remain charged to the session quota.
-        self.quota += stat.len();
+        self.charge(stat.len())?;
         let mut hash = Sha256::new();
         let mut bytes = [0u8; 65536];
         loop {
@@ -407,9 +424,6 @@ impl FileStore {
         {
             return Err("transfer-busy");
         }
-        if self.quota.saturating_add(metadata.size) > SESSION_LIMIT {
-            return Err("transfer-quota");
-        }
         let parent = ParentGuard::open(path)?;
         let destination = path.file_name().ok_or("invalid-destination")?;
         Metadata {
@@ -421,7 +435,7 @@ impl FileStore {
         if path.try_exists().map_err(|_| "destination-unavailable")? {
             return Err("destination-exists");
         }
-        self.quota += metadata.size;
+        self.charge(metadata.size)?;
         let token = identifier()?;
         let temp =
             parent.destination(std::ffi::OsStr::new(&format!(".palisade-{token}.partial")))?;
@@ -591,10 +605,6 @@ impl FileStore {
     }
     pub fn cancel(&mut self, token: &str) {
         self.transfers.remove(token);
-    }
-    pub fn stop(&mut self) {
-        self.cancel.store(true, Ordering::SeqCst);
-        self.transfers.clear();
     }
 }
 impl Drop for FileStore {
@@ -932,7 +942,7 @@ mod tests {
         assert!(store.commit(&token, || Err("revoked")).is_err());
         store.cancel(&token);
         assert!(!second.exists());
-        store.quota = SESSION_LIMIT;
+        store.quota.store(SESSION_LIMIT, Ordering::SeqCst);
         assert!(
             store
                 .open_receive(&second, metadata("second.txt", b"x"), &mut || Ok(()))

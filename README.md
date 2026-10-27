@@ -49,6 +49,7 @@ The repository contains no backend service, web assets or Matrix authentication 
 ## Documentation
 
 - [Windows Assist contract audit and preparation](docs/ASSIST-INTEGRATION.md)
+- [Full Assist integration and release plan](docs/ASSIST-RELEASE-PLAN.md)
 - [Assist resolution plan and engineering defaults](docs/ASSIST-RESOLUTION-PLAN.md)
 - [M4G-WINDOWS checkpoint report](docs/M4G-WINDOWS-REPORT.md)
 - [User guide](docs/USER-GUIDE.md)

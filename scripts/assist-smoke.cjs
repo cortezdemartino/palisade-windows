@@ -11,7 +11,7 @@ const { chooseSource } = require(path.join(root, 'src/assist/source-picker.cjs')
 app.disableHardwareAcceleration();
 app.setPath('userData', path.join(__dirname, '../out/assist-smoke-profile'));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const deadline = setTimeout(() => { console.error('Assist fixture timed out'); app.exit(1); }, 40000);
+const deadline = setTimeout(() => { console.error('Assist fixture timed out during', phase); app.exit(1); }, 40000);
 let owner, phase = "initialization";
 app.whenReady().then(async () => {
   const desktop = createDesktopWindow({ partition: 'assist-smoke' }); owner = desktop.window;
@@ -51,7 +51,8 @@ app.whenReady().then(async () => {
   phase = "capture denial and teardown";
   // Electron 44.7.2 represents modern and legacy desktop capture with empty mediaTypes.
   // Never approve that ambiguous permission just to reach the picker.
-  owner.show(); contents.focus(); await pause(100);
+  // Consume Windows' first-show STARTUPINFO override in a hidden test process.
+  owner.show(); owner.hide(); owner.show(); contents.focus(); await pause(100);
   const id = owner.getMediaSourceId();
   for (const expression of ["navigator.mediaDevices.getDisplayMedia({video:true,audio:false})",
     "navigator.mediaDevices.getUserMedia({video:{mandatory:{chromeMediaSource:\"desktop\",chromeMediaSourceId:" + JSON.stringify(id) + "}}})"]) {

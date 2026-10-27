@@ -1,5 +1,15 @@
 # Validation
 
+## Session-owned file checkpoint, October 26, 2026
+
+Starting Windows SHA: 1234a184dcb76b7dbc81615e865ebfb8ed22f7bf. Local app checks: 112 passed. Native format/strict Clippy and 52 tests in each default/all-features configuration passed (33 library, nine executor, four input, six authority). The ten new session-owned file cases use signed authority and actual temporary NTFS files, with synthetic native file confirmation. They cover exact binding, direction/session/token misuse, cancellation/late selection, independent directions/input suspension, grant/lease/idle/session expiry, nonblocking close and shared-quota admission races. Independent review passed the initial 14 native file cases and approved the dormant component; the final suite also includes the suggested lease-only and simultaneous-quota cases.
+
+Eight subprocess groups passed in each feature configuration and the explicit hidden-startup visibility fixture passed. Windows x64 NSIS packaging, native package integrity and packaged controls/capture fixtures passed. An initial assist smoke timeout prompted explicit hidden-startup show handling and phase diagnostics; final tests passed. The desktop runner now requires freshly written passing evidence from every subprocess, refusing stale output. No physical confirmation, real input or clipboard operation was exercised.
+
+Local unsigned installer SHA-256: 2e2dba53145e91826a99eef15976cc01f2c67bfab6f2ec9c0eb9b73b6a5688ee. Current exact-SHA CI is recorded with the pushed checkpoint; the previous 1234a18 build passed run 40443288217. No installer was executed and no release was signed/published or native feature activated.
+
+Companion 97b2a4f0d0b9766ab5e56197f405b36d5e83e959 addresses the two original service authority findings in independently reviewed source; companion tests were inspected, not executed here. Contract commit 8f9c2a45da7017ee36a9567f76413da53bd76075 publishes native bridge v1 and labelled statements. Windows is beginning that integration; these commits do not establish cross-client acceptance. See the active ASSIST-RELEASE-PLAN.md.
+
 ## Capture and permission-isolation checkpoint, October 26, 2026
 
 Windows 10.0.26300 x64, Node.js 24.20.0, Rust 1.98.1, Electron 44.7.2. Starting commit: ffff0624b4b779814605530fd432e3143d19906d. Companion inspected read-only: c0778935a6a08303bf7a9d7de8f2fa75aa8ef536.

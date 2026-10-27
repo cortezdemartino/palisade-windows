@@ -138,7 +138,7 @@ impl Prompt {
                 until: Instant::now() + Duration::from_secs(60),
                 alive: Cell::new(false),
             };
-            let approved = unsafe { show(&context, &text) };
+            let approved = unsafe { show(&context, &text, "Allow this session") };
             if approved {
                 let accept = (|| {
                     let mut guard = gate.lock().map_err(|_| "endpoint-failed")?;
@@ -208,7 +208,39 @@ impl Drop for Prompt {
         }
     }
 }
-unsafe fn show(context: &Context, text: &str) -> bool {
+pub(crate) fn confirm_file(
+    grant: &StreamGrant,
+    transfer: &str,
+    metadata: &super::files::Metadata,
+    cancel: Arc<AtomicBool>,
+) -> Result<bool, &'static str> {
+    metadata.validate()?;
+    if grant.capability != "file_to_host"
+        || !crate::grant::token(transfer, 8, 128)
+        || !safe_identity(&grant.helper_account)
+        || !safe_identity(&grant.helper_device)
+    {
+        return Err("invalid-file-offer");
+    }
+    let context = Context {
+        cancel,
+        result: Arc::new(Mutex::new(None)),
+        until: Instant::now() + Duration::from_secs(60),
+        alive: Cell::new(false),
+    };
+    let text = format!(
+        "Receive this file from {} (device {})?\r\n\r\nFile: {}\r\nSize: {} bytes\r\nSHA-256: {}\r\nTransfer: {}\r\nPermission expires: {}\r\n\r\nReceived files are untrusted. Choose a save location after accepting.",
+        grant.helper_account,
+        grant.helper_device,
+        metadata.name,
+        metadata.size,
+        metadata.sha256,
+        transfer,
+        expiry(grant.expires_at)?
+    );
+    Ok(unsafe { show(&context, &text, "Receive this file") })
+}
+unsafe fn show(context: &Context, text: &str, allow_label: &str) -> bool {
     unsafe {
         let module = GetModuleHandleW(ptr::null());
         let class = WNDCLASSW {
@@ -250,10 +282,11 @@ unsafe fn show(context: &Context, text: &str) -> bool {
             module,
             ptr::null(),
         );
+        let allow_label = wide(allow_label);
         let allow = CreateWindowExW(
             0,
             w!("BUTTON"),
-            w!("Allow this session"),
+            allow_label.as_ptr(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP,
             290,
             260,

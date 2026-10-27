@@ -18,7 +18,7 @@ Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e31
 | Virtual keyboard / toolbar | Blocked | Canonical web UI and native adapter integration |
 | Multiple monitors | Experimental / Not Verified | Negative origin/rotation coordinate tests and native physical monitor bounds; hardware acceptance pending |
 | Clipboard | Experimental | Separate directions, local action, default Off and sync agreement; OS/peer adapter not wired |
-| Files | Experimental | Native selected handles, NTFS protection, quota, integrity/MOTW/atomic save and trusted-main broker; IPC/transport wiring pending |
+| Files | Experimental, inactive | Native session-owned publisher requests, exact offer binding, directional cancellation and atomic shared quota; protected NTFS tests pass; IPC/transport and physical confirmation pending |
 | Transfer encryption | Blocked / Not Verified | Reuse canonical encrypted data peer; local file hash tests do not prove confidentiality |
 | Consent | Experimental | Native helper/device/capability/expiry display, default Deny, post-decision validation and signed acknowledgement |
 | Emergency stop | Experimental / Not Verified | Native stop message-pump and visibility fixtures; actual shortcut/input cleanup acceptance pending |
@@ -27,7 +27,7 @@ Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e31
 | One-controller ownership | Implemented, inactive | Shared named-event lifetime across guardian/child; real two-process crash exclusion fixture |
 | Windows lifecycle | Experimental / Not Verified | Default desktop/SID/UIPI checks and release-only retry; physical lock/sleep/secure desktop tests pending |
 | Cross-client interoperability | Not Verified | No installed endpoint or full session tested |
-| Companion requirements | Blocked | Roster-check lease failure, deferred decision race, finalized native/capture adapter and enrollment trust |
+| Companion requirements | Blocked | 97b2a4f addresses the two service defects in source; official verification, finalized native/capture adapter and enrollment trust remain |
 | Performance | Not Verified | No invented latency, throughput or resource results |
 | Security review | Implemented for components | Capture cancellation/liveness and input ownership/polling findings resolved; product audit/acceptance pending |
 | Unit tests | Implemented | Current executed counts in TEST-RESULTS.md |
@@ -48,4 +48,4 @@ The remaining work includes Windows integration, not only web code. A production
 
 Owner architecture approval is already recorded under project-palisade#33. Independent component review permits committing dormant code, not installation or activation. Windows#5 requires disposable devices/accounts and real emergency-stop acceptance. No input was injected into the owner's personal desktop. Window-bounds persistence remains queued after Assist testing readiness.
 
-Use [the companion prompt](ASSIST-COMPANION-HANDOFF-PROMPT.md) for the read-only dependency. See [integration](ASSIST-INTEGRATION.md), [capture](ASSIST-CAPTURE.md), [native components](ASSIST-NATIVE-GUARDIAN.md), [threat model](ASSIST-THREAT-MODEL.md) and [executed tests](TEST-RESULTS.md).
+Follow [the release plan](ASSIST-RELEASE-PLAN.md). Use [the companion prompt](ASSIST-COMPANION-HANDOFF-PROMPT.md) for the read-only dependency. See [integration](ASSIST-INTEGRATION.md), [capture](ASSIST-CAPTURE.md), [native components](ASSIST-NATIVE-GUARDIAN.md), [threat model](ASSIST-THREAT-MODEL.md) and [executed tests](TEST-RESULTS.md).

@@ -4,6 +4,8 @@ Current unpublished development also adds an inactive isolated capture provider 
 
 ## 0.3.0 (unpublished)
 
+- Bind publisher-side native files to exact sessions, grants, operations and metadata; add independent cancellation, per-file confirmation and one shared directional quota. Native page/transport wiring and physical acceptance remain incomplete.
+
 - Add inactive canonical stream/group v2 verification, endpoint-authenticated lease polling, native consent and acknowledgement components.
 - Add dormant scoped Windows mouse/keyboard adapters and a private child executor with mirrored held-input cleanup, replay/expiry checks and independent local stop handling.
 - Add directional clipboard and native file brokers with cancellation, private staging, download marking and verified no-overwrite completion.
