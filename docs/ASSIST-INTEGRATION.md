@@ -1,6 +1,6 @@
 # Windows Assist integration
 
-Component checkpoint, October 26, 2026. **Full Assist: Blocked.** Windows now includes dormant native input, local consent, independent signed-lease polling and resource brokers. They are not connected to the hosted application. Production still reports capture unavailable and nativeEndpoint absent. This is not a full Assist release candidate.
+Component checkpoint, October 27, 2026. **Full Assist: Blocked.** Windows now includes dormant native input, local consent, independent signed-lease polling and resource brokers. They are not connected to the hosted application. Production still reports capture unavailable and nativeEndpoint absent. This is not a full Assist release candidate.
 
 ## Compatible contracts
 
@@ -8,7 +8,7 @@ The description-only `palisade.assist.bridge` v1 remains unchanged. Its three me
 
 Windows verifies the canonical stream/group control v2 contract at companion commit `c0778935a6a08303bf7a9d7de8f2fa75aa8ef536`. Exact source, schema and fixtures, with Git blob and LF-normalized SHA-256 provenance, are retained under tests/fixtures. Grants bind both accounts/devices, helper DTLS fingerprint, endpoint, room, stream SID, generation and an immutable deadline up to two hours. Separate twenty-second signed leases determine which grants may act. Native polling uses the endpoint key rather than Matrix tokens or page cookies.
 
-The companion source remains read-only. New service and web flows exist behind disabled experimental gates. Companion 97b2a4f0d0b9766ab5e56197f405b36d5e83e959 addresses roster-check lease failure and deferred decision races in source, independently reviewed. Official companion verification remains required. Native bridge v1 is now specified in docs/49 at 8f9c2a45da7017ee36a9567f76413da53bd76075; Windows integration is in progress. Resource transport/actions, helper authority, relay configuration and production pin setup remain dependencies. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+The companion source remains read-only. Companion ae89e414ec71a193094ef7cbee5ad678418ff6f6 implements the web native adapter, shared-certificate input peer, virtual keyboard, signaling and encrypted capture publication. Its browser acceptance uses a mock endpoint and does not qualify Windows. Native bridge v1 remains the unchanged docs/49 contract from 8f9c2a45da7017ee36a9567f76413da53bd76075; its exact validator blob is 62f29f433dbc20de881108b635a97eee3bde6827. The earlier service authority fixes were independently source-reviewed. Official companion CI evidence remains required. Resource transport/actions, helper authority, relay configuration and production pin setup remain dependencies. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
 
 ## Status
 
@@ -22,8 +22,9 @@ The companion source remains read-only. New service and web flows exist behind d
 | Clipboard text | Experimental | Separate directions, positive authority, manual copy and cancellation; OS/peer wiring pending |
 | Native files | Experimental, inactive | Runtime-owned publisher requests, exact grant/direction/offer binding, independent cancellation, shared quota and protected staging; temp NTFS tests pass, native file confirmation is unqualified |
 | Native capture | Experimental, inactive | Existing picker, isolated provider, owned DTLS video, certificate/socket checks and app-owned window pixel/stop fixtures; canonical web publication adapter and acceptance pending |
-| Native bridge and owned DTLS gateway | In progress / Blocked | Core docs/49 handoff received; implement exact messages and labelled statements, then resolve resource/relay/trust dependencies and qualify the owned peer |
-| Virtual keyboard, full toolbar and annotations | Planned / Blocked | Reuse canonical web controls and existing annotations |
+| Native bridge | Implemented, inactive | Exact two-member native v1 surface, strict messages, live-document witness, private event nonce, bounded requests, cancellation and terminal cleanup scopes; real Electron fixture uses a fake coordinator |
+| Owned remote DTLS gateway and coordinator | In progress / Blocked | Enrollment tuple, actual peer/source binding, resource actions and live native IPC still need integration and qualification |
+| Virtual keyboard, full toolbar and annotations | Experimental / Blocked | Companion web controls exist; Windows endpoint integration and real acceptance remain |
 | Complete cross-client Assist | Not Verified | No installed endpoint or real encrypted control/transfer session exercised |
 | Activation/release | Blocked | Integration review, disposable-device qualification and separate owner approval required |
 
@@ -31,7 +32,9 @@ The companion source remains read-only. New service and web flows exist behind d
 
 The hosted renderer remains sandboxed with context isolation and no Node integration. Current native components are internal and unlaunched. No generic native command, filesystem, clipboard or input bridge exists. Existing scoped microphone/notification permissions remain. Generic display permission stays denied because Electron's ambiguous legacy path could bypass a hosted picker. A capability boolean cannot enable it.
 
-Endpoint identity uses a separate current-user DPAPI-protected Ed25519 key. Updater and Matrix keys are never reused. The dormant issuer implementation confirms a fetched fingerprint on first use and refuses subsequent changes. This is TOFU with HTTPS, not an independently authenticated production pin. Production enrollment remains a review gate.
+Endpoint identity uses a separate current-user DPAPI-protected Ed25519 key. Updater and Matrix keys are never reused. The issuer now requires a release pin or native out-of-band administrator confirmation. Legacy issuer-v2.dpapi first-use records cannot qualify trust and remain untouched. The versioned qualified record binds origin, key, fingerprint and method under DPAPI. No production issuer fingerprint is configured. See [native trust and recovery](ASSIST-NATIVE-GUARDIAN.md#issuer-trust-and-recovery).
+
+Endpoint acknowledgements and lease requests use the exact docs/49 purpose-labelled statements. Shared vectors verify all four statement encodings and reject cross-purpose substitution. The old raw-challenge signer has been removed from both normal and probe IPC. Enrollment proof and transport signing must be owned by their corresponding native coordinators before exposure; no generalized signer is available.
 
 Sensitive operations need current exact authorization, a fresh lease, local consent and the verified helper connection. Input permits bind one action, instance, epoch and source generation for at most 100ms. Expiry invalidates idle held-input authority. Cleanup fences and reaps the child before guardian release. Probe mode cannot inject input, including with sensitive features compiled.
 

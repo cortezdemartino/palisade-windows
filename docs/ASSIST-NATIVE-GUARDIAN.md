@@ -12,7 +12,17 @@ The coordinator joins local consent, endpoint-key-authenticated five-second poll
 
 Consent displays helper account/device, capability and absolute expiry. Deny has default focus. Only the exact native Allow button notification approves. The worker revalidates the grant, source and epoch before recording consent. Acknowledgement signs the native grant after that decision. A page callback cannot approve it.
 
-Endpoint identity persists under current-user DPAPI at %LOCALAPPDATA%/Palisade/Assist/endpoint-v1.dpapi. The issuer-v2 pin implementation confirms the fetched fingerprint on first use and refuses changes. This is TOFU with HTTPS, not an independently authenticated release pin. Production enrollment still requires reviewed trust policy. Never automatically delete corrupt identities or changed pins. Recovery must revoke old service enrollment/grants before establishing new authority. Private identity material never crosses the pipe.
+Endpoint identity persists under current-user DPAPI at %LOCALAPPDATA%/Palisade/Assist/endpoint-v1.dpapi. Private identity material never crosses the pipe. Acknowledgements and lease requests sign the canonical purpose-labelled docs/49 statements. The raw enrollment-challenge IPC signer has been removed. Statement encoders alone provide no permission to sign or operate a device.
+
+## Issuer trust and recovery
+
+The native issuer loader accepts only an authenticated release fingerprint or a qualified local record. The dedicated Assist issuer is separate from the updater and Matrix keys. RELEASE_ISSUER_FINGERPRINT is deliberately unset until the production authority is established through [project-palisade#47](https://github.com/cortezdemartino/project-palisade/issues/47). A runtime HTTPS response cannot supply the release pin.
+
+An administrator may instead compare the entire fingerprint shown by the trusted native confirmation window against the Server Controller's Assist page over a separate trusted channel. The default is Deny. The narrow prompt checks the ordinary desktop and cancellation, fetches the issuer again after confirmation, and refuses a changed value. This prompt is not exposed by diagnostic IPC or enabled by production main.
+
+Qualified trust is stored in issuer-qualified-v1.dpapi as a strict versioned origin/key/fingerprint/method record under current-user DPAPI. The old issuer-v2.dpapi file is retained and never interpreted as confirmed trust. Existing qualified records are never overwritten; corruption, wrong origin, key changes and removed release pins fail closed. A completed administrator trust choice may remain if cancellation races its durable commit; the canceled caller receives no successful result. A live coordinator must recheck its operation/session epoch after this prompt and before enrollment or any acknowledgement.
+
+For recovery, stop Assist first, revoke the affected endpoint enrollment and grants at the service, preserve the old record for review, and independently verify both old and new fingerprints. Use a reviewed release-pin migration or an explicitly reviewed administrator recovery procedure. There is no automatic reset, fallback to HTTPS or live key replacement. Never delete the endpoint identity to make a mismatch disappear. Re-enrollment and issuer recovery are not yet wired into the application UI, and their physical acceptance remains Not Verified.
 
 ## Input executor
 

@@ -19,6 +19,67 @@ function report() {
   if (count !== previous) ipcRenderer.send('palisade:unread-state', { count, baseline: previous === null || Date.now() - firstSeen < 5000 });
   previous = count;
 }
+
+// Separately negotiated native channel. Production passes no enabling argument
+// until its compiled coordinator, native authority and acceptance gates are met.
+if (typeof process !== 'undefined' && process.isMainFrame && location.origin === 'https://palisade.onyxops.org' && Array.isArray(process.argv) && process.argv.includes('--palisade-assist-native')) {
+  const documentId = crypto.randomUUID(), listeners = new Set(), calls = new Set();
+  let alive = true, lastSequence = 0;
+  const connect = 'palisade:assist-native-connect', request = 'palisade:assist-native-request', expired = 'palisade:assist-native-expired', probe = 'palisade:assist-native-probe', witness = 'palisade:assist-native-witness', eventChannel = 'palisade:assist-native-event';
+  const nativeProtocol = 'palisade.assist.native';
+  const answerProbe = (_event, value) => {
+    if (alive && value && typeof value.challenge === 'string' && /^[a-f0-9]{48}$/.test(value.challenge)) ipcRenderer.send(witness, { document: documentId, challenge: value.challenge });
+  };
+  ipcRenderer.on(probe, answerProbe);
+  const connected = ipcRenderer.invoke(connect, { document: documentId }).catch(() => false);
+  const receive = (_event, envelope) => {
+    if (!envelope || Object.keys(envelope).sort().join(',') !== 'document,text' || envelope.document !== documentId) return;
+    const text = envelope.text;
+    if (!alive || typeof text !== 'string' || text.length > 32768) return;
+    let value; try { value = JSON.parse(text); } catch { return; }
+    if (value?.p !== nativeProtocol || value.v !== 1 || !['peer.candidate', 'capture.status', 'lifecycle'].includes(value.event) || !Number.isSafeInteger(value.seq) || value.seq <= lastSequence) return;
+    lastSequence = value.seq;
+    for (const listener of listeners) { try { listener(text); } catch {} }
+  };
+  ipcRenderer.on(eventChannel, receive);
+  contextBridge.exposeInMainWorld('palisadeAssistNative', {
+    request: async text => {
+      if (!alive || typeof text !== 'string' || !text.length || text.length > 32768) throw Error('Invalid native message');
+      let value; try { value = JSON.parse(text); } catch { throw Error('Invalid native message'); }
+      const safety = ['stop', 'capture.stop', 'capture.cancel', 'peer.close'].includes(value?.op);
+      if (!/^[A-Za-z0-9_-]{8,64}$/.test(value?.id || '') ||
+          (!safety && [...calls].filter(call => !call.safety).length >= 8) ||
+          (safety && value.op !== 'stop' && calls.size >= 12) ||
+          (value.op === 'stop' && [...calls].some(call => call.op === 'stop'))) throw Error('Native Assist busy');
+      const call = { done: false, safety, op: value.op }; calls.add(call);
+      let timer;
+      try {
+        return await Promise.race([
+          (async () => {
+            if (await connected !== true || !alive || call.done) throw Error('Native Assist unavailable');
+            const result = await ipcRenderer.invoke(request, { document: documentId, text });
+            if (!alive || call.done || typeof result !== 'string' || result.length > 32768) throw Error('Native Assist unavailable');
+            return result;
+          })(),
+          new Promise((_resolve, reject) => { call.reject = reject; timer = call.timer = setTimeout(() => {
+            call.done = true;
+            ipcRenderer.send(expired, { document: documentId, id: value.id });
+            reject(Error('Native Assist timeout'));
+          }, 120000); }),
+        ]);
+      } finally { call.done = true; clearTimeout(timer); calls.delete(call); }
+    },
+    subscribe: listener => {
+      if (!alive || typeof listener !== 'function' || listeners.size >= 8) return () => {};
+      listeners.add(listener); return () => listeners.delete(listener);
+    },
+  });
+  window.addEventListener('unload', () => {
+    alive = false; listeners.clear();
+    for (const call of calls) { call.done = true; clearTimeout(call.timer); call.reject?.(Error('Native Assist stopped')); }
+    ipcRenderer.removeListener(probe, answerProbe); ipcRenderer.removeListener(eventChannel, receive);
+  }, { once: true });
+}
 window.addEventListener('DOMContentLoaded', () => {
   const observer = new MutationObserver(() => { clearTimeout(timer); timer = setTimeout(report, 150); });
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['aria-label', 'class'] });

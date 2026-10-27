@@ -1,0 +1,592 @@
+{
+  "note": "Shared fixtures for palisade.assist.native v1 (docs/49). The issuer and endpoint keys come from PUBLISHED fixture-only seeds and must never be trusted outside tests.",
+  "issuerPublicKey": "pPCjJqdDagxJfWG1bud3XUc1jXrhfYl2GI8FkYpgIUM",
+  "issuerFingerprint": "0f1b044c0e54db66095729e03f553d50fb568c77613b3235c6db494437f28aed",
+  "endpointPublicKey": "9IjJnDhgTd6sWk5OTkmxc983_SuJrXyUKbVG06_1M2c",
+  "endpointFingerprint": "sha-256 FF:FC:F9:F6:F3:F0:ED:EA:E7:E4:E1:DE:DB:D8:D5:D2:CF:CC:C9:C6:C3:C0:BD:BA:B7:B4:B1:AE:AB:A8:A5:A2",
+  "nativeGrant": {
+    "grant": {
+      "issuer": "palisade",
+      "protocol": "palisade.assist.control",
+      "version": 2,
+      "grantId": "sgrant_fixture_0002",
+      "session": "sassist_fixture_0001",
+      "room": "!voicechannel:palisade.test",
+      "stream": "TR_fixtureStream0001",
+      "capability": "control_mouse",
+      "generation": 3,
+      "nonce": "nonce_stream_fixture_0002",
+      "issuedAt": 1800000000000,
+      "approvedAt": 1800000000000,
+      "sessionDeadline": 1800007200000,
+      "expiresAt": 1800007200000,
+      "publisherAccount": "@streamer:palisade.test",
+      "publisherDevice": "STREAMERDEVICE",
+      "helperAccount": "@helper:palisade.test",
+      "helperDevice": "HELPERDEVICE",
+      "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+      "endpoint": "endpoint_fixture_01"
+    },
+    "signature": "xBr4ktJ212bDAwiKQo46RFW-6M71Y1oyWlCV_4PwEIjA_eCmSvsvF684xACOXn79igIvMgM2himkrTH3dBN4Bg"
+  },
+  "statements": [
+    {
+      "name": "enrollment proof",
+      "statement": "cGFsaXNhZGUuYXNzaXN0LmNvbnRyb2wvZW5kcG9pbnQtcHJvb2YvdjIKMGYxYjA0NGMwZTU0ZGI2NjA5NTcyOWUwM2Y1NTNkNTBmYjU2OGM3NzYxM2IzMjM1YzZkYjQ5NDQzN2YyOGFlZAplbmRwb2ludF9maXh0dXJlXzAxCkBzdHJlYW1lcjpwYWxpc2FkZS50ZXN0ClNUUkVBTUVSREVWSUNFCkJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2NIQndjSEJ3Y0hCd2M",
+      "text": "palisade.assist.control/endpoint-proof/v2\n0f1b044c0e54db66095729e03f553d50fb568c77613b3235c6db494437f28aed\nendpoint_fixture_01\n@streamer:palisade.test\nSTREAMERDEVICE\nBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+      "signature": "36pwcqhjDL8UnF78Bam2yaNDCbRwkrbYCqjTgKgb_6mpugOns1gZ86RTUzygr8imR-bBkMCTrcXurGZShOV_Cg"
+    },
+    {
+      "name": "acknowledgement after local consent",
+      "statement": "cGFsaXNhZGUuYXNzaXN0LmNvbnRyb2wvZW5kcG9pbnQtYWNrL3YyCnsiYXBwcm92ZWRBdCI6MTgwMDAwMDAwMDAwMCwiY2FwYWJpbGl0eSI6ImNvbnRyb2xfbW91c2UiLCJlbmRwb2ludCI6ImVuZHBvaW50X2ZpeHR1cmVfMDEiLCJleHBpcmVzQXQiOjE4MDAwMDcyMDAwMDAsImdlbmVyYXRpb24iOjMsImdyYW50SWQiOiJzZ3JhbnRfZml4dHVyZV8wMDAyIiwiaGVscGVyQWNjb3VudCI6IkBoZWxwZXI6cGFsaXNhZGUudGVzdCIsImhlbHBlckRldmljZSI6IkhFTFBFUkRFVklDRSIsImhlbHBlclRyYW5zcG9ydCI6InNoYS0yNTYgMTA6MTc6MUU6MjU6MkM6MzM6M0E6NDE6NDg6NEY6NTY6NUQ6NjQ6NkI6NzI6Nzk6ODA6ODc6OEU6OTU6OUM6QTM6QUE6QjE6Qjg6QkY6QzY6Q0Q6RDQ6REI6RTI6RTkiLCJpc3N1ZWRBdCI6MTgwMDAwMDAwMDAwMCwiaXNzdWVyIjoicGFsaXNhZGUiLCJub25jZSI6Im5vbmNlX3N0cmVhbV9maXh0dXJlXzAwMDIiLCJwcm90b2NvbCI6InBhbGlzYWRlLmFzc2lzdC5jb250cm9sIiwicHVibGlzaGVyQWNjb3VudCI6IkBzdHJlYW1lcjpwYWxpc2FkZS50ZXN0IiwicHVibGlzaGVyRGV2aWNlIjoiU1RSRUFNRVJERVZJQ0UiLCJyb29tIjoiIXZvaWNlY2hhbm5lbDpwYWxpc2FkZS50ZXN0Iiwic2Vzc2lvbiI6InNhc3Npc3RfZml4dHVyZV8wMDAxIiwic2Vzc2lvbkRlYWRsaW5lIjoxODAwMDA3MjAwMDAwLCJzdHJlYW0iOiJUUl9maXh0dXJlU3RyZWFtMDAwMSIsInZlcnNpb24iOjJ9",
+      "text": "palisade.assist.control/endpoint-ack/v2\n{\"approvedAt\":1800000000000,\"capability\":\"control_mouse\",\"endpoint\":\"endpoint_fixture_01\",\"expiresAt\":1800007200000,\"generation\":3,\"grantId\":\"sgrant_fixture_0002\",\"helperAccount\":\"@helper:palisade.test\",\"helperDevice\":\"HELPERDEVICE\",\"helperTransport\":\"sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9\",\"issuedAt\":1800000000000,\"issuer\":\"palisade\",\"nonce\":\"nonce_stream_fixture_0002\",\"protocol\":\"palisade.assist.control\",\"publisherAccount\":\"@streamer:palisade.test\",\"publisherDevice\":\"STREAMERDEVICE\",\"room\":\"!voicechannel:palisade.test\",\"session\":\"sassist_fixture_0001\",\"sessionDeadline\":1800007200000,\"stream\":\"TR_fixtureStream0001\",\"version\":2}",
+      "signature": "44rUyWQlMj9qwSeFIfZ06u60OAqa1AuWGMo7jyTY0NiIqx7nLB1d6sEPgoCPHUMzVUBajqW4ViJQLCPcLD95Dg"
+    },
+    {
+      "name": "endpoint lease request",
+      "statement": "cGFsaXNhZGUuYXNzaXN0LmNvbnRyb2wvZW5kcG9pbnQtbGVhc2UvdjIKZW5kcG9pbnRfZml4dHVyZV8wMQpzYXNzaXN0X2ZpeHR1cmVfMDAwMQoxODAwMDAwMzAwMDAw",
+      "text": "palisade.assist.control/endpoint-lease/v2\nendpoint_fixture_01\nsassist_fixture_0001\n1800000300000",
+      "signature": "rQ_ytfWumlrd7TYkn-n8U00ctO8Rb493C9OySuL9J_LL4mcU6BRNNImaaLZH2I6O4uMvtVsO-73lCUcXW8uCDw"
+    },
+    {
+      "name": "native peer transport",
+      "statement": "cGFsaXNhZGUuYXNzaXN0LmNvbnRyb2wvZW5kcG9pbnQtdHJhbnNwb3J0L3YyCnNhc3Npc3RfZml4dHVyZV8wMDAxCmVuZHBvaW50X2ZpeHR1cmVfMDEKc2hhLTI1NiBGRjpGQzpGOTpGNjpGMzpGMDpFRDpFQTpFNzpFNDpFMTpERTpEQjpEODpENTpEMjpDRjpDQzpDOTpDNjpDMzpDMDpCRDpCQTpCNzpCNDpCMTpBRTpBQjpBODpBNTpBMgpzaGEtMjU2IDEwOjE3OjFFOjI1OjJDOjMzOjNBOjQxOjQ4OjRGOjU2OjVEOjY0OjZCOjcyOjc5OjgwOjg3OjhFOjk1OjlDOkEzOkFBOkIxOkI4OkJGOkM2OkNEOkQ0OkRCOkUyOkU5",
+      "text": "palisade.assist.control/endpoint-transport/v2\nsassist_fixture_0001\nendpoint_fixture_01\nsha-256 FF:FC:F9:F6:F3:F0:ED:EA:E7:E4:E1:DE:DB:D8:D5:D2:CF:CC:C9:C6:C3:C0:BD:BA:B7:B4:B1:AE:AB:A8:A5:A2\nsha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+      "signature": "PZ9jTw0QaFAFqG2y_BkW2qWH77ARZJ5LAv8RBygJz-aqZf9-GvxMLObafjNkgwWUS-VCEXlvYY812spo0mHDCA"
+    }
+  ],
+  "requests": {
+    "valid": [
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_hello_01",
+        "op": "hello",
+        "versions": [1]
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_enroll_key",
+        "op": "enroll.key",
+        "origin": "https://palisade.example"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_enroll_prove",
+        "op": "enroll.prove",
+        "endpointId": "endpoint_fixture_01",
+        "challenge": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+        "account": "@streamer:palisade.test",
+        "device": "STREAMERDEVICE"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_grant_offer",
+        "op": "grant.offer",
+        "session": "sassist_fixture_0001",
+        "grant": "{\"grant\":{\"issuer\":\"palisade\",\"protocol\":\"palisade.assist.control\",\"version\":2,\"grantId\":\"sgrant_fixture_0002\",\"session\":\"sassist_fixture_0001\",\"room\":\"!voicechannel:palisade.test\",\"stream\":\"TR_fixtureStream0001\",\"capability\":\"control_mouse\",\"generation\":3,\"nonce\":\"nonce_stream_fixture_0002\",\"issuedAt\":1800000000000,\"approvedAt\":1800000000000,\"sessionDeadline\":1800007200000,\"expiresAt\":1800007200000,\"publisherAccount\":\"@streamer:palisade.test\",\"publisherDevice\":\"STREAMERDEVICE\",\"helperAccount\":\"@helper:palisade.test\",\"helperDevice\":\"HELPERDEVICE\",\"helperTransport\":\"sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9\",\"endpoint\":\"endpoint_fixture_01\"},\"signature\":\"xBr4ktJ212bDAwiKQo46RFW-6M71Y1oyWlCV_4PwEIjA_eCmSvsvF684xACOXn79igIvMgM2himkrTH3dBN4Bg\"}"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_peer_offer",
+        "op": "peer.offer",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0002",
+        "sdp": "v=0\r\na=fingerprint:sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9\r\n"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_peer_cand",
+        "op": "peer.candidate",
+        "session": "sassist_fixture_0001",
+        "candidate": "candidate:1 1 udp 2122260223 192.0.2.10 54400 typ host",
+        "mid": "0"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_peer_close",
+        "op": "peer.close",
+        "session": "sassist_fixture_0001"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_capture_a",
+        "op": "capture.start",
+        "operation": "capture_op_0001",
+        "room": "!voicechannel:palisade.test"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_capture_b",
+        "op": "capture.bind",
+        "operation": "capture_op_0001",
+        "trackSid": "TR_fixtureStream0001"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_capture_c",
+        "op": "capture.cancel",
+        "operation": "capture_op_0001"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_capture_d",
+        "op": "capture.stop",
+        "operation": "capture_op_0001"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_status_01",
+        "op": "status"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "id": "req_stop_0001",
+        "op": "stop"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "generic invoke",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_invoke_1",
+          "op": "invoke",
+          "method": "shell.exec",
+          "args": ["cmd.exe"]
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown operation",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_unknown1",
+          "op": "files.read",
+          "path": "C:\\\\Users"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "extra field (path)",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_status_02",
+          "op": "status",
+          "path": "C:\\\\"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "page-declared fingerprint",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_peer_off2",
+          "op": "peer.offer",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0002",
+          "sdp": "v=0\r\na=fingerprint:sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9\r\n",
+          "fingerprint": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "page-supplied issuer",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_k2",
+          "op": "enroll.key",
+          "origin": "https://palisade.example",
+          "issuer": "0f1b044c0e54db66095729e03f553d50fb568c77613b3235c6db494437f28aed"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "plain http origin",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_k3",
+          "op": "enroll.key",
+          "origin": "http://palisade.example"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "challenge of wrong length",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_p2",
+          "op": "enroll.prove",
+          "endpointId": "endpoint_fixture_01",
+          "challenge": "AQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQEBAQ",
+          "account": "@streamer:palisade.test",
+          "device": "STREAMERDEVICE"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "oversized SDP",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_peer_off3",
+          "op": "peer.offer",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0002",
+          "sdp": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "malformed track SID",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_capture_e",
+          "op": "capture.bind",
+          "operation": "capture_op_0001",
+          "trackSid": "screen-1"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "other version",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 2,
+          "id": "req_status_03",
+          "op": "status"
+        },
+        "error": "unsupported-version"
+      },
+      {
+        "name": "description bridge protocol",
+        "message": {
+          "p": "palisade.assist.bridge",
+          "v": 1,
+          "id": "req_status_04",
+          "op": "status"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "responses": {
+    "valid": [
+      {
+        "op": "hello",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_hello_01",
+          "ok": true,
+          "result": {
+            "version": 1,
+            "features": {
+              "capture": false,
+              "clipboard": false,
+              "files": false,
+              "input": false
+            }
+          }
+        }
+      },
+      {
+        "op": "enroll.key",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_key",
+          "ok": true,
+          "result": {
+            "publicKey": "9IjJnDhgTd6sWk5OTkmxc983_SuJrXyUKbVG06_1M2c",
+            "issuerFingerprint": "0f1b044c0e54db66095729e03f553d50fb568c77613b3235c6db494437f28aed",
+            "pin": "release"
+          }
+        }
+      },
+      {
+        "op": "enroll.prove",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_prove",
+          "ok": true,
+          "result": {
+            "signature": "36pwcqhjDL8UnF78Bam2yaNDCbRwkrbYCqjTgKgb_6mpugOns1gZ86RTUzygr8imR-bBkMCTrcXurGZShOV_Cg"
+          }
+        }
+      },
+      {
+        "op": "grant.offer",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_grant_offer",
+          "ok": true,
+          "result": {
+            "signature": "44rUyWQlMj9qwSeFIfZ06u60OAqa1AuWGMo7jyTY0NiIqx7nLB1d6sEPgoCPHUMzVUBajqW4ViJQLCPcLD95Dg"
+          }
+        }
+      },
+      {
+        "op": "grant.offer",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_grant_offer",
+          "ok": false,
+          "error": "consent-denied"
+        }
+      },
+      {
+        "op": "peer.offer",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_peer_offer",
+          "ok": true,
+          "result": {
+            "sdp": "v=0\r\na=fingerprint:sha-256 FF:FC:F9:F6:F3:F0:ED:EA:E7:E4:E1:DE:DB:D8:D5:D2:CF:CC:C9:C6:C3:C0:BD:BA:B7:B4:B1:AE:AB:A8:A5:A2\r\n",
+            "transportSignature": "PZ9jTw0QaFAFqG2y_BkW2qWH77ARZJ5LAv8RBygJz-aqZf9-GvxMLObafjNkgwWUS-VCEXlvYY812spo0mHDCA"
+          }
+        }
+      },
+      {
+        "op": "peer.offer",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_peer_offer",
+          "ok": false,
+          "error": "transport-mismatch"
+        }
+      },
+      {
+        "op": "capture.start",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_capture_a",
+          "ok": true,
+          "result": {
+            "operation": "capture_op_0001"
+          }
+        }
+      },
+      {
+        "op": "capture.start",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_capture_a",
+          "ok": false,
+          "error": "capture-unavailable"
+        }
+      },
+      {
+        "op": "status",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_status_01",
+          "ok": true,
+          "result": {
+            "endpoint": {
+              "enrolled": true,
+              "endpointId": "endpoint_fixture_01",
+              "pin": "release"
+            },
+            "capture": {
+              "operation": "capture_op_0001",
+              "state": "live",
+              "trackSid": "TR_fixtureStream0001"
+            },
+            "controller": {
+              "session": "sassist_fixture_0001",
+              "state": "active"
+            }
+          }
+        }
+      },
+      {
+        "op": "stop",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_stop_0001",
+          "ok": true,
+          "result": {}
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "first-use pin is not a trust state",
+        "op": "enroll.key",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_key",
+          "ok": true,
+          "result": {
+            "publicKey": "9IjJnDhgTd6sWk5OTkmxc983_SuJrXyUKbVG06_1M2c",
+            "issuerFingerprint": "0f1b044c0e54db66095729e03f553d50fb568c77613b3235c6db494437f28aed",
+            "pin": "first-use"
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "private key in a result",
+        "op": "enroll.key",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_enroll_key",
+          "ok": true,
+          "result": {
+            "publicKey": "9IjJnDhgTd6sWk5OTkmxc983_SuJrXyUKbVG06_1M2c",
+            "issuerFingerprint": "0f1b044c0e54db66095729e03f553d50fb568c77613b3235c6db494437f28aed",
+            "pin": "release",
+            "privateKey": "x"
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown error code",
+        "op": "stop",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_stop_0001",
+          "ok": false,
+          "error": "oops"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "approval as a boolean",
+        "op": "grant.offer",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "req_grant_offer",
+          "ok": true,
+          "result": {
+            "approved": true
+          }
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "events": {
+    "valid": [
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "event": "capture.status",
+        "seq": 1,
+        "operation": "capture_op_0001",
+        "state": "live",
+        "reason": null
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "event": "peer.candidate",
+        "seq": 2,
+        "session": "sassist_fixture_0001",
+        "candidate": "candidate:2 1 udp 2122260223 192.0.2.20 54401 typ host",
+        "mid": "0"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "event": "capture.status",
+        "seq": 3,
+        "operation": "capture_op_0001",
+        "state": "stopped",
+        "reason": "source-lost"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "event": "lifecycle",
+        "seq": 4,
+        "session": "sassist_fixture_0001",
+        "state": "suspended",
+        "reason": "lock"
+      },
+      {
+        "p": "palisade.assist.native",
+        "v": 1,
+        "event": "lifecycle",
+        "seq": 5,
+        "session": "sassist_fixture_0001",
+        "state": "stopped",
+        "reason": "local-stop"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "sequence zero",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "event": "lifecycle",
+          "seq": 0,
+          "session": null,
+          "state": "idle",
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown reason",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "event": "capture.status",
+          "seq": 6,
+          "operation": "capture_op_0001",
+          "state": "stopped",
+          "reason": "because"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown event",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "event": "clipboard.read",
+          "seq": 7,
+          "text": "secret"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  }
+}

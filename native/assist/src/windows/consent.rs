@@ -240,6 +240,16 @@ pub(crate) fn confirm_file(
     );
     Ok(unsafe { show(&context, &text, "Receive this file") })
 }
+pub(crate) fn confirm_issuer(text: &str, cancel: Arc<AtomicBool>) -> Result<bool, &'static str> {
+    super::input::ordinary_desktop()?;
+    let context = Context {
+        cancel,
+        result: Arc::new(Mutex::new(None)),
+        until: Instant::now() + Duration::from_secs(90),
+        alive: Cell::new(false),
+    };
+    Ok(unsafe { show(&context, text, "I compared the key") })
+}
 unsafe fn show(context: &Context, text: &str, allow_label: &str) -> bool {
     unsafe {
         let module = GetModuleHandleW(ptr::null());

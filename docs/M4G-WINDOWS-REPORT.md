@@ -1,8 +1,8 @@
 # M4G-WINDOWS-FULL implementation report
 
-Checkpoint: October 26, 2026. **Full Assist: Blocked.** Windows has reviewed, tested inactive components; the product is not release-ready. Companion source remains read-only.
+Checkpoint: October 27, 2026. **Full Assist: Blocked.** Windows has reviewed, tested inactive components; the product is not release-ready. Companion source remains read-only.
 
-Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e3143d19906d. Earlier component work began at c76d3370a770e811e4997d61cab738a9a9a90d3e. Exact final candidate and its CI URL are recorded in the pushed commit/issue evidence. Companion inspected: c0778935a6a08303bf7a9d7de8f2fa75aa8ef536.
+Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d81f4c72e6cdfd1da. Earlier component work began at c76d3370a770e811e4997d61cab738a9a9a90d3e. Exact final candidate and its CI URL are recorded in the pushed commit/issue evidence. Companion inspected read-only: ae89e414ec71a193094ef7cbee5ad678418ff6f6; canonical native v1 validator is unchanged since 8f9c2a4.
 
 | Requested area | Classification | Evidence or remaining work |
 | --- | --- | --- |
@@ -10,12 +10,12 @@ Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e31
 | Endpoint architecture | Experimental | Per-user Rust guardian, private pipes, child input, native consent and local stop; no privileged service |
 | Native modules | Experimental | stream, executor, input, runtime, consent, lease, identity, issuer, files, image, parent and lifecycle |
 | Electron description bridge | Implemented | Original three members/seven fields; unavailable/absent production report |
-| Native page bridge / remote gateway | Blocked | Final canonical answer/cancel/status/lifecycle and certificate binding required, then Windows implementation/wiring |
+| Native page bridge / remote gateway | Implemented, inactive / Blocked | Two-member v1 bridge and strict messages/document scopes tested in real Electron with a fake coordinator; live native coordinator and owned remote gateway remain unfinished |
 | Screen/window capture | Experimental, inactive | Existing picker, separate provider, local owned DTLS video, actual certificate/socket checks and selected-window stop |
-| Cross-client encrypted viewing | Not Verified | No MatrixRTC publication adapter or live session executed |
+| Cross-client encrypted viewing | Not Verified | Companion publication adapter exists and is mock-browser tested; Windows capture binding and real cross-client session remain |
 | Mouse | Experimental | Bounded coordinates/buttons/scroll, native source checks and fake-sink/process tests; real input not exercised |
 | Keyboard / shortcuts | Experimental | Physical scan-code mapping, permitted bounded shortcuts and owned modifier cleanup |
-| Virtual keyboard / toolbar | Blocked | Canonical web UI and native adapter integration |
+| Virtual keyboard / toolbar | Experimental / Blocked | Companion web controls implemented; Windows endpoint integration and acceptance remain |
 | Multiple monitors | Experimental / Not Verified | Negative origin/rotation coordinate tests and native physical monitor bounds; hardware acceptance pending |
 | Clipboard | Experimental | Separate directions, local action, default Off and sync agreement; OS/peer adapter not wired |
 | Files | Experimental, inactive | Native session-owned publisher requests, exact offer binding, directional cancellation and atomic shared quota; protected NTFS tests pass; IPC/transport and physical confirmation pending |
@@ -27,7 +27,7 @@ Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e31
 | One-controller ownership | Implemented, inactive | Shared named-event lifetime across guardian/child; real two-process crash exclusion fixture |
 | Windows lifecycle | Experimental / Not Verified | Default desktop/SID/UIPI checks and release-only retry; physical lock/sleep/secure desktop tests pending |
 | Cross-client interoperability | Not Verified | No installed endpoint or full session tested |
-| Companion requirements | Blocked | 97b2a4f addresses the two service defects in source; official verification, finalized native/capture adapter and enrollment trust remain |
+| Companion requirements | Blocked | Core native handoff and web adapter available; official CI evidence, resource data plane/helper authority/relay details and production issuer setup remain |
 | Performance | Not Verified | No invented latency, throughput or resource results |
 | Security review | Implemented for components | Capture cancellation/liveness and input ownership/polling findings resolved; product audit/acceptance pending |
 | Unit tests | Implemented | Current executed counts in TEST-RESULTS.md |
@@ -39,10 +39,10 @@ Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e31
 | Documentation | Implemented | Integration, capture, native architecture, threat model, user/operations/settings and companion prompt |
 | Issue tracking | Implemented via owner issues | Windows #1/#3/#4/#5, project #18/#33; exact checkpoint evidence posted after push |
 | Open owner interventions | Blocked | Companion changes, disposable-device acceptance and separate installation/activation/release approval |
-| Exact-SHA CI | Not Verified until hosted run | Previous ffff062 run passed; current push must establish its own result |
+| Exact-SHA CI | Not Verified until hosted run | a7d381b passed run 40448822734; the current push must establish its own result |
 | Deployment | Blocked | No installer executed, production feature enabled or release published |
 | Limitations | Blocked / Not Verified | Images, transfer resume and unrestricted drag/drop unsupported; no unattended access |
-| Next integration | Blocked | Companion handoff first, then Windows remote gateway/native IPC/resource/capture wiring and real acceptance |
+| Next integration | Blocked | Windows enrollment tuple, remote gateway/native IPC/capture wiring, canonical resource follow-up and real acceptance |
 
 The remaining work includes Windows integration, not only web code. A production endpoint cannot be completed by accepting page-provided consent or fingerprints. Generic hosted capture remains denied. The isolated local video hop does not replace MatrixRTC E2EE.
 

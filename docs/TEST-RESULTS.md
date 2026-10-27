@@ -1,5 +1,20 @@
 # Validation
 
+## Native bridge and trust checkpoint, October 27, 2026
+
+Starting Windows SHA: a7d381b2b92d0bf7f23c9d4d81f4c72e6cdfd1da. Companion inspected read-only: ae89e414ec71a193094ef7cbee5ad678418ff6f6. Its native v1 validator remains exact blob 62f29f433dbc20de881108b635a97eee3bde6827 from 8f9c2a4; pinned fixtures preserve Git blob and SHA-256 provenance. No companion tests ran locally, and no Actions run was returned for ae89e41. Its mock-endpoint browser acceptance does not qualify Windows.
+
+- npm run check passed: 127 tests, none failed/skipped. Fifteen native bridge/preload/contract cases cover exact schemas, enabled main-frame exposure, private live-document challenge/events, full-queue safety operations, timeout, reload, late signatures, replacement/terminal events, destroyed contents and canonical purpose-separated signature vectors.
+- Native format/strict Clippy passed. All 58 Rust tests passed in each default/all-features configuration: 39 library, nine executor, four input and six authority cases. New tests verify exact four statement vectors, cross-purpose/tamper refusal, issuer qualification and actual temporary current-user DPAPI persistence without legacy/corrupt state replacement.
+- Eight actual subprocess groups passed in each feature configuration, plus explicit hidden-startup visibility. Raw enrollment-challenge signing is no longer accepted. No probe injects input.
+- Source and packaged Electron 44.7.2 desktop checks passed, including the new native bridge fixture with a fake coordinator. It proves the actual context-isolated surface, subframe denial, full-queue stop, stale-result rejection and reload/origin teardown without native enrollment or OS execution.
+- Windows x64 NSIS packaging and package integrity passed with sensitive native features disabled. Packaged capture fixtures passed for isolated DOM video, real synthetic DTLS, ten negative/lifecycle cases and actual app-owned window pixels/source-stop. No personal screen/window was captured.
+- Locked native and production dependency audits passed. Independent read-only review passed focused Node/signing/issuer tests and cleared the disabled component slice after stale lifetime/capacity findings were fixed.
+
+Local unsigned installer SHA-256: 20d2107dd99e4794be7686c1d2ecd7accf7e7e4ba4f4a1e0a0e7cd3e106926f7. Exact-SHA CI is recorded after push; a7d381b passed [run 40448822734](https://github.com/cortezdemartino/palisade-windows/actions/runs/40448822734), which is previous-checkpoint evidence only.
+
+The real issuer confirmation window, enrollment, native remote peer/coordinator, physical input, clipboard, cross-client encrypted transfer, installer execution and installed upgrade remain Not Verified. No production Assist pin is configured. No installer was run, private update key used, production feature activated or release published. This remains an inactive component checkpoint, not full Assist acceptance.
+
 ## Session-owned file checkpoint, October 26, 2026
 
 Starting Windows SHA: 1234a184dcb76b7dbc81615e865ebfb8ed22f7bf. Local app checks: 112 passed. Native format/strict Clippy and 52 tests in each default/all-features configuration passed (33 library, nine executor, four input, six authority). The ten new session-owned file cases use signed authority and actual temporary NTFS files, with synthetic native file confirmation. They cover exact binding, direction/session/token misuse, cancellation/late selection, independent directions/input suspension, grant/lease/idle/session expiry, nonblocking close and shared-quota admission races. Independent review passed the initial 14 native file cases and approved the dormant component; the final suite also includes the suggested lease-only and simultaneous-quota cases.

@@ -4,6 +4,8 @@ Current unpublished development also adds an inactive isolated capture provider 
 
 ## 0.3.0 (unpublished)
 
+- Add an inactive canonical native v1 bridge with document-bound cancellation/events and real Electron boundary tests. Purpose-separate endpoint statements, remove raw-challenge IPC signing and require qualified issuer pins without promoting legacy first-use records. Live endpoint integration and acceptance remain incomplete.
+
 - Bind publisher-side native files to exact sessions, grants, operations and metadata; add independent cancellation, per-file confirmation and one shared directional quota. Native page/transport wiring and physical acceptance remain incomplete.
 
 - Add inactive canonical stream/group v2 verification, endpoint-authenticated lease polling, native consent and acknowledgement components.

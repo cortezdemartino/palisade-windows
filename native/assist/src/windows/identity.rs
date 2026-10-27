@@ -28,8 +28,15 @@ impl Identity {
     pub fn public_key(&self) -> String {
         URL_SAFE_NO_PAD.encode(self.0.verifying_key().as_bytes())
     }
-    pub(crate) fn acknowledge(&self, grant: &crate::stream::StreamGrant) -> String {
-        URL_SAFE_NO_PAD.encode(self.0.sign(&grant.canonical()).to_bytes())
+    pub(crate) fn acknowledge(
+        &self,
+        grant: &crate::stream::StreamGrant,
+    ) -> Result<String, &'static str> {
+        Ok(URL_SAFE_NO_PAD.encode(
+            self.0
+                .sign(&crate::statements::acknowledgement(grant)?)
+                .to_bytes(),
+        ))
     }
 }
 pub(crate) fn storage() -> Result<PathBuf, &'static str> {
@@ -118,22 +125,17 @@ impl Identity {
             Err(_) => Err("identity-read"),
         }
     }
-    pub fn sign_enrollment_challenge(&self, challenge: &[u8; 32]) -> String {
-        URL_SAFE_NO_PAD.encode(self.0.sign(challenge).to_bytes())
-    }
     pub fn sign_lease_request(
         &self,
         endpoint: &str,
         session: &str,
         issued_at: u64,
     ) -> Result<String, &'static str> {
-        if !crate::grant::token(endpoint, 8, 128) || !crate::grant::token(session, 8, 128) {
-            return Err("binding-mismatch");
-        }
-        let statement = format!(
-            "palisade.assist.control/endpoint-lease/v2\n{endpoint}\n{session}\n{issued_at}"
-        );
-        Ok(URL_SAFE_NO_PAD.encode(self.0.sign(statement.as_bytes()).to_bytes()))
+        Ok(URL_SAFE_NO_PAD.encode(
+            self.0
+                .sign(&crate::statements::lease(endpoint, session, issued_at)?)
+                .to_bytes(),
+        ))
     }
 }
 fn refuse_reparse(path: &Path) -> Result<(), &'static str> {
@@ -223,9 +225,7 @@ mod tests {
         let key = VerifyingKey::from_bytes(&decode::<32>(&public).unwrap()).unwrap();
         key.verify_strict(
             &[9; 32],
-            &Signature::from_bytes(
-                &decode::<64>(&second.sign_enrollment_challenge(&[9; 32])).unwrap(),
-            ),
+            &Signature::from_bytes(&second.0.sign(&[9; 32]).to_bytes()),
         )
         .unwrap();
         fs::write(&path, vec![1; 200]).unwrap();

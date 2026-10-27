@@ -333,7 +333,7 @@ impl StreamRuntime {
                 Acknowledgement {
                     grant_id: id.into(),
                     signature: if grant.endpoint.is_some() {
-                        Some(self.identity.acknowledge(&grant))
+                        Some(self.identity.acknowledge(&grant)?)
                     } else {
                         None
                     },

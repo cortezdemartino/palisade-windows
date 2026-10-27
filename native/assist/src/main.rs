@@ -38,9 +38,6 @@ enum Command {
         issuer: String,
         expected: Box<Expected>,
     },
-    EnrollmentChallenge {
-        challenge: String,
-    },
     Stop,
     Shutdown,
 }
@@ -66,9 +63,7 @@ fn run() -> Result<(), &'static str> {
 
 #[cfg(windows)]
 fn run() -> Result<(), &'static str> {
-    use palisade_assist_guardian::windows::{
-        identity::Identity, lifecycle::NativeStop, parent::Parent,
-    };
+    use palisade_assist_guardian::windows::{lifecycle::NativeStop, parent::Parent};
     let args: Vec<_> = std::env::args().skip(1).collect();
     if (args.len() == 3 && args[0] == "--executor-probe")
         || (args.len() == 4 && args[0] == "--executor")
@@ -134,7 +129,6 @@ fn run() -> Result<(), &'static str> {
     });
     let mut handshaken = false;
     let mut sequence = 0;
-    let mut identity: Option<Identity> = None;
     let mut output = std::io::stdout().lock();
     loop {
         let bytes = receive.recv().map_err(|_| "pipe-ended")?;
@@ -186,14 +180,6 @@ fn run() -> Result<(), &'static str> {
                     Ok(()) => json!({"signatureValid":true,"authorized":false}),
                     Err(error) => json!({"signatureValid":false,"authorized":false,"error":error}),
                 }
-            }
-            Command::EnrollmentChallenge { challenge } if !probe => {
-                let challenge = decode::<32>(&challenge)?;
-                if identity.is_none() {
-                    identity = Some(Identity::load_current_user()?);
-                }
-                let key = identity.as_ref().ok_or("identity-unavailable")?;
-                json!({"publicKey":key.public_key(),"signature":key.sign_enrollment_challenge(&challenge)})
             }
             Command::Stop | Command::Shutdown => {
                 stopped.store(true, Ordering::SeqCst);
