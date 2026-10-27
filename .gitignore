@@ -16,3 +16,4 @@ out-unified/
 native/assist/target/
 .assist/
 src/assist/guardian-integrity.json
+src/assist/hosted-preload.cjs

@@ -25,13 +25,13 @@ function createIsolatedCapture({
     parent,
     inspect,
     enabled,
-    onState: (state) => {
+    onState: (state, publicOperation) => {
       if (state === 'ended' || state === 'unavailable') {
         epoch++;
         cancelPending();
         source = null;
       }
-      onState(state);
+      onState(state, publicOperation);
     },
   });
   const allowed = () =>
@@ -65,7 +65,7 @@ function createIsolatedCapture({
   consumer.on('render-process-gone', stop);
   consumer.on('destroyed', stop);
   for (const event of ['hide', 'minimize', 'closed']) parent.on(event, stop);
-  async function request() {
+  async function request({ publicOperation = null } = {}) {
     if (!allowed() || pending || hop.busy()) throw Error('Capture selection unavailable');
     const abort = new AbortController(),
       generation = epoch,
@@ -97,7 +97,7 @@ function createIsolatedCapture({
           permitted,
         });
         if (!selected || !permitted()) throw Error('Capture selection cancelled');
-        const stream = await hop.start({ kind: 'desktop', id: selected.id });
+        const stream = await hop.start({ kind: 'desktop', id: selected.id }, { publicOperation });
         if (!permitted()) {
           // stop() already invalidated this hop. Late completion must not stop a successor.
           throw Error('Capture selection cancelled');

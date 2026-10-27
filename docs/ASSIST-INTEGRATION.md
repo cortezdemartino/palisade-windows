@@ -21,7 +21,7 @@ The companion source remains read-only. Companion ae89e414ec71a193094ef7cbee5ad6
 | Guardian/child execution | Experimental | Private pipes, mirrored intent, fenced cleanup, heartbeat and probe tests; physical crash/lock recovery not qualified |
 | Clipboard text | Experimental | Separate directions, positive authority, manual copy and cancellation; OS/peer wiring pending |
 | Native files | Experimental, inactive | Runtime-owned publisher requests, exact grant/direction/offer binding, independent cancellation, shared quota and protected staging; temp NTFS tests pass, native file confirmation is unqualified |
-| Native capture | Experimental, inactive | Existing picker, isolated provider, owned DTLS video, certificate/socket checks and app-owned window pixel/stop fixtures; canonical web publication adapter and acceptance pending |
+| Native capture | Experimental, inactive | Canonical operation-labelled stream and one-time tentative SID binding reuse existing picker/provider; real bridge/app-owned window pixels and source-stop pass; live coordinator and cross-client publication acceptance remain |
 | Native bridge | Implemented, inactive | Exact two-member native v1 surface, strict messages, live-document witness, private event nonce, bounded requests, cancellation and terminal cleanup scopes; real Electron fixture uses a fake coordinator |
 | Owned remote DTLS gateway and coordinator | In progress / Blocked | Enrollment tuple, actual peer/source binding, resource actions and live native IPC still need integration and qualification |
 | Virtual keyboard, full toolbar and annotations | Experimental / Blocked | Companion web controls exist; Windows endpoint integration and real acceptance remain |

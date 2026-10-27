@@ -14,6 +14,7 @@ async function unlocked(operation) {
   }
 }
 async function main() {
+  await require('./build-assist-preload.cjs').buildAssistPreload();
   const root = path.resolve(__dirname, '..'),
     binary = require('electron'),
     fuse = FuseV1Options.GrantFileProtocolExtraPrivileges,
@@ -27,6 +28,7 @@ async function main() {
       ['assist-local-video-smoke.cjs', [], 'assist-local-video-result.json'],
       ['assist-local-video-negative.cjs', [], 'assist-local-video-negative-result.json'],
       ['assist-local-video-smoke.cjs', ['--owned-window'], 'assist-owned-window-result.json'],
+      ['assist-local-video-smoke.cjs', ['--native-publication'], 'assist-native-capture-result.json'],
     ];
     for (const [file, args, result] of cases) {
       const output = path.join(root, 'out', result);

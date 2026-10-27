@@ -4,6 +4,7 @@ const path = require('node:path');
 const fs = require('node:fs/promises');
 const { flipFuses, getCurrentFuseWire, FuseVersion, FuseV1Options } = require('@electron/fuses');
 async function main() {
+  await require('./build-assist-preload.cjs').buildAssistPreload();
   const executable = require('electron');
   const fuse = FuseV1Options.GrantFileProtocolExtraPrivileges;
   const original = await getCurrentFuseWire(executable);

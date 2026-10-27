@@ -1,5 +1,13 @@
 # Validation
 
+## Canonical capture checkpoint, October 27, 2026
+
+Starting Windows SHA: f553f4e68a113a7743188c190b7e28b03ad43e07. npm run check passed 133 tests. Six new source/publication cases cover one-time tentative SID binding, exact operation/room/source retention, cancellation, stale completions and callbacks, fail-closed child invalidation, and delayed provider load/crash/failure/timer rejection without stopping a successor. Independent review separately passed 21 focused cases and cleared this inactive capture-only slice.
+
+Windows x64 NSIS packaging, package integrity, packaged desktop/combined-preload checks and all five capture fixture groups passed. The new actual Electron/native-bridge fixture negotiates, selects an app-owned window through the existing picker, reads its operation-labelled video srcObject and decoded pixels, binds a synthetic SID once, refuses a second bind and observes source-close. No personal window was captured and no LiveKit publication was performed. The common preload is rebuilt from maintained sources before packaging/tests; production still uses the original preload with Assist disabled.
+
+Unsigned installer SHA-256: 844a303d4dc8fcd606964d1ac77b0a94c0527fc84eb17a5264ee8c552bfc8159. This capture-only change retains the previous checkpoint's native implementation; its 58-test/native audit evidence is recorded below. The next native enrollment slice requires separate verification. No installer execution, private release signing or activation occurred. Exact-SHA CI is recorded after push; source/fixture success does not establish live encrypted cross-client viewing.
+
 ## Native bridge and trust checkpoint, October 27, 2026
 
 Starting Windows SHA: a7d381b2b92d0bf7f23c9d4d81f4c72e6cdfd1da. Companion inspected read-only: ae89e414ec71a193094ef7cbee5ad678418ff6f6. Its native v1 validator remains exact blob 62f29f433dbc20de881108b635a97eee3bde6827 from 8f9c2a4; pinned fixtures preserve Git blob and SHA-256 provenance. No companion tests ran locally, and no Actions run was returned for ae89e41. Its mock-endpoint browser acceptance does not qualify Windows.

@@ -46,7 +46,7 @@ app
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
-        preload: path.join(root, "src/chat-notifications-preload.cjs"),
+        preload: path.join(root, "src/assist/hosted-preload.cjs"),
         additionalArguments: ["--palisade-assist-native"],
       },
     });

@@ -302,13 +302,16 @@
         )
           throw Error('Route changed');
         approvedPair = JSON.stringify(value.pair);
+        if (message.publicOperation !== null && (typeof message.publicOperation !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(message.publicOperation)))
+          throw Error('Invalid capture publication');
         node = document.createElement('video');
         node.id = 'palisade-capture-' + operation;
+        if (message.publicOperation !== null) node.setAttribute('data-palisade-assist-capture', message.publicOperation);
         node.hidden = true;
         node.srcObject = new MediaStream([track]);
         document.body.append(node);
         exposed = true;
-        emit('exposed', { elementId: node.id });
+        emit('exposed', { elementId: node.id, publicOperation: message.publicOperation });
         return;
       }
       throw Error('Invalid transition');

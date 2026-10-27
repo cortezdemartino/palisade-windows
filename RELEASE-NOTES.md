@@ -4,6 +4,8 @@ Current unpublished development also adds an inactive isolated capture provider 
 
 ## 0.3.0 (unpublished)
 
+- Connect the inactive capture component to canonical native start/bind/cancel/stop messages and operation-labelled video. Test the actual bridge with an app-owned window and reject stale provider failures. Live session coordination and encrypted cross-client publication remain unqualified.
+
 - Add an inactive canonical native v1 bridge with document-bound cancellation/events and real Electron boundary tests. Purpose-separate endpoint statements, remove raw-challenge IPC signing and require qualified issuer pins without promoting legacy first-use records. Live endpoint integration and acceptance remain incomplete.
 
 - Bind publisher-side native files to exact sessions, grants, operations and metadata; add independent cancellation, per-file confirmation and one shared directional quota. Native page/transport wiring and physical acceptance remain incomplete.

@@ -11,7 +11,7 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | Native modules | Experimental | stream, executor, input, runtime, consent, lease, identity, issuer, files, image, parent and lifecycle |
 | Electron description bridge | Implemented | Original three members/seven fields; unavailable/absent production report |
 | Native page bridge / remote gateway | Implemented, inactive / Blocked | Two-member v1 bridge and strict messages/document scopes tested in real Electron with a fake coordinator; live native coordinator and owned remote gateway remain unfinished |
-| Screen/window capture | Experimental, inactive | Existing picker, separate provider, local owned DTLS video, actual certificate/socket checks and selected-window stop |
+| Screen/window capture | Experimental, inactive | Canonical native bridge/source operation/one-time tentative SID path plus existing picker/provider; owned-window pixels/source-stop and stale provider callback tests pass |
 | Cross-client encrypted viewing | Not Verified | Companion publication adapter exists and is mock-browser tested; Windows capture binding and real cross-client session remain |
 | Mouse | Experimental | Bounded coordinates/buttons/scroll, native source checks and fake-sink/process tests; real input not exercised |
 | Keyboard / shortcuts | Experimental | Physical scan-code mapping, permitted bounded shortcuts and owned modifier cleanup |

@@ -34,9 +34,9 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
     event.senderFrame === consumer.mainFrame &&
     isPalisadeUrl(consumer.getURL()) &&
     isPalisadeUrl(event.senderFrame?.url);
-  const publish = (state) => {
+  const publish = (state, operation = active?.publicOperation ?? null) => {
     try {
-      onState(state);
+      onState(state, operation);
     } catch {}
   };
   const send = (contents, document, message) => {
@@ -59,7 +59,7 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
       });
     if (!state.provider.isDestroyed()) state.provider.destroy();
     state.reject(new Error('Local capture ended'));
-    publish('ended');
+    publish('ended', state.publicOperation);
   }
   async function freshBindings(state, local, remote) {
     const ports = [...new Set([...local.keys(), ...remote.keys()])];
@@ -216,14 +216,16 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
           type: 'expose',
           fingerprint: state.providerOffer.fingerprint,
           pair: state.consumerReport.pair,
+          publicOperation: state.publicOperation,
         });
       }
       return;
     }
     if (message.type === 'exposed' && role === 'consumer' && state.phase === 'exposing') {
       if (
-        !exact(message, ['type', 'document', 'operation', 'elementId']) ||
-        message.elementId !== 'palisade-capture-' + state.nonce
+        !exact(message, ['type', 'document', 'operation', 'elementId', 'publicOperation']) ||
+        message.elementId !== 'palisade-capture-' + state.nonce ||
+        message.publicOperation !== state.publicOperation
       )
         throw Error('Invalid stream');
       clearTimeout(state.timeout);
@@ -274,7 +276,7 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
   parent?.on('hide', stop);
   parent?.on('minimize', stop);
   parent?.on('closed', stop);
-  async function start(source) {
+  async function start(source, { publicOperation = null } = {}) {
     const requestedEpoch = epoch;
     if (
       enabled !== true ||
@@ -284,6 +286,8 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
       !isPalisadeUrl(consumer.getURL())
     )
       throw Error('Local capture unavailable');
+    if (publicOperation !== null && (typeof publicOperation !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(publicOperation)))
+      throw Error('Invalid capture publication');
     if (
       !exact(source, source?.kind === 'synthetic' ? ['kind'] : ['kind', 'id']) ||
       !['synthetic', 'desktop'].includes(source.kind) ||
@@ -368,6 +372,7 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
     const result = new Promise((resolve, reject) => {
       const state = {
         nonce,
+        publicOperation,
         source,
         provider,
         consumerDocument,
@@ -380,7 +385,7 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
         liveness: new Liveness(),
       };
       active = state;
-      state.timeout = setTimeout(stop, 15000);
+      state.timeout = setTimeout(() => { if (active === state) stop(); }, 15000);
       state.timeout.unref?.();
       state.watch = setInterval(() => {
         if (active !== state) return;
@@ -405,10 +410,11 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
     provider.on('closed', () => {
       if (active?.provider === provider) stop();
     });
-    provider.webContents.on('render-process-gone', stop);
-    provider.webContents.on('did-fail-load', stop);
+    const lostProvider = () => { if (active?.provider === provider) stop(); };
+    provider.webContents.on('render-process-gone', lostProvider);
+    provider.webContents.on('did-fail-load', lostProvider);
     publish('starting');
-    void provider.loadURL(PROVIDER).catch(stop);
+    void provider.loadURL(PROVIDER).catch(lostProvider);
     return result;
   }
   function dispose() {
