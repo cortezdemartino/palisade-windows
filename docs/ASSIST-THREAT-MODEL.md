@@ -1,5 +1,7 @@
 # Windows Assist threat model
 
+The inactive owned remote input peer now checks the actual helper certificate before native peer acceptance and forwards only a single bounded control channel. Deterministic tests refuse expired peer proof at admission, queued dispatch and late native acceptance even if the watchdog has not run. Pre-admission traffic is bounded and discarded. Real Electron negatives exercise certificate substitution, channel misuse, malformed traffic, native stalls, cancellation and renderer loss with a fake sink. The live coordinator must derive the helper binding from verified native grants, sign only its own transport statement, revoke native flags synchronously on close and retain cleanup through child exit. These are integration requirements, not permission supplied by the transport.
+
 Status: **Experimental, inactive**, October 26, 2026. This is an implementation assessment with independent component review, not a product security audit. Production main/preload do not expose the native/capture components. Fully compromised local hosts with sufficient privileges are outside the claimed boundary.
 
 | Threat and precondition | Boundary and required authorization | Enforcement | Negative evidence | Remaining risk |

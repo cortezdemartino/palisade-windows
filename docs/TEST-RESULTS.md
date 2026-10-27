@@ -1,6 +1,20 @@
 # Validation
 
+## Owned remote input transport, October 27, 2026
+
+Starting Windows SHA: `9c683edc9b810a653165a28b7eca7b77ee7213d9`; companion remains `ae89e414ec71a193094ef7cbee5ad678418ff6f6`. The new transport is inactive and has no production caller, signing route or OS-input sink. It is a component checkpoint, not full Assist acceptance.
+
+- `npm run check`: 143 tests and configured syntax checks passed. Six transport cases cover strict data-only SDP/candidates/session binding, expired proof without a watchdog callback, crossing the proof deadline while queued for only 20ms, and late native acceptance. The independent reviewer separately executed all six successfully.
+- `npm run test:assist-peer`: all 14 actual Electron 44.7.2 source fixtures passed. They use app-owned helper/endpoint peers, real DTLS and a fake native sink. Cases include default/pre-canceled/malformed configuration, pre-acceptance discard, private-world/provenance isolation, retained cleanup, bounded early traffic, canceled admission/dispatch, approved-fingerprint mismatch, actual certificate substitution, wrong/extra channels, binary/oversized packets, a stalled native queue, crash and freeze. Some checks share one fixture case; the runner requires all fourteen case results.
+- Review found and corrected proof freshness depending only on the watchdog, pre-admission traffic bounds and session-type coercion. Freshness is checked at IPC admission, queued dispatch and completion of asynchronous native acceptance. The 100ms queue limit starts when main receives the packet; it does not measure network/SCTP age.
+- Fresh Windows x64 NSIS packaging, native integrity, packaged desktop/permissions/native bridge/admission and all five capture groups passed. All 14 peer fixtures also passed against packaged modules/preload under release file-protocol restrictions. Native source/dependencies are unchanged from the preceding 69-tests-per-configuration checkpoint and its passing exact-SHA CI.
+- Current unsigned local installer SHA-256: `ccfe147a7a879c100248ceedcbb3b9fbd12ef28bf0c4d25a7420eb0edcd3a5e2`. No installer was executed. Both Windows build and protected release workflows now require the packaged peer fixtures before uploading/signing artifacts. The new push still needs its own exact-SHA CI result.
+
+Live native coordinator/IPC, purpose-bound transport signing, host controls, native resource data plane, approved relay configuration and real Windows/cross-client acceptance remain unfinished. No physical input, real clipboard transfer, service session, production key, deployment, activation or release publication was exercised by this transport suite.
+
 ## Enrollment revocation and live capture routes, October 27, 2026
+
+Pushed as `9c683edc9b810a653165a28b7eca7b77ee7213d9`. Exact-SHA Windows CI [40600104983](https://github.com/cortezdemartino/palisade-windows/actions/runs/40600104983) passed all required native/app tests, audits, packaging and packaged Electron/capture fixtures. This supersedes the failed historical run only for this new SHA; it does not qualify live native Assist or authorize a release.
 
 Starting Windows SHA: `2f250f6836d1d23bc2228ea812d575d3369550ac`. Companion refreshed read-only at `ae89e414ec71a193094ef7cbee5ad678418ff6f6`; native bridge v1 remains unchanged. Risk: High. Independent source review found no new blocker in the disabled enrollment/stop and capture-route changes. It did not execute tests or authorize activation.
 

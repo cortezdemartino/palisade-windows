@@ -10,7 +10,7 @@ Current executed evidence is in TEST-RESULTS.md. Previous 2f250f6 CI failed capt
 
 ## Remaining Windows integration
 
-1. Build the owned remote input peer with actual observed helper certificate checks and canonical signaling.
+1. Connect the implemented inactive owned remote input peer to the live native coordinator and canonical signaling. Actual observed helper certificate and bounded fake-sink fixtures exist; transport signing and native input wiring remain unfinished.
 2. Add typed live native coordinator/IPC, concurrent cancellation and stop, enrollment/grant consent wiring, and trusted local host controls. Do not reuse diagnostic immediate-exit cleanup for active input.
 3. Connect capture/source, grants and independent leases. Treat the publication SID as a tentative page claim and describe enforceable input scope accurately.
 4. Add canonical native resource adapters after the companion contract and helper authority are finalized. Add quit/update cleanup barriers that retain the last cleanup holder until exit.
