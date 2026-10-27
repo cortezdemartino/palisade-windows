@@ -2,11 +2,11 @@
 //! call it; no renderer assertion can set consent or replace its issuer.
 use super::{
     consent::{Decision, Prompt},
+    enrollment::EnrolledIdentity,
     files::SessionFiles,
     identity::Identity,
     input::{Source, ordinary_desktop},
     input_owner::InputOwner,
-    issuer::TrustedIssuer,
     lease::{self, LeasePoller},
     lifecycle::NativeStop,
     process_input::ProcessInput,
@@ -52,8 +52,7 @@ pub struct StreamRuntime {
 }
 impl StreamRuntime {
     pub fn begin(
-        issuer: &TrustedIssuer,
-        identity: Arc<Identity>,
+        enrolled: EnrolledIdentity<'_>,
         binding: Binding,
         grants: &[SignedStreamGrant],
         source: Option<Source>,
@@ -63,7 +62,14 @@ impl StreamRuntime {
         if !cfg!(any(feature = "native-input", feature = "native-resources")) {
             return Err("endpoint-disabled");
         }
+        let EnrolledIdentity {
+            issuer,
+            identity,
+            enrollment,
+        } = enrolled;
+        enrollment.verify_binding(issuer, &identity, &binding)?;
         let stop = stop_surface.session_flag()?;
+        enrollment.bind_session(&stop)?;
         if stop.load(Ordering::SeqCst) || grants.is_empty() || grants.len() > 8 {
             return Err("invalid-session");
         }
@@ -174,7 +180,10 @@ impl StreamRuntime {
                                 &manifest,
                                 owner.as_ref().ok_or("input-owner-required")?,
                             )?;
-                            executor = Some(Executor::new(child, worker_input_stop.clone(), true));
+                            executor = Some(
+                                Executor::new(child, worker_input_stop.clone(), true)
+                                    .with_session_stop(worker_stop.clone()),
+                            );
                             active_epoch = Some(
                                 worker_gate
                                     .lock()
@@ -255,7 +264,14 @@ impl StreamRuntime {
                         &mut gate,
                         &source,
                         &message.action,
-                        || Ok((lease::now()?, Instant::now())),
+                        || {
+                            if worker_stop.load(Ordering::SeqCst)
+                                || worker_input_stop.load(Ordering::SeqCst)
+                            {
+                                return Err("revoked");
+                            }
+                            Ok((lease::now()?, Instant::now()))
+                        },
                     )
                 })();
                 if result.is_err() && result != Err("input-not-ready") {
@@ -322,6 +338,15 @@ impl StreamRuntime {
                 state: "consent-denied",
             },
             Decision::Allowed(grant) => {
+                let input = matches!(
+                    grant.capability.as_str(),
+                    "control_mouse" | "control_keyboard"
+                );
+                if self.stop.load(Ordering::SeqCst)
+                    || (input && self.input_stop.load(Ordering::SeqCst))
+                {
+                    return Err("revoked");
+                }
                 let current = self
                     .gate
                     .lock()
@@ -330,7 +355,7 @@ impl StreamRuntime {
                 if current.canonical() != grant.canonical() {
                     return Err("binding-mismatch");
                 }
-                Acknowledgement {
+                let acknowledgement = Acknowledgement {
                     grant_id: id.into(),
                     signature: if grant.endpoint.is_some() {
                         Some(self.identity.acknowledge(&grant)?)
@@ -338,7 +363,13 @@ impl StreamRuntime {
                         None
                     },
                     state: "consented",
+                };
+                if self.stop.load(Ordering::SeqCst)
+                    || (input && self.input_stop.load(Ordering::SeqCst))
+                {
+                    return Err("revoked");
                 }
+                acknowledgement
             }
         };
         if result.state != "consent-pending" {

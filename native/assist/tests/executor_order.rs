@@ -8,7 +8,10 @@ use serde_json::{Value, json};
 use std::{
     cell::RefCell,
     rc::Rc,
-    sync::{Arc, atomic::AtomicBool},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 #[derive(Default)]
@@ -18,6 +21,8 @@ struct Trace {
     applied: usize,
     intent_delay: bool,
     clock_delay: u64,
+    stop_on_intent: Option<Arc<AtomicBool>>,
+    stop_after_apply: Option<(usize, Arc<AtomicBool>)>,
 }
 struct Fake(Rc<RefCell<Trace>>);
 impl Backend for Fake {
@@ -34,12 +39,20 @@ impl Backend for Fake {
         if t.intent_delay {
             t.clock_delay = 200;
         }
+        if let Some(stop) = &t.stop_on_intent {
+            stop.store(true, Ordering::SeqCst);
+        }
         Ok(())
     }
     fn apply(&mut self, _: &Source, action: &Action) -> Result<(), &'static str> {
         let mut t = self.0.borrow_mut();
         t.applied += 1;
         t.events.push(format!("{action:?}"));
+        if let Some((count, stop)) = &t.stop_after_apply {
+            if t.applied == *count {
+                stop.store(true, Ordering::SeqCst);
+            }
+        }
         if t.fail_at == Some(t.applied) {
             return Err("partial-write");
         };
@@ -271,6 +284,85 @@ fn blocking_intent_cannot_outlive_the_one_shot_permit() {
         gate.authorize(&g.grant.grant_id, "control_keyboard", now, t)
             .is_err()
     );
+}
+#[test]
+fn session_stop_during_intent_refuses_down_and_fences_before_owned_release() {
+    let (mut gate, g, now, t) = fixture();
+    let m = message(&g, "key", json!({"code":"ControlLeft","down":true}));
+    let permit = gate.permit(&m, 1, now, t).unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let state = Rc::new(RefCell::new(Trace {
+        stop_on_intent: Some(stop.clone()),
+        ..Trace::default()
+    }));
+    let mut executor = Executor::new(Fake(state.clone()), Arc::new(AtomicBool::new(false)), true)
+        .with_session_stop(stop);
+    assert!(
+        executor
+            .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
+            .is_err()
+    );
+    assert!(!executor.held());
+    let events = &state.borrow().events;
+    assert!(!events.iter().any(|s| s.contains("down: true")));
+    let fence = events.iter().position(|s| s == "fence").unwrap();
+    let up = events
+        .iter()
+        .position(|s| s.contains("down: false"))
+        .unwrap();
+    assert!(fence < up);
+}
+#[test]
+fn session_stop_between_shortcut_steps_allows_only_fenced_releases() {
+    let (mut gate, g, now, t) = fixture();
+    let m = message(&g, "shortcut", json!({"name":"copy"}));
+    let permit = gate.permit(&m, 1, now, t).unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let state = Rc::new(RefCell::new(Trace {
+        stop_after_apply: Some((1, stop.clone())),
+        ..Trace::default()
+    }));
+    let mut executor = Executor::new(Fake(state.clone()), Arc::new(AtomicBool::new(false)), true)
+        .with_session_stop(stop);
+    assert!(
+        executor
+            .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
+            .is_err()
+    );
+    assert!(!executor.held());
+    let events = &state.borrow().events;
+    assert_eq!(
+        events.iter().filter(|s| s.contains("down: true")).count(),
+        1
+    );
+    let fence = events.iter().position(|s| s == "fence").unwrap();
+    assert!(events[fence..].iter().all(|s| !s.contains("down: true")));
+}
+#[test]
+fn session_stop_during_single_down_cleans_before_dispatch_returns() {
+    let (mut gate, g, now, t) = fixture();
+    let m = message(&g, "key", json!({"code":"ControlLeft","down":true}));
+    let permit = gate.permit(&m, 1, now, t).unwrap();
+    let stop = Arc::new(AtomicBool::new(false));
+    let state = Rc::new(RefCell::new(Trace {
+        stop_after_apply: Some((1, stop.clone())),
+        ..Trace::default()
+    }));
+    let mut executor = Executor::new(Fake(state.clone()), Arc::new(AtomicBool::new(false)), true)
+        .with_session_stop(stop);
+    assert!(
+        executor
+            .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
+            .is_err()
+    );
+    assert!(!executor.held());
+    let events = &state.borrow().events;
+    let fence = events.iter().position(|s| s == "fence").unwrap();
+    let up = events
+        .iter()
+        .position(|s| s.contains("down: false"))
+        .unwrap();
+    assert!(fence < up);
 }
 #[test]
 fn an_unowned_up_cannot_release_host_input() {

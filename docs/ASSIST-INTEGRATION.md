@@ -16,14 +16,14 @@ The companion source remains read-only. Companion ae89e414ec71a193094ef7cbee5ad6
 | --- | --- | --- |
 | Existing desktop, updater and description bridge | Implemented | Regression tests; app identity, updater trust and persistent profile preserved |
 | Canonical stream v2 verification | Implemented, inactive | Shared TypeScript/Rust signatures, fixtures and negative tests |
-| Native consent, acknowledgement and lease polling | Experimental | App-owned Win32 consent and fixed-origin HTTPS; live enrollment/service acceptance not executed |
+| Native enrollment, consent, acknowledgement and lease polling | Experimental | Private native-confirmed tuple/own-key binding, typed proof and runtime admission, revocation-linked sessions, app-owned consent and fixed-origin polling; live enrollment/dialog acceptance not executed |
 | Mouse, keyboard and bounded shortcuts | Experimental | SendInput adapter, source/session/UIPI checks and owned-state cleanup; real input not qualified |
 | Guardian/child execution | Experimental | Private pipes, mirrored intent, fenced cleanup, heartbeat and probe tests; physical crash/lock recovery not qualified |
 | Clipboard text | Experimental | Separate directions, positive authority, manual copy and cancellation; OS/peer wiring pending |
 | Native files | Experimental, inactive | Runtime-owned publisher requests, exact grant/direction/offer binding, independent cancellation, shared quota and protected staging; temp NTFS tests pass, native file confirmation is unqualified |
 | Native capture | Experimental, inactive | Canonical operation-labelled stream and one-time tentative SID binding reuse existing picker/provider; real bridge/app-owned window pixels and source-stop pass; live coordinator and cross-client publication acceptance remain |
 | Native bridge | Implemented, inactive | Exact two-member native v1 surface, strict messages, live-document witness, private event nonce, bounded requests, cancellation and terminal cleanup scopes; real Electron fixture uses a fake coordinator |
-| Owned remote DTLS gateway and coordinator | In progress / Blocked | Enrollment tuple, actual peer/source binding, resource actions and live native IPC still need integration and qualification |
+| Owned remote DTLS gateway and coordinator | In progress / Blocked | Enrollment/capture components exist; actual peer binding, resource actions and live native IPC/coordinator still need integration and qualification |
 | Virtual keyboard, full toolbar and annotations | Experimental / Blocked | Companion web controls exist; Windows endpoint integration and real acceptance remain |
 | Complete cross-client Assist | Not Verified | No installed endpoint or real encrypted control/transfer session exercised |
 | Activation/release | Blocked | Integration review, disposable-device qualification and separate owner approval required |

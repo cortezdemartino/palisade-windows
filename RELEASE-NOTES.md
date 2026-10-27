@@ -4,6 +4,10 @@ Current unpublished development also adds an inactive isolated capture provider 
 
 ## 0.3.0 (unpublished)
 
+- Validate isolated capture against the live selected ICE pair, reciprocal ports and fresh native socket ownership. Preserve Chromium's exact address-redaction marker without treating it as address or network-path proof.
+
+- Bind native runtime admission to locally confirmed enrollment and the installation key. Revoke old sessions on replacement/Drop and check global stop throughout input dispatch. Native dialogs, remote gateway and live IPC remain unqualified and disabled.
+
 - Connect the inactive capture component to canonical native start/bind/cancel/stop messages and operation-labelled video. Test the actual bridge with an app-owned window and reject stale provider failures. Live session coordination and encrypted cross-client publication remain unqualified.
 
 - Add an inactive canonical native v1 bridge with document-bound cancellation/events and real Electron boundary tests. Purpose-separate endpoint statements, remove raw-challenge IPC signing and require qualified issuer pins without promoting legacy first-use records. Live endpoint integration and acceptance remain incomplete.

@@ -1,4 +1,20 @@
 'use strict';
+// Query the active transport directly. getStats() is an asynchronous reporting
+// snapshot and must not be used as the source of current route authority.
+function selectedRoute(ice) {
+  const fail = code => { const error = Error('ICE route unavailable'); error.code = code; throw error; };
+  if (!ice || !['connected', 'completed'].includes(ice.state) || typeof ice.getSelectedCandidatePair !== 'function') fail('route-ice-state');
+  const pair = ice.getSelectedCandidatePair(), local = pair?.local, remote = pair?.remote;
+  if (!local || !remote) fail('route-pair');
+  if (local.protocol !== 'udp' || remote.protocol !== 'udp') fail('route-protocol');
+  if (!['host', 'prflx'].includes(local.type) || !['host', 'prflx'].includes(remote.type)) fail('route-type');
+  if (!Number.isInteger(local.port) || local.port < 1 || local.port > 65535 || !Number.isInteger(remote.port) || remote.port < 1 || remote.port > 65535) fail('route-port');
+  // Preserve Chromium's exact privacy marker as unknown address information.
+  // Main must independently prove native-owned IPv4 bindings, both private peer
+  // certificates and reciprocal ports; this marker is never address proof.
+  if (remote.address !== 'redacted-ip.invalid' && (typeof remote.address !== 'string' || !/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(remote.address) || remote.address.split('.').some(part => Number(part) > 255))) fail(typeof remote.address !== 'string' || !remote.address ? 'route-address-absent' : remote.address.endsWith('.local') ? 'route-address-mdns' : remote.address.includes(':') ? 'route-address-ipv6' : 'route-address-format');
+  return { localPort: local.port, remotePort: remote.port, remoteAddress: remote.address, protocol: 'udp' };
+}
 // App-owned peers only. No contextBridge, signaling API or certificate is exposed.
 (() => {
   const { ipcRenderer } = require('electron');
@@ -73,43 +89,10 @@
       live();
       stage = 'certificate-match';
       if (peer !== expectedPeer) throw Error('Certificate mismatch');
-      stage = 'stats';
-      const stats = await pc.getStats();
-      live();
-      const transports = [...stats.values()].filter(
-        (record) =>
-          record.type === 'transport' &&
-          record.dtlsState === 'connected' &&
-          record.selectedCandidatePairId,
-      );
-      stage = 'transport';
-      if (transports.length !== 1) throw Error('Ambiguous transport');
-      const pair = stats.get(transports[0].selectedCandidatePairId),
-        local = stats.get(pair?.localCandidateId),
-        remote = stats.get(pair?.remoteCandidateId);
       stage = 'route';
-      if (
-        !pair ||
-        pair.state !== 'succeeded' ||
-        !local ||
-        !remote ||
-        local.protocol !== 'udp' ||
-        remote.protocol !== 'udp' ||
-        !['host', 'prflx'].includes(local.candidateType) ||
-        !['host', 'prflx'].includes(remote.candidateType) ||
-        !Number.isInteger(local.port) ||
-        !Number.isInteger(remote.port) ||
-        typeof remote.address !== 'string'
-      )
-        throw Error('Route unavailable');
       return {
         peerFingerprint: peer,
-        pair: {
-          localPort: local.port,
-          remotePort: remote.port,
-          remoteAddress: remote.address,
-          protocol: 'udp',
-        },
+        pair: selectedRoute(dtls.iceTransport),
       };
     }
     async function report() {
@@ -126,7 +109,8 @@
         }
         if (exposed && JSON.stringify(value.pair) !== approvedPair) throw Error('Route changed');
         emit('connected', { ...value, ...heartbeat });
-      } catch {
+      } catch (error) {
+        if (['route-ice-state', 'route-pair', 'route-protocol', 'route-type', 'route-port', 'route-address-absent', 'route-address-mdns', 'route-address-ipv6', 'route-address-format'].includes(error?.code)) stage = error.code;
         emit('failed', { stage });
         stop(false);
       } finally {
@@ -368,3 +352,5 @@
     { once: true },
   );
 })();
+// CommonJS exports stay inside the isolated preload; the page sees no module.
+if (typeof module !== 'undefined') module.exports = { selectedRoute };

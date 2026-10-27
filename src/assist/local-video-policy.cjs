@@ -157,8 +157,17 @@ function pairAllowed(pair, local, remote) {
     pair &&
       Object.keys(pair).sort().join(',') === 'localPort,protocol,remoteAddress,remotePort' &&
       pair.protocol === 'udp' &&
+      Number.isInteger(pair.localPort) && Number.isInteger(pair.remotePort) &&
+      typeof pair.remoteAddress === 'string' &&
       local.has(pair.localPort) &&
-      remote.get(pair.remotePort) === pair.remoteAddress,
+      remote.has(pair.remotePort) &&
+      ip4(local.get(pair.localPort)) && ip4(remote.get(pair.remotePort)) &&
+      (remote.get(pair.remotePort) === pair.remoteAddress ||
+        pair.remoteAddress === 'redacted-ip.invalid'),
   );
 }
-module.exports = { parse, sanitize, pairAllowed, FP };
+function reciprocal(left, right) {
+  return Boolean(left && right && left.protocol === 'udp' && right.protocol === 'udp' &&
+    left.localPort === right.remotePort && left.remotePort === right.localPort);
+}
+module.exports = { parse, sanitize, pairAllowed, reciprocal, FP };

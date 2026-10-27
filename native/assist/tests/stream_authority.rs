@@ -107,6 +107,40 @@ fn authority_needs_local_consent_and_fresh_covering_lease() {
     assert!(gate.consent(id, now).is_err());
 }
 #[test]
+fn native_consent_can_be_acknowledged_before_activation_but_cannot_operate_without_covering_lease()
+{
+    let f = fixtures();
+    let now = f["now"].as_u64().unwrap();
+    let instant = Instant::now();
+    let key = SigningKey::from_bytes(&[45; 32]);
+    let original: SignedStreamGrant =
+        serde_json::from_value(f["grants"]["valid"][1]["signed"].clone()).unwrap();
+    let grant = sign_grant(original.grant, &key);
+    let id = &grant.grant.grant_id;
+    let mut gate = SessionGate::new(key.verifying_key().to_bytes(), binding(&f), now, 0, instant);
+    gate.admit(&grant, now).unwrap();
+    gate.consent(id, now).unwrap();
+    assert_eq!(
+        gate.pending_grant(id, now).unwrap().canonical(),
+        grant.grant.canonical()
+    );
+    assert!(gate.authorize(id, "control_mouse", now, instant).is_err());
+    gate.verify_peer(&binding(&f).helper_transport).unwrap();
+    assert!(gate.authorize(id, "control_mouse", now, instant).is_err());
+    let mut lease: SignedStreamLease =
+        serde_json::from_value(f["leases"]["valid"][0]["signed"].clone()).unwrap();
+    lease.lease.grants.clear();
+    let empty = sign_lease(lease.lease.clone(), &key);
+    gate.refresh(&empty, now, instant, instant).unwrap();
+    assert!(gate.authorize(id, "control_mouse", now, instant).is_err());
+    lease.lease.issued_at += 1;
+    lease.lease.grants.push(id.clone());
+    let active = sign_lease(lease.lease, &key);
+    let fresh = instant + Duration::from_millis(1);
+    gate.refresh(&active, now + 1, fresh, fresh).unwrap();
+    gate.authorize(id, "control_mouse", now + 1, fresh).unwrap();
+}
+#[test]
 fn clock_skew_cannot_extend_a_lease_past_twenty_monotonic_seconds() {
     let f = fixtures();
     let key = SigningKey::from_bytes(&[42; 32]);

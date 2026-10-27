@@ -16,6 +16,8 @@ The track SID is a page claim. A capture.bind acknowledgement is not independent
 
 The hosted preload is assembled at build time from the maintained notification/native bridge preload and local-video preload. The generated file is ignored by Git and rebuilt before packaging and fixture runs. Production continues to use the original preload without native activation. Fixtures use the assembled preload under the same sandbox and context isolation.
 
+Route checks read the live ICE transport's selected candidate pair rather than an asynchronous statistics snapshot. Chromium's exact `redacted-ip.invalid` marker is retained as unknown address metadata. It is accepted only with independently proven native IPv4 bindings, reciprocal selected ports, both actual owned certificates and fresh socket ownership checks. No other placeholder, missing address, relay, TCP or IPv6 fallback is accepted by this local hop. Specific interface bindings are supported alongside wildcard/loopback bindings. The marker cannot prove the path taken by packets; these checks authenticate the owned encrypted endpoints.
+
 ## Reproducible checks
 
 Run `npm run build:assist`, then `npm run test:assist-capture`. The test runner uses Electron 44.7.2 with the release file-protocol restrictions and requires fresh result files from each subprocess. After packaging, set `PALISADE_WINDOW_SMOKE_ASAR` to the absolute `out/win-unpacked/resources/app.asar` path and repeat the command to test the packaged modules and preloads.

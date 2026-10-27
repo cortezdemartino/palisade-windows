@@ -13,6 +13,8 @@ app.disableHardwareAcceleration();
 app.setPath('userData', path.resolve('out/assist-local-video-negative-profile'));
 let guardian, current, keeper;
 const passed = [];
+const failures = [];
+ipcMain.on('palisade:local-video-event', (_event, message) => { if (message?.type === 'failed' && failures.length < 32) failures.push(message.stage || 'unspecified'); });
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const visibleFixtures = () => BrowserWindow.getAllWindows().filter((window) => window !== keeper);
 const deadline = setTimeout(() => {
@@ -56,6 +58,7 @@ async function setup(options = {}) {
     parent: window,
     inspect: (ports) => guardian.inspectLocalIce(ports),
     enabled: true,
+    onState: (state, _operation, reason) => { if (state === 'unavailable' && failures.length < 32) failures.push(reason); },
     ...options,
   });
   current = { window, contents, hop };
@@ -138,6 +141,16 @@ app
         ipcMain.removeListener('palisade:local-video-event', corrupt);
         close();
       }
+    }
+    for (const kind of ['wrong-observed-certificate','unowned-selected-port']) {
+      const corrupt = (_event,message) => { if (message.type === 'connected') {
+        if (kind === 'wrong-observed-certificate') message.peerFingerprint='sha-256 '+Array(32).fill('00').join(':');
+        else message.pair.remotePort=message.pair.remotePort===65535?1:message.pair.remotePort+1;
+      } };
+      ipcMain.prependListener('palisade:local-video-event',corrupt);
+      try { const t=await setup();await assert.rejects(t.hop.start({kind:'synthetic'}));
+        assert.equal(await t.contents.executeJavaScript('document.querySelectorAll("video").length'),0);passed.push(kind);
+      } finally { ipcMain.removeListener('palisade:local-video-event',corrupt);close(); }
     }
     {
       const t = await setup();
@@ -254,7 +267,7 @@ app
     app.exit(0);
   })
   .catch((error) => {
-    console.error('Local video negatives:', error.message, passed);
+    console.error('Local video negatives:', error.message, passed, failures);
     close();
     guardian?.close();
     clearTimeout(deadline);

@@ -22,6 +22,13 @@ pub struct TrustedIssuer {
     method: Method,
 }
 impl TrustedIssuer {
+    #[cfg(test)]
+    pub(crate) fn fixture(candidate: Candidate) -> Self {
+        Self {
+            candidate,
+            method: Method::Confirmed,
+        }
+    }
     pub(crate) fn key(&self) -> [u8; 32] {
         self.candidate.key()
     }

@@ -125,3 +125,16 @@ test('liveness challenges cannot be replayed or renewed by delayed queued report
   now = 1600;
   assert.equal(other.expired('provider'), true);
 });
+test('redacted route metadata needs native-proven IPv4 ports and reciprocal peer reports', () => {
+  const {reciprocal}=require('../src/assist/local-video-policy.cjs');
+  const local=new Map([[10001,'127.0.0.1'],[10002,'127.0.0.1']]),remote=new Map([[20001,'127.0.0.1'],[20002,'127.0.0.1']]);
+  const left={localPort:10001,remotePort:20001,remoteAddress:'redacted-ip.invalid',protocol:'udp'};
+  const right={localPort:20001,remotePort:10001,remoteAddress:'127.0.0.1',protocol:'udp'};
+  assert(pairAllowed(left,local,remote));assert(pairAllowed(right,remote,local));assert(reciprocal(left,right));
+  assert(pairAllowed(left,local,new Map([[20001,'10.0.0.1']])));
+  assert(pairAllowed(left,new Map([[10001,'10.0.0.1']]),remote));
+  for(const change of [{remotePort:22222},{localPort:11111},{remoteAddress:'unknown'},{remoteAddress:'redacted-literal.invalid'}])assert.equal(pairAllowed({...left,...change},local,remote),false);
+  const other={...right,localPort:20002};assert(pairAllowed(other,remote,local));assert.equal(reciprocal(left,other),false);
+  assert.equal(pairAllowed({...left,remotePort:22222,remoteAddress:undefined},local,remote),false);
+  for(const invalid of [undefined,'0.0.0.0','::1','not-an-address'])assert.equal(pairAllowed(left,local,new Map([[20001,invalid]])),false);
+});

@@ -1,4 +1,5 @@
-//! No input injection, capture, clipboard, network or remote filesystem operations.
+//! Verification/state core and dormant Windows adapters. Production activation
+//! requires the separate native integration and device-qualification gates.
 pub mod executor;
 pub mod framing;
 pub mod grant;

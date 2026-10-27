@@ -1,5 +1,20 @@
 # Validation
 
+## Enrollment revocation and live capture routes, October 27, 2026
+
+Starting Windows SHA: `2f250f6836d1d23bc2228ea812d575d3369550ac`. Companion refreshed read-only at `ae89e414ec71a193094ef7cbee5ad678418ff6f6`; native bridge v1 remains unchanged. Risk: High. Independent source review found no new blocker in the disabled enrollment/stop and capture-route changes. It did not execute tests or authorize activation.
+
+- `npm run check`: 137 tests and configured syntax checks passed locally, including current selected-route and native-binding negatives. Existing updater signature/hash/rollback, profile, permissions, controls and notification checks remain passing.
+- `npm run test:assist-native`: formatting, strict all-target/all-feature Clippy and 69 Rust tests passed in each default/all-features configuration (46 library, 12 executor, four input and seven authority). Enrollment uses temporary DPAPI identities and synthetic decisions; stop tests use a fake input sink. No physical input or native dialog acceptance was performed.
+- `npm run build:assist` and `npm run test:assist-process`: passed. Eight executable groups passed in each configuration; the explicit hidden-startup visibility case also passed. Process probes are non-authorizing even with sensitive features compiled.
+- Production npm audit reported zero vulnerabilities. Cargo audit scanned the locked 34-crate graph against the fetched RustSec database with warnings denied and passed.
+
+Historical CI for `2f250f6` failed in the final canonical capture fixture (`failed:route`, stream ended). That run is [40498962262](https://github.com/cortezdemartino/palisade-windows/actions/runs/40498962262), not passing evidence. The replacement reads the live selected ICE pair and requires reciprocal ports, both actual certificates and fresh native socket ownership. The exact Chromium address-redaction marker remains unknown metadata, never network-path proof. Exact-SHA CI must pass after the current push; its outcome is recorded in Windows#1.
+
+Fresh Windows x64 NSIS packaging, native package integrity and packaged Electron controls/unread/permissions/native bridge/admission checks passed. All five packaged capture groups passed, including twelve negative/lifecycle cases and canonical native-bridge app-owned window selection, decoded pixels, one-time SID bind and source-stop. The bridge fixture also proves selectedRoute is absent from the page. Current route modules in the archive match source bytes. Local unsigned installer SHA-256: `bc86fbc421c72b25a2d94ff60a18b4b276a9da6909b5bb7ce9e9a0866a0a44b3`. This is local build evidence, not release or installation acceptance. Sixteen intentional Chromium bad-IPC renderer refusals in the admission suite retain their negative-test classification.
+
+Native enrollment/runtime and capture changes remain inactive. Live coordinator/IPC, the owned remote input peer, canonical resource integration, real encrypted cross-client acceptance, physical emergency stop/OS input/clipboard/files and installed upgrade remain incomplete or Not Verified. No private signing material, release signing, installation, production activation or publication is included.
+
 ## Canonical capture checkpoint, October 27, 2026
 
 Starting Windows SHA: f553f4e68a113a7743188c190b7e28b03ad43e07. npm run check passed 133 tests. Six new source/publication cases cover one-time tentative SID binding, exact operation/room/source retention, cancellation, stale completions and callbacks, fail-closed child invalidation, and delayed provider load/crash/failure/timer rejection without stopping a successor. Independent review separately passed 21 focused cases and cleared this inactive capture-only slice.

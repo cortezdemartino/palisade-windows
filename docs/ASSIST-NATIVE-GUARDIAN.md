@@ -26,6 +26,12 @@ For recovery, stop Assist first, revoke the affected endpoint enrollment and gra
 
 ## Input executor
 
+Native enrollment now has a private, non-deserializable in-memory tuple binding the qualified fixed-origin issuer, installation public key, account, device and endpoint ID. The trusted enrollment window displays those values and defaults to Deny. After confirmation, the code checks cancellation, the ordinary desktop and the qualified issuer again, then signs only the exact labelled proof. The tuple is not proof of service registration. Restart/re-enrollment requires new local confirmation; no permanent remote permission is saved.
+
+Native session construction now requires that tuple and the matching identity. Publisher/account/device/endpoint expectations come from it; room and the tentative track SID come from the owned publication; helper details must verify under the signed grant. The tuple registers bounded session-stop flags. Revocation or Drop sets every old flag, including during concurrent admission, and refuses old proofs/bindings. A replacement needs fresh local approval and a fresh stop owner; old stop flags are never reset. No enrollment proof route has been restored to diagnostic IPC.
+
+Enrollment and capability consent are separate. A pending signed grant may receive its native consent acknowledgement before the service activates it. The acknowledgement alone permits no action: a fresh independently fetched covering lease and the observed approved DTLS peer are still mandatory. Input/resource execution, real native dialog interaction and service enrollment remain unqualified.
+
 The guardian owns the authorization gate and a write-ahead ledger. A child accepts bounded, sequenced, short-lived primitive steps over creator-bound inherited pipes. It has no listener, command launcher or elevated service. Before self-spawn, the helper checks the protected expected binary hash and retains no-write/no-delete image/ancestor locks.
 
 A fixed per-session named-event ownership object is retained by both guardian and child. Every existing object blocks a successor, regardless of signaling. The child duplicates the exact object from its validated parent and checks kernel-object identity before readiness. The guardian retains ownership through fenced mirror cleanup, including unwind. A two-process fixture kills the initial holder and proves repeated attempts remain blocked until the surviving holder exits. This proves lifetime exclusion, not physical held-key recovery.
@@ -35,6 +41,8 @@ The child has another local ledger, a local activity monitor and independent par
 The adapter validates physical monitor bounds, source generation, virtual-desktop coordinates, per-monitor DPI, session, target SID and elevation. It denies OS/Meta keys, Alt+Tab, secure-attention/elevation shortcuts, unknown scan codes and unowned UP events. Pre-existing local mouse holds cannot become remote drags. Physical layouts, AltGr/dead keys/IME, modifier interference, crash recovery and protected-window transitions remain unqualified. Input failure/suspension terminally revokes current mouse/keyboard grants and releases owned input while independently authorized resources keep their checks. A full service renewal cannot restore locally revoked input. Clock, lease, desktop/session uncertainty and Stop Assist still terminate the whole session.
 
 Probe mode simulates steps/cleanup. It does not register activity hooks, enroll identities or execute resource/input APIs, including in all-features builds. Actual subprocess checks cover readiness, no-input keepalive, EOF, idle loss, malformed frames, expiry and replay. These do not qualify physical stop shortcuts or real input.
+
+Both global session stop and input-only stop are checked at each dispatch clock barrier and before primitive application, including after a blocking intent acknowledgement. A stop raised during the final step also returns through fenced owned-state cleanup. Fake-backend tests cover stop during intent, between shortcut steps and during a single DOWN. Separate resource revocation still cannot invalidate unrelated input permits, and input suspension does not grant or silently revoke independent resource authority.
 
 ## Clipboard and files
 

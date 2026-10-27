@@ -67,6 +67,7 @@ pub struct Executor<B: Backend> {
     backend: B,
     ledger: Ledger,
     stop: Arc<AtomicBool>,
+    session_stop: Option<Arc<AtomicBool>>,
     enabled: bool,
     last_source: Option<Source>,
     epoch: Option<u64>,
@@ -81,9 +82,7 @@ impl<B: Backend> Executor<B> {
     ) -> Result<(), &'static str> {
         let result = (|| {
             gate.tick(now, instant)?;
-            if self.stop.load(Ordering::SeqCst)
-                || self.epoch.is_some_and(|epoch| epoch != gate.input_epoch())
-            {
+            if self.stopped() || self.epoch.is_some_and(|epoch| epoch != gate.input_epoch()) {
                 return Err("revoked");
             }
             self.backend.heartbeat(source)
@@ -100,10 +99,22 @@ impl<B: Backend> Executor<B> {
             backend,
             ledger: Ledger::default(),
             stop,
+            session_stop: None,
             enabled,
             last_source: None,
             epoch: None,
         }
+    }
+    pub fn with_session_stop(mut self, stop: Arc<AtomicBool>) -> Self {
+        self.session_stop = Some(stop);
+        self
+    }
+    fn stopped(&self) -> bool {
+        self.stop.load(Ordering::SeqCst)
+            || self
+                .session_stop
+                .as_ref()
+                .is_some_and(|stop| stop.load(Ordering::SeqCst))
     }
     pub fn dispatch(
         &mut self,
@@ -148,7 +159,7 @@ impl<B: Backend> Executor<B> {
                 // Target/desktop checks may block; use endpoint-owned clocks afterwards.
                 let (now, t) = clock()?;
                 gate.validate_permit(&permit, source.generation, now, t)?;
-                if self.stop.load(Ordering::SeqCst) {
+                if self.stopped() {
                     return Err("revoked");
                 }
                 let down = matches!(
@@ -161,7 +172,7 @@ impl<B: Backend> Executor<B> {
                 }
                 let (now, t) = clock()?;
                 gate.validate_permit(&permit, source.generation, now, t)?;
-                if self.stop.load(Ordering::SeqCst) {
+                if self.stopped() {
                     return Err("revoked");
                 }
                 self.backend.apply(source, &step)?;
@@ -171,6 +182,9 @@ impl<B: Backend> Executor<B> {
                 }
                 let (now, t) = clock()?;
                 gate.tick(now, t)?;
+                if self.stopped() {
+                    return Err("revoked");
+                }
             }
             Ok(())
         })();

@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod consent;
+pub mod enrollment;
 pub mod files;
 pub mod https;
 pub mod identity;

@@ -94,7 +94,7 @@ app
       parent: consumer,
       enabled: true,
       inspect: (ports) => guardian.inspectLocalIce(ports),
-      onState: (state) => phases.push(state),
+      onState: (state, _operation, reason) => phases.push(state + (reason ? ':' + reason : '')),
     };
     if (desktopMode) {
       const captureOptions = {

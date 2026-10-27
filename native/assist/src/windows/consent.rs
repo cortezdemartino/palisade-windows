@@ -42,10 +42,10 @@ pub struct Prompt {
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
-fn safe_identity(s: &str) -> bool {
+pub(crate) fn safe_identity(s: &str) -> bool {
     !s.chars().any(|c| {
         c.is_control()
-            || matches!(c,'\u{200b}'..='\u{200f}'|'\u{202a}'..='\u{202e}'|'\u{2066}'..='\u{2069}')
+            || matches!(c,'\u{061c}'|'\u{00ad}'|'\u{034f}'|'\u{180e}'|'\u{200b}'..='\u{200f}'|'\u{2028}'..='\u{202e}'|'\u{2060}'..='\u{206f}'|'\u{feff}')
     })
 }
 fn expiry(time: u64) -> Result<String, &'static str> {
@@ -239,6 +239,19 @@ pub(crate) fn confirm_file(
         expiry(grant.expires_at)?
     );
     Ok(unsafe { show(&context, &text, "Receive this file") })
+}
+pub(crate) fn confirm_enrollment(
+    text: &str,
+    cancel: Arc<AtomicBool>,
+) -> Result<bool, &'static str> {
+    super::input::ordinary_desktop()?;
+    let context = Context {
+        cancel,
+        result: Arc::new(Mutex::new(None)),
+        until: Instant::now() + Duration::from_secs(60),
+        alive: Cell::new(false),
+    };
+    Ok(unsafe { show(&context, text, "Enroll this device") })
 }
 pub(crate) fn confirm_issuer(text: &str, cancel: Arc<AtomicBool>) -> Result<bool, &'static str> {
     super::input::ordinary_desktop()?;

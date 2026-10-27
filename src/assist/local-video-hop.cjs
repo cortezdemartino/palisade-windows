@@ -4,7 +4,7 @@ const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const { installControlsProtocol } = require('../desktop-window.cjs');
 const { isPalisadeUrl } = require('../security-policy.cjs');
-const { sanitize, pairAllowed, FP } = require('./local-video-policy.cjs');
+const { sanitize, pairAllowed, reciprocal, FP } = require('./local-video-policy.cjs');
 const { Liveness } = require('./local-video-liveness.cjs');
 const { performance } = require('node:perf_hooks');
 const PROVIDER = 'palisade-controls://app/assist-provider.html',
@@ -34,9 +34,9 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
     event.senderFrame === consumer.mainFrame &&
     isPalisadeUrl(consumer.getURL()) &&
     isPalisadeUrl(event.senderFrame?.url);
-  const publish = (state, operation = active?.publicOperation ?? null) => {
+  const publish = (state, operation = active?.publicOperation ?? null, reason = null) => {
     try {
-      onState(state, operation);
+      onState(state, operation, reason);
     } catch {}
   };
   const send = (contents, document, message) => {
@@ -197,19 +197,22 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
       if (!pending) return;
       const local = role === 'consumer' ? state.consumerAnswer : state.providerOffer,
         remote = role === 'consumer' ? state.providerOffer : state.consumerAnswer;
-      if (
-        message.peerFingerprint !== remote.fingerprint ||
-        !pairAllowed(message.pair, local.bindings, remote.bindings)
-      )
-        throw Error('Route changed');
+      if (message.peerFingerprint !== remote.fingerprint) throw Error('Observed peer mismatch');
+      if (!pairAllowed(message.pair, local.bindings, remote.bindings)) {
+        if (!local.bindings.has(message.pair?.localPort)) throw Error('Selected local port unowned');
+        if (!remote.bindings.has(message.pair?.remotePort)) throw Error('Selected remote port unowned');
+        throw Error('Selected remote address changed');
+      }
       await freshBindings(state, local.bindings, remote.bindings);
       if (state.liveness.match(role, message, arrived) !== pending)
         throw Error('Stale route report');
       const previous = state[role + 'Report'];
       if (previous && JSON.stringify(previous.pair) !== JSON.stringify(message.pair))
-        throw Error('Route changed');
+        throw Error('Selected route changed');
       state.liveness.finish(role, pending, true);
       state[role + 'Report'] = { pair: message.pair };
+      if (state.consumerReport && state.providerReport && !reciprocal(state.consumerReport.pair, state.providerReport.pair))
+        throw Error('Nonreciprocal owned route');
       if (state.phase === 'answered' && state.consumerReport && state.providerReport) {
         state.phase = 'exposing';
         send(consumer, state.consumerDocument, {
@@ -253,9 +256,10 @@ function createLocalVideoHop({ consumer, parent, inspect, enabled = false, onSta
     const arrived = performance.now();
     queue = queue
       .then(() => handle(event, message, arrived))
-      .catch(() => {
+      .catch((error) => {
         if (active === state) {
-          publish('unavailable');
+          const reason = typeof error?.message === 'string' && /^[A-Za-z -]{1,64}$/.test(error.message) ? error.message : 'validation-failed';
+          publish('unavailable', active?.publicOperation, reason);
           stop();
         }
       })

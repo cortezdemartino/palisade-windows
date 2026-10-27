@@ -8,7 +8,7 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | --- | --- | --- |
 | Canonical contract | Implemented, inactive | docs/48 stream/group control v2 source/schema/fixtures pinned; legacy v1 unchanged |
 | Endpoint architecture | Experimental | Per-user Rust guardian, private pipes, child input, native consent and local stop; no privileged service |
-| Native modules | Experimental | stream, executor, input, runtime, consent, lease, identity, issuer, files, image, parent and lifecycle |
+| Native modules | Experimental | stream, executor, input, runtime, enrollment, consent, lease, identity, issuer, files, image, parent and lifecycle |
 | Electron description bridge | Implemented | Original three members/seven fields; unavailable/absent production report |
 | Native page bridge / remote gateway | Implemented, inactive / Blocked | Two-member v1 bridge and strict messages/document scopes tested in real Electron with a fake coordinator; live native coordinator and owned remote gateway remain unfinished |
 | Screen/window capture | Experimental, inactive | Canonical native bridge/source operation/one-time tentative SID path plus existing picker/provider; owned-window pixels/source-stop and stale provider callback tests pass |
@@ -20,7 +20,7 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | Clipboard | Experimental | Separate directions, local action, default Off and sync agreement; OS/peer adapter not wired |
 | Files | Experimental, inactive | Native session-owned publisher requests, exact offer binding, directional cancellation and atomic shared quota; protected NTFS tests pass; IPC/transport and physical confirmation pending |
 | Transfer encryption | Blocked / Not Verified | Reuse canonical encrypted data peer; local file hash tests do not prove confidentiality |
-| Consent | Experimental | Native helper/device/capability/expiry display, default Deny, post-decision validation and signed acknowledgement |
+| Consent | Experimental | Separate private enrollment tuple and native capability consent; own-key/source expectations, cancellation/revocation and labelled proof/ack; real dialog acceptance pending |
 | Emergency stop | Experimental / Not Verified | Native stop message-pump and visibility fixtures; actual shortcut/input cleanup acceptance pending |
 | Expiration and revocation | Implemented, inactive | Immutable two-hour ceiling, 20s signed lease, five-second endpoint polling, fail-closed clocks and terminal grants |
 | Input suspension | Implemented, inactive | Independent input epoch; release/fence while resources retain separate authority; full renewal cannot restore input |
@@ -39,10 +39,10 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | Documentation | Implemented | Integration, capture, native architecture, threat model, user/operations/settings and companion prompt |
 | Issue tracking | Implemented via owner issues | Windows #1/#3/#4/#5, project #18/#33; exact checkpoint evidence posted after push |
 | Open owner interventions | Blocked | Companion changes, disposable-device acceptance and separate installation/activation/release approval |
-| Exact-SHA CI | Not Verified until hosted run | a7d381b passed run 40448822734; the current push must establish its own result |
+| Exact-SHA CI | Not Verified until hosted run | f553f4e passed run 40496936460; 2f250f6 failed capture route verification in run 40498962262; the current fix must establish its own result |
 | Deployment | Blocked | No installer executed, production feature enabled or release published |
 | Limitations | Blocked / Not Verified | Images, transfer resume and unrestricted drag/drop unsupported; no unattended access |
-| Next integration | Blocked | Windows enrollment tuple, remote gateway/native IPC/capture wiring, canonical resource follow-up and real acceptance |
+| Next integration | Blocked | Live coordinator, remote gateway/native IPC/capture wiring, canonical resource follow-up and real acceptance |
 
 The remaining work includes Windows integration, not only web code. A production endpoint cannot be completed by accepting page-provided consent or fingerprints. Generic hosted capture remains denied. The isolated local video hop does not replace MatrixRTC E2EE.
 

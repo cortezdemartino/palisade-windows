@@ -104,6 +104,7 @@ app
       await contents.executeJavaScript('typeof require + ":" + typeof process'),
       "undefined:undefined",
     );
+  assert.equal(await contents.executeJavaScript('typeof selectedRoute'), 'undefined');
     assert.equal(
       await evaluate(
         `JSON.parse(await palisadeAssistNative.request(${message("status")})).error`,

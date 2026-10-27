@@ -28,6 +28,17 @@ impl Identity {
     pub fn public_key(&self) -> String {
         URL_SAFE_NO_PAD.encode(self.0.verifying_key().as_bytes())
     }
+    pub(crate) fn prove_enrollment(
+        &self,
+        record: &super::enrollment::Enrollment,
+        challenge: &str,
+    ) -> Result<String, &'static str> {
+        Ok(URL_SAFE_NO_PAD.encode(self.0.sign(&record.statement(self, challenge)?).to_bytes()))
+    }
+    #[cfg(test)]
+    pub(crate) fn fixture(path: &Path) -> Result<Self, &'static str> {
+        Self::load(path)
+    }
     pub(crate) fn acknowledge(
         &self,
         grant: &crate::stream::StreamGrant,
