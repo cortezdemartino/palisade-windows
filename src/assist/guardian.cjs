@@ -4,6 +4,7 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { createHash, randomBytes } = require('node:crypto');
 const { spawn } = require('node:child_process');
+const { performance } = require('node:perf_hooks');
 const MAX_FRAME = 16_384;
 const FILENAME = 'Palisade-Assist.exe';
 
@@ -78,6 +79,11 @@ async function openGuardian({ binary, manifestFile, probe = false }) {
     return Object.freeze({
       // No generic command API, enrollment signer, file path, clipboard or input operation.
       status: () => request({ type: 'status' }),
+      inspectLocalIce: async ports => {
+        const deadline=performance.now()+500;
+        while(pending&&!ended&&performance.now()<deadline)await new Promise(resolve=>setTimeout(resolve,5));
+        return request({ type: 'inspect-local-ice', ports });
+      },
       verifyIssuance: (signed, issuer, expected) => request({ type: 'verify-grant', signed, issuer, expected }),
       stop: async () => { clearInterval(heartbeat); try { return await request({ type: 'stop' }); } finally { fail(new Error('Assist stopped')); } },
       close: () => fail(new Error('Assist helper closed')),

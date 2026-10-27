@@ -66,6 +66,8 @@ jobs:
           try {
             npm run test:window-controls
             if ($LASTEXITCODE -ne 0) { throw 'Packaged Electron checks failed.' }
+            npm run test:assist-capture
+            if ($LASTEXITCODE -ne 0) { throw 'Isolated capture component checks failed.' }
           } finally { Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR -ErrorAction SilentlyContinue }
       - name: Upload installer
         uses: actions/upload-artifact@v4

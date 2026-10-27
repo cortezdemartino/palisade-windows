@@ -14,7 +14,7 @@ Palisade's Windows desktop client runs the existing Palisade service in a restri
 - Automatic update checks through [GitHub Releases](https://github.com/cortezdemartino/palisade-windows/releases)
 - Ed25519-signed release metadata and SHA-256 and SHA-512 installer verification
 
-The canonical Assist v1 description bridge and inactive local picker/controller are implemented. Capture remains disabled pending the Electron permission review. Remote input, clipboard/files and cross-client E2EE remain blocked or unverified; isolated planners/validators do not constitute a functioning remote-control endpoint. See the integration guide and review packet.
+The canonical Assist v1 description bridge is implemented. Inactive components now include an isolated Windows capture provider, native input/consent, short signed-lease polling and clipboard/file brokers. App-owned Windows capture and process fixtures pass; the canonical page/gateway wiring, cross-client E2EE and physical input acceptance remain incomplete. Full Assist is not release ready. See the [integration guide](docs/ASSIST-INTEGRATION.md).
 
 ## Install
 
@@ -32,6 +32,7 @@ npm run check
 npm run test:assist-native
 npm run build:assist
 npm run test:assist-process
+npm run test:assist-capture
 npm run package:win
 ```
 
@@ -63,4 +64,4 @@ The repository contains no backend service, web assets or Matrix authentication 
 
 The Windows client source is available under the [Apache License, Version 2.0](LICENSE). Copyright 2026 Onyx Operations Group. The Palisade name, logo and other brand identifiers remain the property of their respective owner; no trademark license is granted. The separately hosted Palisade service and website are not covered by this repository's license. See [third-party notices](THIRD-PARTY-NOTICES.md).
 
-The inactive [native guardian](docs/ASSIST-NATIVE-GUARDIAN.md) now provides protected endpoint identity, canonical signature diagnostics, process/watchdog isolation and binary integrity verification. It is not started or advertised by the application. Full Assist still requires the canonical native bridge, independently authenticated lifecycle, safe capture and Windows/cross-client acceptance.
+The inactive [native guardian](docs/ASSIST-NATIVE-GUARDIAN.md) now provides protected endpoint identity, canonical signature diagnostics, process/watchdog isolation and binary integrity verification. It is not started or advertised by the application. Full Assist still requires the finalized canonical native bridge, independently authenticated production enrollment, remote gateway/application wiring and Windows/cross-client acceptance. See [isolated capture](docs/ASSIST-CAPTURE.md) for executed component tests.

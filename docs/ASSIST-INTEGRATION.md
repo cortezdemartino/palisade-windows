@@ -21,7 +21,7 @@ The companion source remains read-only. New service and web flows exist behind d
 | Guardian/child execution | Experimental | Private pipes, mirrored intent, fenced cleanup, heartbeat and probe tests; physical crash/lock recovery not qualified |
 | Clipboard text | Experimental | Separate directions, positive authority, manual copy and cancellation; OS/peer wiring pending |
 | Native files | Experimental | Local dialogs, opaque handles, quotas, private staging, integrity/MOTW/no-overwrite commit; temporary-file tests executed |
-| Native capture | Blocked | Picker exists; isolated provider/gateway and positive capture proof still required |
+| Native capture | Experimental, inactive | Existing picker, isolated provider, owned DTLS video, certificate/socket checks and app-owned window pixel/stop fixtures; canonical web publication adapter and acceptance pending |
 | Native bridge and owned DTLS gateway | Planned / Blocked | Must match a finalized versioned handoff; certificates must be observed by the owned peer |
 | Virtual keyboard, full toolbar and annotations | Planned / Blocked | Reuse canonical web controls and existing annotations |
 | Complete cross-client Assist | Not Verified | No installed endpoint or real encrypted control/transfer session exercised |
@@ -39,7 +39,7 @@ Clipboard defaults Off and supports bounded text only. Sync additionally require
 
 ## Verification and next integration
 
-See [native components](ASSIST-NATIVE-GUARDIAN.md), [test results](TEST-RESULTS.md), [threat model](ASSIST-THREAT-MODEL.md) and [milestone report](M4G-WINDOWS-REPORT.md). A passing build or probe does not qualify physical input, issuer enrollment, encrypted viewing or cross-client transfer.
+See [isolated capture](ASSIST-CAPTURE.md), [native components](ASSIST-NATIVE-GUARDIAN.md), [test results](TEST-RESULTS.md), [threat model](ASSIST-THREAT-MODEL.md) and [milestone report](M4G-WINDOWS-REPORT.md). A passing build or probe does not qualify physical input, issuer enrollment, encrypted viewing or cross-client transfer.
 
 Owner architecture approval is already recorded under [project-palisade#33](https://github.com/cortezdemartino/project-palisade/issues/33#issuecomment-6399951819). Remaining work is tracked in [Windows#1](https://github.com/cortezdemartino/palisade-windows/issues/1), [#3](https://github.com/cortezdemartino/palisade-windows/issues/3), [#4](https://github.com/cortezdemartino/palisade-windows/issues/4) and [#5](https://github.com/cortezdemartino/palisade-windows/issues/5). Window-bounds persistence remains queued after Assist testing readiness.
 

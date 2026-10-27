@@ -90,40 +90,54 @@ impl NativeStop {
                 let _ = ready.send(Err("native-stop-timer"));
                 return;
             }
-            if !probe {
-                CreateWindowExW(
-                    0,
-                    w!("STATIC"),
-                    if cfg!(feature = "native-input") {
-                        w!("Session permissions end on Stop Assist.")
-                    } else {
-                        w!("Native control is disabled in this build.")
-                    },
-                    WS_CHILD | WS_VISIBLE,
-                    16,
-                    12,
-                    380,
-                    24,
-                    hwnd,
-                    ptr::null_mut(),
-                    module,
-                    ptr::null(),
-                );
-                CreateWindowExW(
-                    0,
-                    w!("BUTTON"),
-                    w!("Stop Assist"),
-                    WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                    16,
-                    44,
-                    160,
-                    30,
-                    hwnd,
-                    1usize as HMENU,
-                    module,
-                    ptr::null(),
-                );
-                ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            let label = CreateWindowExW(
+                0,
+                w!("STATIC"),
+                if cfg!(feature = "native-input") {
+                    w!("Session permissions end on Stop Assist.")
+                } else {
+                    w!("Native control is disabled in this build.")
+                },
+                WS_CHILD | WS_VISIBLE,
+                16,
+                12,
+                380,
+                24,
+                hwnd,
+                ptr::null_mut(),
+                module,
+                ptr::null(),
+            );
+            let button = CreateWindowExW(
+                0,
+                w!("BUTTON"),
+                w!("Stop Assist"),
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+                16,
+                44,
+                160,
+                30,
+                hwnd,
+                1usize as HMENU,
+                module,
+                ptr::null(),
+            );
+            if label.is_null()
+                || button.is_null()
+                || (!probe
+                    && (!show_required_window(hwnd, false)
+                        || IsWindowVisible(label) == 0
+                        || IsWindowVisible(button) == 0))
+            {
+                context.stop.store(true, Ordering::SeqCst);
+                KillTimer(hwnd, 1);
+                if !probe {
+                    UnregisterHotKey(hwnd, 1);
+                }
+                WTSUnRegisterSessionNotification(hwnd);
+                DestroyWindow(hwnd);
+                let _ = ready.send(Err("native-stop-not-visible"));
+                return;
             }
             if ready.send(Ok(hwnd as usize)).is_err() {
                 context.stop.store(true, Ordering::SeqCst);
@@ -181,6 +195,21 @@ impl Drop for NativeStop {
         }
     }
 }
+pub(crate) unsafe fn show_required_window(hwnd: HWND, activate: bool) -> bool {
+    unsafe {
+        ShowWindow(hwnd, if activate { SW_SHOW } else { SW_SHOWNOACTIVATE });
+        SetWindowPos(
+            hwnd,
+            HWND_TOPMOST,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW | if activate { 0 } else { SWP_NOACTIVATE },
+        ) != 0
+            && IsWindowVisible(hwnd) != 0
+    }
+}
 unsafe extern "system" fn window_proc(
     hwnd: HWND,
     message: u32,
@@ -192,6 +221,10 @@ unsafe extern "system" fn window_proc(
             let create = &*(lparam as *const CREATESTRUCTW);
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, create.lpCreateParams as isize);
             (*(create.lpCreateParams as *const Context)).alive.set(true);
+        }
+        #[cfg(test)]
+        if message == WM_APP + 17 {
+            return show_required_window(hwnd, false) as LRESULT;
         }
         let context = GetWindowLongPtrW(hwnd, GWLP_USERDATA) as *mut Context;
         if !context.is_null()
@@ -229,6 +262,37 @@ unsafe extern "system" fn window_proc(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hidden_startup_cannot_hide_required_owned_controls() {
+        if std::env::var_os("PALISADE_UI_HIDDEN_FIXTURE").is_some() {
+            unsafe {
+                let mut startup: windows_sys::Win32::System::Threading::STARTUPINFOW =
+                    std::mem::zeroed();
+                windows_sys::Win32::System::Threading::GetStartupInfoW(&mut startup);
+                assert_ne!(
+                    startup.dwFlags & windows_sys::Win32::System::Threading::STARTF_USESHOWWINDOW,
+                    0
+                );
+                assert_eq!(startup.wShowWindow, SW_HIDE as u16);
+            }
+        }
+        let stop = Arc::new(AtomicBool::new(false));
+        let surface = NativeStop::start(stop.clone(), true).unwrap();
+        surface.post(WM_APP + 17);
+        let until = std::time::Instant::now() + std::time::Duration::from_secs(2);
+        while unsafe { IsWindowVisible(surface.hwnd as HWND) } == 0
+            && std::time::Instant::now() < until
+        {
+            thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_ne!(unsafe { IsWindowVisible(surface.hwnd as HWND) }, 0);
+        let button = unsafe { GetDlgItem(surface.hwnd as HWND, 1) };
+        assert!(!button.is_null());
+        assert_ne!(unsafe { IsWindowVisible(button) }, 0);
+        surface.post(WM_CLOSE);
+        drop(surface);
+        assert!(stop.load(Ordering::SeqCst));
+    }
     #[test]
     fn native_message_pump_stops_without_renderer_or_pipe() {
         // Posts to our own hidden test window. Does not lock/suspend this machine.

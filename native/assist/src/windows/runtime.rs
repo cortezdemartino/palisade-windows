@@ -4,6 +4,7 @@ use super::{
     consent::{Decision, Prompt},
     identity::Identity,
     input::{Source, ordinary_desktop},
+    input_owner::InputOwner,
     issuer::TrustedIssuer,
     lease::{self, LeasePoller},
     lifecycle::NativeStop,
@@ -39,6 +40,7 @@ pub struct StreamRuntime {
     gate: Arc<Mutex<SessionGate>>,
     source: Option<Arc<Mutex<Source>>>,
     stop: Arc<AtomicBool>,
+    input_stop: Arc<AtomicBool>,
     identity: Arc<Identity>,
     prompts: BTreeMap<String, Prompt>,
     poller: Option<LeasePoller>,
@@ -92,10 +94,15 @@ impl StreamRuntime {
         );
         let (work, receive) = mpsc::sync_channel(1);
         let ready = Arc::new(AtomicBool::new(false));
+        let input_stop = Arc::new(AtomicBool::new(false));
+        let worker_input_stop = input_stop.clone();
         let worker_ready = ready.clone();
         let (worker_gate, worker_source, worker_stop) =
             (gate.clone(), source.clone(), stop.clone());
         let worker = thread::spawn(move || {
+            let mut owner = None;
+            // Reverse drop order retains the slot through Executor's fenced
+            // mirror cleanup even if the worker unwinds.
             let mut executor: Option<Executor<ProcessInput>> = None;
             let mut last_pulse = Instant::now();
             let mut active_epoch = None;
@@ -124,8 +131,7 @@ impl StreamRuntime {
                         }
                     };
                     if source.current_monitor().is_err() {
-                        worker_stop.store(true, Ordering::SeqCst);
-                        break;
+                        worker_input_stop.store(true, Ordering::SeqCst);
                     }
                     if !super::input::local_input_idle() {
                         quiet_since = Instant::now();
@@ -137,10 +143,14 @@ impl StreamRuntime {
                         })
                         .unwrap_or(false);
                     if executor.is_none()
+                        && !worker_input_stop.load(Ordering::SeqCst)
                         && input_active
                         && quiet_since.elapsed() >= Duration::from_millis(250)
                     {
                         let result = (|| {
+                            // The slot remains held until the child is fenced and
+                            // its owned input is released, across all streams.
+                            owner = Some(InputOwner::acquire()?);
                             let mut tag = [0u8; 8];
                             if unsafe {
                                 windows_sys::Win32::Security::Cryptography::BCryptGenRandom(std::ptr::null_mut(),tag.as_mut_ptr(),8,windows_sys::Win32::Security::Cryptography::BCRYPT_USE_SYSTEM_PREFERRED_RNG)
@@ -148,22 +158,30 @@ impl StreamRuntime {
                             {
                                 return Err("random-failed");
                             }
-                            let child =
-                                ProcessInput::spawn(usize::from_le_bytes(tag), false, &manifest)?;
-                            executor = Some(Executor::new(child, worker_stop.clone(), true));
-                            active_epoch =
-                                Some(worker_gate.lock().map_err(|_| "endpoint-failed")?.epoch());
+                            let child = ProcessInput::spawn(
+                                usize::from_le_bytes(tag),
+                                false,
+                                &manifest,
+                                owner.as_ref().ok_or("input-owner-required")?,
+                            )?;
+                            executor = Some(Executor::new(child, worker_input_stop.clone(), true));
+                            active_epoch = Some(
+                                worker_gate
+                                    .lock()
+                                    .map_err(|_| "endpoint-failed")?
+                                    .input_epoch(),
+                            );
                             worker_ready.store(true, Ordering::SeqCst);
                             Ok::<(), &'static str>(())
                         })();
                         if result.is_err() {
-                            worker_stop.store(true, Ordering::SeqCst);
-                            break;
+                            worker_input_stop.store(true, Ordering::SeqCst);
                         }
                     }
                     if let Some(ref mut executor) = executor {
-                        let epoch = worker_gate.lock().map(|g| g.epoch()).unwrap_or(0);
-                        // Any grant-generation/revocation change fences held input.
+                        let epoch = worker_gate.lock().map(|g| g.input_epoch()).unwrap_or(0);
+                        // Input revocation fences held input. Independent resource
+                        // revocation does not change this input epoch.
                         if active_epoch != Some(epoch)
                             || (last_pulse.elapsed() >= Duration::from_millis(250)
                                 && worker_gate
@@ -180,12 +198,27 @@ impl StreamRuntime {
                                     })
                                     .unwrap_or(true))
                         {
-                            worker_stop.store(true, Ordering::SeqCst);
-                            break;
+                            worker_input_stop.store(true, Ordering::SeqCst);
                         }
                         if last_pulse.elapsed() >= Duration::from_millis(250) {
                             last_pulse = Instant::now();
                         }
+                    }
+                    if worker_input_stop.load(Ordering::SeqCst) {
+                        worker_ready.store(false, Ordering::SeqCst);
+                        if let Ok(mut gate) = worker_gate.lock() {
+                            gate.suspend_input();
+                        }
+                        if let Some(mut child) = executor.take() {
+                            while child.release_owned(&source).is_err() {
+                                if ordinary_desktop().is_err() {
+                                    worker_stop.store(true, Ordering::SeqCst);
+                                }
+                                thread::sleep(Duration::from_millis(100));
+                            }
+                        }
+                        owner.take();
+                        active_epoch = None;
                     }
                 }
                 let packet = match receive.recv_timeout(Duration::from_millis(20)) {
@@ -216,7 +249,7 @@ impl StreamRuntime {
                     )
                 })();
                 if result.is_err() && result != Err("input-not-ready") {
-                    worker_stop.store(true, Ordering::SeqCst);
+                    worker_input_stop.store(true, Ordering::SeqCst);
                 }
                 let _ = packet.1.send(result);
             }
@@ -239,6 +272,7 @@ impl StreamRuntime {
             gate,
             source,
             stop,
+            input_stop,
             identity,
             prompts: BTreeMap::new(),
             poller: Some(poller),
@@ -316,7 +350,7 @@ impl StreamRuntime {
         if self.stop.load(Ordering::SeqCst) {
             return Err("revoked");
         }
-        if !self.ready.load(Ordering::SeqCst) {
+        if self.input_stop.load(Ordering::SeqCst) || !self.ready.load(Ordering::SeqCst) {
             return Err("input-not-ready");
         }
         let (send, receive) = mpsc::sync_channel(1);
@@ -328,7 +362,8 @@ impl StreamRuntime {
             .map_err(|_| "endpoint-timeout")?
     }
     pub fn authorize(&self, id: &str, capability: &str) -> Result<(), &'static str> {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.load(Ordering::SeqCst) || ordinary_desktop().is_err() {
+            self.stop.store(true, Ordering::SeqCst);
             return Err("revoked");
         }
         self.gate
@@ -341,7 +376,19 @@ impl StreamRuntime {
         self.stop.load(Ordering::SeqCst)
     }
     pub fn input_ready(&self) -> bool {
-        !self.ended() && self.ready.load(Ordering::SeqCst)
+        !self.ended()
+            && !self.input_stop.load(Ordering::SeqCst)
+            && self.ready.load(Ordering::SeqCst)
+    }
+    /// Local suspension invalidates queued permits immediately. The worker fences
+    /// and releases input before relinquishing controller ownership. New input
+    /// requires a fresh Assist authorization; old consent/leases cannot resume it.
+    pub fn suspend_input(&self) {
+        self.input_stop.store(true, Ordering::SeqCst);
+        self.ready.store(false, Ordering::SeqCst);
+        if let Ok(mut gate) = self.gate.lock() {
+            gate.suspend_input();
+        }
     }
     pub fn stop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);

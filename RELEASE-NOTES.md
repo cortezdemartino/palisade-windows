@@ -1,5 +1,7 @@
 # Release notes
 
+Current unpublished development also adds an inactive isolated capture provider with existing-picker reuse, app-owned DTLS/video proof, native socket ownership, monotonic freeze detection and selected-window shutdown tests. Native input suspension preserves independent resource permissions across lease renewal. Shared guardian/child ownership prevents concurrent controllers during surviving cleanup. These components are not connected to production; full Assist remains Blocked. No release or activation is authorized by this checkpoint.
+
 ## 0.3.0 (unpublished)
 
 - Add inactive canonical stream/group v2 verification, endpoint-authenticated lease polling, native consent and acknowledgement components.

@@ -30,6 +30,9 @@ enum Command {
         challenge: String,
     },
     Status,
+    InspectLocalIce {
+        ports: Vec<u16>,
+    },
     VerifyGrant {
         signed: Box<SignedGrant>,
         issuer: String,
@@ -67,11 +70,16 @@ fn run() -> Result<(), &'static str> {
         identity::Identity, lifecycle::NativeStop, parent::Parent,
     };
     let args: Vec<_> = std::env::args().skip(1).collect();
-    if args.len() == 3 && ["--executor", "--executor-probe"].contains(&args[0].as_str()) {
+    if (args.len() == 3 && args[0] == "--executor-probe")
+        || (args.len() == 4 && args[0] == "--executor")
+    {
         return palisade_assist_guardian::windows::process_input::run_child(
             args[1].parse().map_err(|_| "invalid-parent")?,
             args[2].parse().map_err(|_| "invalid-tag")?,
             args[0] == "--executor-probe",
+            args.get(3)
+                .map(|v| v.parse().map_err(|_| "invalid-owner"))
+                .transpose()?,
         );
     }
     if args.len() != 2 || !["--guardian", "--probe"].contains(&args[0].as_str()) {
@@ -79,6 +87,7 @@ fn run() -> Result<(), &'static str> {
     }
     let probe = args[0] == "--probe";
     let parent = Parent::validate(args[1].parse().map_err(|_| "invalid-parent")?, probe)?;
+    let parent_pid = parent.pid();
     let stopped = Arc::new(AtomicBool::new(false));
     let guard = Arc::new(Mutex::new(Watchdog::new(
         stopped.clone(),
@@ -157,6 +166,14 @@ fn run() -> Result<(), &'static str> {
             }
             _ if !handshaken => return Err("handshake-required"),
             Command::Status => json!({"state":"inactive","nativeInput":false,"authority":"none"}),
+            Command::InspectLocalIce { ports } => {
+                match palisade_assist_guardian::windows::local_ice::inspect(
+                    parent_pid, &ports, probe,
+                ) {
+                    Ok(candidates) => json!({"candidates":candidates}),
+                    Err(error) => json!({"error":error}),
+                }
+            }
             Command::VerifyGrant {
                 signed,
                 issuer,

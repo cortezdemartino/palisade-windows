@@ -1,80 +1,51 @@
-# M4G-WINDOWS-FULL implementation checkpoint
+# M4G-WINDOWS-FULL implementation report
 
-## October 26 native component checkpoint
+Checkpoint: October 26, 2026. **Full Assist: Blocked.** Windows has reviewed, tested inactive components; the product is not release-ready. Companion source remains read-only.
 
-Starting Windows revision: `c76d3370a770e811e4997d61cab738a9a9a90d3e`. Companion revision inspected read-only: `c0778935a6a08303bf7a9d7de8f2fa75aa8ef536`. Canonical control v2 source/schema/fixtures are pinned with Git blob and SHA-256 provenance. The earlier numbered report below is historical; this checkpoint supersedes its claims that no native input/resource components exist.
+Starting Windows revision for this continuation: ffff0624b4b779814605530fd432e3143d19906d. Earlier component work began at c76d3370a770e811e4997d61cab738a9a9a90d3e. Exact final candidate and its CI URL are recorded in the pushed commit/issue evidence. Companion inspected: c0778935a6a08303bf7a9d7de8f2fa75aa8ef536.
 
-**Implemented, inactive:** exact stream-v2 verification, unchanged legacy-v1 limits, one-use permit checks, replay/rate/expiry controls, directional clipboard and file broker components.
+| Requested area | Classification | Evidence or remaining work |
+| --- | --- | --- |
+| Canonical contract | Implemented, inactive | docs/48 stream/group control v2 source/schema/fixtures pinned; legacy v1 unchanged |
+| Endpoint architecture | Experimental | Per-user Rust guardian, private pipes, child input, native consent and local stop; no privileged service |
+| Native modules | Experimental | stream, executor, input, runtime, consent, lease, identity, issuer, files, image, parent and lifecycle |
+| Electron description bridge | Implemented | Original three members/seven fields; unavailable/absent production report |
+| Native page bridge / remote gateway | Blocked | Final canonical answer/cancel/status/lifecycle and certificate binding required, then Windows implementation/wiring |
+| Screen/window capture | Experimental, inactive | Existing picker, separate provider, local owned DTLS video, actual certificate/socket checks and selected-window stop |
+| Cross-client encrypted viewing | Not Verified | No MatrixRTC publication adapter or live session executed |
+| Mouse | Experimental | Bounded coordinates/buttons/scroll, native source checks and fake-sink/process tests; real input not exercised |
+| Keyboard / shortcuts | Experimental | Physical scan-code mapping, permitted bounded shortcuts and owned modifier cleanup |
+| Virtual keyboard / toolbar | Blocked | Canonical web UI and native adapter integration |
+| Multiple monitors | Experimental / Not Verified | Negative origin/rotation coordinate tests and native physical monitor bounds; hardware acceptance pending |
+| Clipboard | Experimental | Separate directions, local action, default Off and sync agreement; OS/peer adapter not wired |
+| Files | Experimental | Native selected handles, NTFS protection, quota, integrity/MOTW/atomic save and trusted-main broker; IPC/transport wiring pending |
+| Transfer encryption | Blocked / Not Verified | Reuse canonical encrypted data peer; local file hash tests do not prove confidentiality |
+| Consent | Experimental | Native helper/device/capability/expiry display, default Deny, post-decision validation and signed acknowledgement |
+| Emergency stop | Experimental / Not Verified | Native stop message-pump and visibility fixtures; actual shortcut/input cleanup acceptance pending |
+| Expiration and revocation | Implemented, inactive | Immutable two-hour ceiling, 20s signed lease, five-second endpoint polling, fail-closed clocks and terminal grants |
+| Input suspension | Implemented, inactive | Independent input epoch; release/fence while resources retain separate authority; full renewal cannot restore input |
+| One-controller ownership | Implemented, inactive | Shared named-event lifetime across guardian/child; real two-process crash exclusion fixture |
+| Windows lifecycle | Experimental / Not Verified | Default desktop/SID/UIPI checks and release-only retry; physical lock/sleep/secure desktop tests pending |
+| Cross-client interoperability | Not Verified | No installed endpoint or full session tested |
+| Companion requirements | Blocked | Roster-check lease failure, deferred decision race, finalized native/capture adapter and enrollment trust |
+| Performance | Not Verified | No invented latency, throughput or resource results |
+| Security review | Implemented for components | Capture cancellation/liveness and input ownership/polling findings resolved; product audit/acceptance pending |
+| Unit tests | Implemented | Current executed counts in TEST-RESULTS.md |
+| Native Windows tests | Implemented for fixtures | Owned video/windows, DPAPI, NTFS and subprocess/lifetime tests only |
+| IPC/negative tests | Implemented for components | Provenance, frames, replay, tampering, deadlines, cancellation, frozen peers, ownership |
+| Browser/cross-client tests | Not Verified | Hosted denial fixtures run; live peer matrix remains pending |
+| Packaging | Implemented when checks pass | Default-sensitive-features-off x64 NSIS; exact result recorded in TEST-RESULTS.md |
+| Signing/update boundary | Implemented | Existing trusted updater/fuses/identity/partition preserved; no release signed this checkpoint |
+| Documentation | Implemented | Integration, capture, native architecture, threat model, user/operations/settings and companion prompt |
+| Issue tracking | Implemented via owner issues | Windows #1/#3/#4/#5, project #18/#33; exact checkpoint evidence posted after push |
+| Open owner interventions | Blocked | Companion changes, disposable-device acceptance and separate installation/activation/release approval |
+| Exact-SHA CI | Not Verified until hosted run | Previous ffff062 run passed; current push must establish its own result |
+| Deployment | Blocked | No installer executed, production feature enabled or release published |
+| Limitations | Blocked / Not Verified | Images, transfer resume and unrestricted drag/drop unsupported; no unattended access |
+| Next integration | Blocked | Companion handoff first, then Windows remote gateway/native IPC/resource/capture wiring and real acceptance |
 
-**Experimental:** Win32 consent and acknowledgement, fixed-origin endpoint-key-authenticated lease polling, current-user issuer TOFU, SendInput mouse/keyboard/shortcut adapter, guardian/child private pipes, local activity stop, mirror cleanup, native file dialogs, protected NTFS handles, quotas, integrity/MOTW and no-overwrite commit. They are not imported or exposed by production main/preload.
+The remaining work includes Windows integration, not only web code. A production endpoint cannot be completed by accepting page-provided consent or fingerprints. Generic hosted capture remains denied. The isolated local video hop does not replace MatrixRTC E2EE.
 
-**Blocked / Planned:** app-owned DTLS gateway, enforceable positive capture path, finalized native page operations, full toolbar/virtual keyboard/annotation integration, live lifecycle wiring and one-controller enforcement across streams. TOFU is not independently authenticated production enrollment. Host activity currently conservatively ends the session rather than preserving independent resource permissions; that integration behavior still needs refinement.
+Owner architecture approval is already recorded under project-palisade#33. Independent component review permits committing dormant code, not installation or activation. Windows#5 requires disposable devices/accounts and real emergency-stop acceptance. No input was injected into the owner's personal desktop. Window-bounds persistence remains queued after Assist testing readiness.
 
-**Not Verified:** actual OS input/stop, international layouts/IME, mixed-DPI hardware, clipboard read/write, live peer transfer/encryption, cross-client scenarios, network performance, protected-desktop recovery, installation and upgrade acceptance. No personal desktop input or clipboard test was performed.
-
-The app suite passed 104 tests. Native checks passed both default and all-features compilation/test configurations; fake executor tests include idle held-key expiry and Drop cleanup. Seven actual non-authorizing subprocess groups passed against both the default helper and all-features debug helper. Temporary NTFS tests include OS staging cleanup after process exit without Rust Drop. Independent review separately passed 25 focused tests and approved committing only this disabled slice. Updated full check and packaging evidence is recorded in TEST-RESULTS.md and Windows issue #1 after push.
-
-The Windows x64 NSIS build succeeded with sensitive features disabled. No release manifest was signed, installer run, release published or production/native feature activated. Owner architecture approval is already recorded in project-palisade#33; integration review, disposable-device qualification and separate activation/release approval remain required. The current full Assist product is **Blocked**, with remaining Windows implementation as well as companion defects.
-
-Companion blockers: fail closed on media-roster exceptions/timeouts before issuing any new lease, and revalidate pending request state after awaited facts before approval commits. Native endpoint/capture schemas must include answer/cancel/status/lifecycle operations rather than leave them implicit. The companion prompt will include the exact Windows implementation revision after commit.
-
-## Historical checkpoints
-
-Desktop version **0.3.0**. Overall Assist product classification: **Blocked**. The canonical v1 description bridge and independently testable components are implemented; production capture and sensitive execution/data routes remain disabled or absent. The owner authorized the desktop update release with those restrictions; the full Assist product definition of done is not met. The numbered checkpoint evidence below retains its original release status, with publication evidence tracked separately in Windows issue #1.
-
-## Capture-admission follow-up
-
-Latest October 25 lifecycle follow-up: 80 tests, production audit, Windows x64 packaging, packaged boundaries and archive/fuse checks passed. The existing helpers now enforce the original deadline at admission, live consent, stop-during-verification refusal, granular cancellation and failed/stalled stream interruption. TEST-RESULTS.md records scope and digest; the companion prompt identifies the required canonical types/fixtures and independent review. These are offline components with no native operation route. The attempted partial 0.3.0 release was stopped; full Assist release testing remains the target, and the overall product remains Blocked.
-
-Starting checkpoint ed6f1628a927c5e08ee8d8b71be8dd4b4b4091dc. Session policy now denies display capture independently of controller availability, and main cannot advertise capture from its build flag alone. A regression failed before this fix and passes afterward. Sixty-six automated tests, production dependency audit, source and packaged Electron fixtures, Windows x64 NSIS packaging and packaged policy/fuse checks passed. A thirty-case fixture also passed on the official Electron 45.0.0 comparison runtime; the application dependency remains 44.7.2. TEST-RESULTS.md records the precise negative-test scope and installer digest. Current exact-SHA CI and issue evidence are recorded in Windows #1 after push.
-
-The resolution plan and control/data handoff now select routine engineering defaults, including seamless private invitations and device-bound grants. No new authority, native execution or companion protocol is implemented. Native input approval, enforceable positive capture, companion implementation and real cross-client qualification remain open. The original numbered report below describes the earlier checkpoint; this section supersedes its test count and capture-admission status.
-
-## Revision and component report
-
-1. Starting Windows SHA: ef5dab42da44f5f31d2bfe2530f9f6ee2365d36c; main was clean and reconciled with origin before editing.
-2. Implementation SHA: 2b7a5e76dbee275f2bff9c4892f0253ccdc471c8. Final Windows SHA: the main commit containing this report. Exact SHA and final CI run are recorded in Windows issue #1 after push and in the final handoff; CI is pending at document creation.
-3. Inspected committed web main: 6c7ab894862ca3767b1239594e37c322e96ff2c4. Companion source was read-only.
-4. Compatible web contract: palisade.assist.bridge v1 at that exact SHA, for capability reporting only. No compatible input/clipboard/file contract exists. Canonical TypeScript adapter is pinned in a test fixture; source SHA-256 3a7ba6e58726270977d812a05fdf4ac108d6ad8f61553e2d8e48851112ccb40e.
-5. Native endpoint architecture: Planned / Blocked in project-palisade#33. Separate per-user, non-elevated endpoint proposed; no native executable, listener, service, pipe, hook or executor implemented/installed.
-6. New modules/resources: src/assist/{bridge,capture,source-picker,picker-preload,build-policy,lease,input-model,data-model}.cjs; src/assist-picker.{html,css,js}; scripts/assist-smoke.cjs; three focused Assist test files and canonical web fixture; endpoint review, control/data handoff and threat model docs. Existing main, session policy, hosted preload, local protocol, smoke runner, package/lock and relevant guides extended.
-7. Electron bridge: Implemented. Exactly protocol/getCapabilities/onCapabilitiesChanged, bounded schemas/version lists, 2.5-second preload timeout, 12 requests/second, exact sender/current main frame/origin, navigation refusal, subscription bounds and cleanup. No generic IPC/native operation added.
-8. Screen capture: picker/controller components Implemented / Experimental. Production capture disabled and reported unavailable. Electron 44.7.2 empty-media ambiguity blocks a safe native admission path; positive native experiment was denied before the handler. Modern and legacy negative fixtures passed without relaxing that rule.
-9. Mouse control: coordinate/held-button planning helper Implemented; actual OS movement/click/drag/scroll Blocked on #33 and service/transport. No injection API called.
-10. Keyboard control: bounded key/held-state planning helper Implemented; actual scancodes/Unicode/keyboard-layout/IME execution Blocked. No keyboard hook/injection implemented.
-11. Key combinations: small offline shortcut plan, protected/meta/Alt+Tab refusal and release-all ledger Implemented. Native permitted-combination approval/execution Not Verified.
-12. Virtual keyboard: Planned / Blocked; no fake functional guest controls shown while native/backend capability is unavailable.
-13. Multi-monitor: pure content/source mapping handles negative origins and 0/90/180/270 rotation. Actual monitor enumeration-to-input scope, mixed DPI, source generation, disconnect and physical cursor alignment Not Verified.
-14. Clipboard: bounded UTF-8/PNG-envelope and opt-in in-memory deduplication helpers Implemented. No OS read/write, history, monitoring, image decoder, bidirectional sync or encrypted peer transfer. Actual feature Blocked.
-15. Direct files: basename/size/hash validation and a bounded Writable-stream receiver Implemented. No remote path accepted; no filesystem broker, save dialog, disk quarantine/commit, peer protocol, aggregate quotas or resume feature. Actual direct transfer Blocked.
-16. Transfer encryption/integrity: SHA-256/length integrity and cancellation tested on in-memory streams. No network data encryption, key negotiation or peer authenticity implemented; media E2EE is not reused or treated as data E2EE.
-17. Consent: picker requires a source choice and Share; never defaults/auto-selects. Lease helper independently verifies a synthetic grant and separately records local consent. Real identity-bound native consent surface/backend grants remain Blocked; no page script can call an input/file/clipboard broker.
-18. Emergency stop: terminal in-memory revoke, expiry timer and key/button release plans tested. Local capture termination hooks/tray action wired but inactive with gate off. Renderer termination exercised; actual active capture/input release under a frozen renderer remains Not Verified. v1 emergencyStop/localRevocation remain false.
-19. Authorization: helper exact session/host/guest/device/endpoint binding, expiry <=15 minutes, nonce/generation/sequence/rate/clock-rollback rejection. Production independent verifier/issuer/endpoint identity remains Blocked; no grant is minted from renderer fields or media tokens.
-20. Windows lifecycle: capture stop hooks for minimize/hide/close/unresponsive, navigation/crash, lock/suspend/shutdown and display changes. Actual capture/input behavior through OS lock/sign-out/UIPI/UAC/secure desktop/user switch remains Not Verified; no bypass implementation.
-21. Cross-client: canonical web adapter accepts the Windows v1 report. All four real screen/control/clipboard/file interoperability combinations remain Blocked or Not Verified. No browser regression suite executed in the companion repository.
-22. Backend requirements: endpoint/device proof, scoped control/data grants and revocation, consent UI, encrypted authenticated signaling/transport, guest event generation, browser clipboard/file gestures, receipts/quotas and negative service/SFU tests. See ASSIST-CONTROL-HANDOFF.md; no global LiveKit data-publishing bypass.
-23. Performance: Not Verified for capture/video/input/clipboard/files, WAN/NAT/TURN, CPU/GPU/memory/frame rate/throughput. Unit durations and local UI fixture times are not workload performance evidence.
-24. Security finding: modern display and legacy desktop/tab requests share empty mediaTypes in Electron 44.7.2; allowing the ambiguous permission would bypass picker enforcement through the legacy path. Permission remains denied; Windows #3 tracks independent runtime/architecture review. Threat model records residual risks without claiming an independent audit.
-25. Units: final local npm run check passed 65 tests. Existing update signatures/key rotation/hash/installer-helper, profile/settings, tray, notifications, controls and navigation assertions retained. Production audit found zero reported vulnerabilities. Contract tests use Node 22.13+ built-in TypeScript stripping; no compiler dependency added.
-26. Native Windows results: real Electron source fixtures exercised bridge isolation, local picker Share/Cancel and malicious-title text handling, renderer termination, and modern/legacy refusal on Windows x64. Actual chosen-screen video, OS input, real clipboard/files, installed-client acceptance and protected-desktop matrix Not Verified.
-27. IPC/negative tests: wrong sender/frame/origin, navigation state, malformed/oversized version lists, rate limits, subscription cleanup, chooser cancellation/disappearance/late results, lease replay/expiry/revocation/flood, key cleanup, invalid coordinates, file traversal/ADS/reserved names, payload sizes and stalled-transfer cancellation passed. No native endpoint channel exists to certify.
-28. Browser/cross-client: Not Verified. Actual pinned adapter parser/negotiation fixture passed, but a mocked/local report is not authenticated Assist/E2EE acceptance. No deployed website assumption substitutes for the compatible SHA.
-29. Packaging: local Windows x64 NSIS and packaged ASAR checks are recorded in TEST-RESULTS.md; final exact-SHA CI must verify package contents and the Electron suite. Candidate is not installed or published.
-30. Signing/updates: existing signing/verifier/key-rotation/installer-integrity tests retained. Trust anchor, app ID, persistent partition, manager pin, NSIS data preservation and fuses unchanged. No private key read or new release manifest signed; no native binary/runtime download added.
-31. Documentation: canonical integration guide extended; exact proposed types/examples/states, source integration points, endpoint decisions, threat matrix, real limits, user availability, operator gates and test evidence updated. Earlier 0.2.12 missing-contract audit is marked historical.
-32. GitHub enhancement: existing Windows #1 tracks expanded FULL scope; parent project-palisade#18 receives checkpoint and evidence updates. No duplicate feature issue.
-33. Interventions: Windows #3 capture permission review, #4 full companion data contract, #5 disposable-device qualification; project-palisade#33 native endpoint decision. Earlier Windows #2 missing-v1 handoff is resolved by the committed web contract, not by approving new capabilities.
-34. Exact-SHA CI: pending until checkpoint push. Run/head SHA/result will be recorded in Windows #1 and final handoff. Old green runs do not qualify this revision.
-35. Deployment: no tag, release, installation, native endpoint activation, production deployment or website change. Main CI test artifacts are not production releases.
-36. Known limitations: helper components are not a remote desktop product; no native executor/identity/transport, no live E2EE/cross-client proof, no secure filesystem/clipboard broker, no physical input/stop qualification. Production capture stays off.
-37. Remaining blockers: independent native approval #33; runtime capture admission #3; expanded canonical web/backend grants/data UI/transport #4; physical/security/performance acceptance #5; later explicit release/activation approval.
-38. Next actions: resolve the narrow runtime finding and review packet, approve/reconcile the proposed contract into the companion repository, then implement only the authorized endpoint/data paths, execute full real-service/native/cross-client negative/E2EE tests on disposable devices and request separate release approval.
-
-See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md), [ASSIST-CONTROL-HANDOFF.md](ASSIST-CONTROL-HANDOFF.md), [ASSIST-ENDPOINT-REVIEW.md](ASSIST-ENDPOINT-REVIEW.md), [ASSIST-THREAT-MODEL.md](ASSIST-THREAT-MODEL.md) and [TEST-RESULTS.md](TEST-RESULTS.md).
-
-## Native guardian implementation checkpoint, 2026-10-25
-
-Starting Windows SHA: 1880d08dec49e780f90878f86b1a3bcd4b21a54b. Companion inspected: ee9c2763f19e62b405bbf9a9c97f187bc5a1291a, control v1. The non-injecting Rust guardian, DPAPI identity, canonical Ed25519 diagnostics, bounded pipe broker, independent process/Windows lifecycle watchdog and integrity/license packaging are Implemented components. Independent review approved this scope after concrete findings were fixed. The current application still reports endpoint absent and never starts the helper. Signed issuance is never accepted as current authorization.
-
-Earlier numbered absence statements describe their historical checkpoint. Full remote control, physical emergency stop, selected-source capture, clipboard/files, encrypted cross-client interoperability and performance remain Blocked / Not Verified. The new stream/group/two-hour contract and native bridge/liveness authority require the read-only companion handoff. Exact local test/build evidence is in TEST-RESULTS.md; final SHA and CI are recorded in Windows #1. No production manifest, tag, release, installation or activation is performed by this checkpoint.
+Use [the companion prompt](ASSIST-COMPANION-HANDOFF-PROMPT.md) for the read-only dependency. See [integration](ASSIST-INTEGRATION.md), [capture](ASSIST-CAPTURE.md), [native components](ASSIST-NATIVE-GUARDIAN.md), [threat model](ASSIST-THREAT-MODEL.md) and [executed tests](TEST-RESULTS.md).

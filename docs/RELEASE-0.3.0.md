@@ -5,6 +5,7 @@ Unpublished. The release attempt was stopped at the owner's request. The existin
 - Add restricted Assist capability reporting compatible with the Palisade web application.
 - Harden permission handling so a capture feature flag cannot grant screen access or bypass source selection.
 - Add inactive source-picker and session/data validation components for continued Assist development.
+- Add inactive isolated capture with app-owned video/certificate/socket checks and source shutdown fixtures, plus native consent/input/resource components with separate permission handling and crash-surviving controller exclusion.
 - Expand automated checks for permissions, window controls, notifications and signed updates.
 
 Assist screen/window sharing, remote mouse/keyboard control, clipboard sharing and file transfer are disabled or unavailable in this release. Capability reporting does not authorize these actions. Native execution and activation still require their separate security review and acceptance tests.

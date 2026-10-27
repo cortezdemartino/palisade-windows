@@ -26,6 +26,9 @@ impl Drop for Parent {
     }
 }
 impl Parent {
+    pub fn pid(&self) -> u32 {
+        unsafe { GetProcessId(self.0) }
+    }
     pub fn alive(&self) -> bool {
         unsafe { WaitForSingleObject(self.0, 0) == WAIT_TIMEOUT }
     }
@@ -133,7 +136,7 @@ impl Parent {
     }
 }
 
-unsafe fn creation_time(process: HANDLE) -> Result<u64, &'static str> {
+pub(crate) unsafe fn creation_time(process: HANDLE) -> Result<u64, &'static str> {
     let (mut created, mut exited, mut kernel, mut user): (FILETIME, FILETIME, FILETIME, FILETIME) =
         unsafe { zeroed() };
     if unsafe { GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user) } == 0 {
@@ -210,6 +213,9 @@ unsafe fn same_user(parent: HANDLE, probe: bool) -> Result<bool, &'static str> {
 }
 pub(crate) fn same_unelevated_user(process: HANDLE) -> bool {
     unsafe { same_user(process, false).unwrap_or(false) }
+}
+pub(crate) fn same_user_for_query(process: HANDLE, probe: bool) -> bool {
+    unsafe { same_user(process, probe).unwrap_or(false) }
 }
 #[cfg(test)]
 mod tests {

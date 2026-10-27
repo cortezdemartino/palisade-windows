@@ -1,5 +1,7 @@
 # Palisade Assist resolution plan
 
+Historical plan. Current implementation and remaining gates are recorded in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md) and [M4G-WINDOWS-REPORT.md](M4G-WINDOWS-REPORT.md). Canonical stream/group v2 now exists at companion c0778935a6a08303bf7a9d7de8f2fa75aa8ef536. Owner architecture approval and independent reviews of dormant components are complete; activation and product acceptance are not.
+
 Implementation plan, 2026-10-24. This document records engineering direction, not permission to implement privileged input, change the companion repository, install, activate or release. The first capture-admission follow-up is recorded below and in TEST-RESULTS.md; later stages remain planned or blocked.
 
 Baseline: Windows `ed6f1628a927c5e08ee8d8b71be8dd4b4b4091dc`; web contract `6c7ab894862ca3767b1239594e37c322e96ff2c4`; Electron 44.7.2. The verified baseline has 65 passing tests and packaged component checks. It does not have working native capture, remote input, OS clipboard sharing or direct file transfer.

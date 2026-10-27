@@ -59,6 +59,53 @@ pub struct LeasePoller {
     gate: Arc<Mutex<SessionGate>>,
     on_loss: Arc<dyn Fn() + Send + Sync>,
 }
+fn apply_response(
+    guard: &mut SessionGate,
+    bytes: &[u8],
+    now: u64,
+    started: Instant,
+    instant: Instant,
+) -> Result<(), &'static str> {
+    let response: Response = serde_json::from_slice(bytes).map_err(|_| "invalid-service-view")?;
+    guard.tick(now, instant)?;
+    let binding = guard.binding().clone();
+    let view = response.session;
+    if view.id != binding.session
+        || view.room != binding.room
+        || view.stream != binding.stream
+        || view.publisher.user_id != binding.publisher_account
+        || view.publisher.device_id != binding.publisher_device
+        || view.helper.user_id != binding.helper_account
+        || view.helper.device_id != binding.helper_device
+        || view.ended.is_some()
+        || view.grants.len() > 8
+        || guard.deadline() != Some(view.deadline)
+    {
+        return Err("session-ended");
+    }
+    let mut ids = std::collections::BTreeSet::new();
+    for record in view.grants {
+        if !ids.insert(record.grant.grant_id.clone())
+            || record.grant.approved_at != view.approved_at
+            || !["issued", "active", "revoked"].contains(&record.state.as_str())
+        {
+            return Err("binding-mismatch");
+        }
+        let id = record.grant.grant_id.clone();
+        // Even revoked service records must match an authenticated known grant.
+        guard.observe_grant(
+            &SignedStreamGrant {
+                grant: record.grant,
+                signature: record.signature,
+            },
+            now,
+        )?;
+        if record.state == "revoked" {
+            guard.revoke(&id);
+        }
+    }
+    guard.refresh(&view.lease.ok_or("session-ended")?, now, started, instant)
+}
 impl LeasePoller {
     pub fn start(
         identity: Arc<Identity>,
@@ -95,43 +142,8 @@ impl LeasePoller {
                     if flag.load(Ordering::SeqCst) {
                         return Err("revoked");
                     }
-                    let response: Response =
-                        serde_json::from_slice(&response).map_err(|_| "invalid-service-view")?;
-                    let view = response.session;
                     let mut guard = gate.lock().map_err(|_| "endpoint-failed")?;
-                    if view.id != binding.session
-                        || view.room != binding.room
-                        || view.stream != binding.stream
-                        || view.publisher.user_id != binding.publisher_account
-                        || view.publisher.device_id != binding.publisher_device
-                        || view.helper.user_id != binding.helper_account
-                        || view.helper.device_id != binding.helper_device
-                        || view.ended.is_some()
-                        || view.grants.len() > 8
-                        || guard.deadline() != Some(view.deadline)
-                    {
-                        return Err("session-ended");
-                    }
-                    for record in view.grants {
-                        if record.grant.approved_at != view.approved_at
-                            || !["issued", "active", "revoked"].contains(&record.state.as_str())
-                        {
-                            return Err("binding-mismatch");
-                        }
-                        if record.state == "revoked" {
-                            guard.revoke(&record.grant.grant_id)
-                        } else {
-                            guard.admit(
-                                &SignedStreamGrant {
-                                    grant: record.grant,
-                                    signature: record.signature,
-                                },
-                                now()?,
-                            )?;
-                        }
-                    }
-                    let lease = view.lease.ok_or("session-ended")?;
-                    guard.refresh(&lease, now()?, started, Instant::now())
+                    apply_response(&mut guard, &response, now()?, started, Instant::now())
                 })();
                 if result.is_err() {
                     if let Ok(mut guard) = gate.lock() {
@@ -181,5 +193,112 @@ impl Drop for LeasePoller {
                 let _ = worker.join();
             }
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::stream::{Binding, StreamGrant};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use ed25519_dalek::{Signer, SigningKey};
+    fn signed(grant: StreamGrant, key: &SigningKey) -> SignedStreamGrant {
+        SignedStreamGrant {
+            signature: URL_SAFE_NO_PAD.encode(key.sign(&grant.canonical()).to_bytes()),
+            grant,
+        }
+    }
+    #[test]
+    fn full_poll_preserves_resources_after_local_input_suspension_without_restoring_input() {
+        let fixtures: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let now = fixtures["now"].as_u64().unwrap();
+        let instant = Instant::now();
+        let key = SigningKey::from_bytes(&[42; 32]);
+        let input: SignedStreamGrant =
+            serde_json::from_value(fixtures["grants"]["valid"][1]["signed"].clone()).unwrap();
+        let input = signed(input.grant, &key);
+        let mut resource = input.grant.clone();
+        resource.capability = "clipboard_to_host".into();
+        resource.endpoint = None;
+        resource.generation += 1;
+        resource.grant_id = "clipboard_fixture_01".into();
+        resource.nonce = "clipboard_fixture_nonce_01".into();
+        let resource = signed(resource, &key);
+        let g = &input.grant;
+        let binding = Binding {
+            session: g.session.clone(),
+            room: g.room.clone(),
+            stream: g.stream.clone(),
+            publisher_account: g.publisher_account.clone(),
+            publisher_device: g.publisher_device.clone(),
+            helper_account: g.helper_account.clone(),
+            helper_device: g.helper_device.clone(),
+            helper_transport: g.helper_transport.clone(),
+            endpoint: g.endpoint.clone().unwrap(),
+        };
+        let mut gate = SessionGate::new(key.verifying_key().to_bytes(), binding, now, 0, instant);
+        for grant in [&input, &resource] {
+            gate.admit(grant, now).unwrap();
+            gate.consent(&grant.grant.grant_id, now).unwrap();
+        }
+        gate.verify_peer(&g.helper_transport).unwrap();
+        let mut lease: SignedStreamLease =
+            serde_json::from_value(fixtures["leases"]["valid"][0]["signed"].clone()).unwrap();
+        lease.lease.grants = vec![g.grant_id.clone(), resource.grant.grant_id.clone()];
+        lease.lease.grants.sort();
+        lease.lease.generation = resource.grant.generation;
+        lease.signature = URL_SAFE_NO_PAD.encode(
+            key.sign(&serde_json::to_vec(&lease.lease).unwrap())
+                .to_bytes(),
+        );
+        gate.refresh(&lease, now, instant, instant).unwrap();
+        gate.suspend_input();
+        lease.lease.issued_at = now + 5000;
+        lease.lease.expires_at = now + 25000;
+        lease.signature = URL_SAFE_NO_PAD.encode(
+            key.sign(&serde_json::to_vec(&lease.lease).unwrap())
+                .to_bytes(),
+        );
+        let mut response = serde_json::json!({"session": {"id":g.session,"room":g.room,"stream":g.stream,
+            "publisher":{"userId":g.publisher_account,"deviceId":g.publisher_device},
+            "helper":{"userId":g.helper_account,"deviceId":g.helper_device},
+            "approvedAt":g.approved_at,"deadline":g.session_deadline,"ended":null,
+            "grants":[{"grant":g,"signature":input.signature,"state":"active"},
+                {"grant":resource.grant,"signature":resource.signature,"state":"active"}],"lease":{"lease":lease.lease,"signature":lease.signature}}});
+        let next = instant + Duration::from_secs(5);
+        apply_response(
+            &mut gate,
+            &serde_json::to_vec(&response).unwrap(),
+            now + 5000,
+            next,
+            next,
+        )
+        .unwrap();
+        assert!(!gate.ended());
+        gate.authorize(
+            &resource.grant.grant_id,
+            "clipboard_to_host",
+            now + 5000,
+            next,
+        )
+        .unwrap();
+        assert!(
+            gate.authorize(&g.grant_id, "control_mouse", now + 5000, next)
+                .is_err()
+        );
+        assert!(gate.consent(&g.grant_id, now + 5000).is_err());
+        response["session"]["grants"][0]["grant"]["helperDevice"] = serde_json::json!("OTHER");
+        assert!(
+            apply_response(
+                &mut gate,
+                &serde_json::to_vec(&response).unwrap(),
+                now + 5000,
+                next,
+                next
+            )
+            .is_err()
+        );
     }
 }

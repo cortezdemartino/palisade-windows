@@ -283,7 +283,10 @@ unsafe fn show(context: &Context, text: &str) -> bool {
             DestroyWindow(hwnd);
             return false;
         }
-        ShowWindow(hwnd, SW_SHOW);
+        if !super::lifecycle::show_required_window(hwnd, true) {
+            DestroyWindow(hwnd);
+            return false;
+        }
         SetForegroundWindow(hwnd);
         SetFocus(deny);
         let mut message = std::mem::zeroed();

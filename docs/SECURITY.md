@@ -43,7 +43,7 @@ The remote preload reads only rendered workspace/direct-message unread labels. I
 
 ## M4G-WINDOWS permission preparation
 
-The missing web desktop contract blocks any Assist API or native capture grant. The current session policy rejects same-origin subframes, missing main-frame provenance, conflicting origins and stale/destroyed hosted contents. Media checks now grant audio only; camera/unknown checks remain denied. Display requests explicitly return null without enumerating sources. No new privileged renderer bridge, input capability or secret access exists. See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md) for the pinned contract audit and acceptance limits.
+Historical preparation: the initial missing web contract blocked Assist APIs and native capture grants. The current session policy rejects same-origin subframes, missing main-frame provenance, conflicting origins and stale/destroyed hosted contents. Media checks now grant audio only; camera/unknown checks remain denied. Display requests explicitly return null without enumerating sources. No new privileged renderer bridge, input capability or secret access exists. See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md) for the pinned contract audit and acceptance limits.
 
 ## M4G-WINDOWS-FULL candidate
 
@@ -52,3 +52,11 @@ The current v1 Assist API describes capabilities only and is accepted by the pin
 ## Inactive native guardian
 
 The [guardian foundation](ASSIST-NATIVE-GUARDIAN.md) adds current-user DPAPI identity, strict Ed25519 issuance diagnostics, bounded inherited pipes, parent/user/session checks and an independent watchdog. It accepts no current Assist authority and is not started by production main/preload. Its binary hash manifest is inside the integrity-protected ASAR; native dependency audit and package verification are required before signing. Identity corruption fails closed without automatic reset. Directory replacement races by same-user malware, initial input-desktop qualification and eventual held-key crash recovery remain unqualified. No remote input, capture, OS clipboard or file transfer is activated.
+
+## Current inactive native and capture components
+
+Canonical stream control v2 is pinned at companion c0778935a6a08303bf7a9d7de8f2fa75aa8ef536. Dormant native components now implement local consent, bounded input permits, short signed-lease polling and protected file handles. Input suspension invalidates native grants without renewing them or revoking unrelated resource permissions. A guardian/child shared kernel-object lifetime prevents a successor while either holder remains. The native default package still has sensitive features disabled.
+
+The isolated capture provider is separate from the hosted permission policy. Main validates the selected source, app-owned DTLS peer certificates and native socket ownership; monotonic challenges bound frozen-peer teardown. The hosted page receives no signaling or general native capability. App-owned window capture is tested, but this does not qualify cross-client E2EE or establish a firewall guarantee.
+
+The current description bridge continues to report no native endpoint/capture. Production enrollment and finalized page/gateway wiring remain incomplete. The issuer's dormant first-use HTTPS confirmation is TOFU, not independent production authentication. See the current [threat model](ASSIST-THREAT-MODEL.md), [capture boundary](ASSIST-CAPTURE.md) and [integration gates](ASSIST-INTEGRATION.md). Earlier notes that no input adapter or protected file implementation exists describe historical checkpoints.

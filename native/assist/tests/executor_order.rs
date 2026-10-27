@@ -113,6 +113,42 @@ fn source() -> Source {
         generation: 1,
     }
 }
+fn add_resource(
+    gate: &mut SessionGate,
+    input: &SignedStreamGrant,
+    now: u64,
+    t: Instant,
+) -> SignedStreamGrant {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use ed25519_dalek::{Signer, SigningKey};
+    let key = SigningKey::from_bytes(&[42; 32]);
+    let mut resource = input.clone();
+    resource.grant.capability = "clipboard_to_host".into();
+    resource.grant.endpoint = None;
+    resource.grant.generation += 1;
+    resource.grant.grant_id = "clipboard_fixture_01".into();
+    resource.grant.nonce = "clipboard_fixture_nonce_01".into();
+    resource.signature = URL_SAFE_NO_PAD.encode(key.sign(&resource.grant.canonical()).to_bytes());
+    gate.admit(&resource, now).unwrap();
+    gate.consent(&resource.grant.grant_id, now).unwrap();
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/assist-control-v2.json"
+    ))
+    .unwrap();
+    let mut lease: SignedStreamLease =
+        serde_json::from_value(fixtures["leases"]["valid"][0]["signed"].clone()).unwrap();
+    lease.lease.issued_at += 1;
+    lease.lease.expires_at += 1;
+    lease.lease.generation = resource.grant.generation;
+    lease.lease.grants.push(resource.grant.grant_id.clone());
+    lease.lease.grants.sort();
+    lease.signature = URL_SAFE_NO_PAD.encode(
+        key.sign(&serde_json::to_vec(&lease.lease).unwrap())
+            .to_bytes(),
+    );
+    gate.refresh(&lease, now, t, t).unwrap();
+    resource
+}
 fn message(
     g: &SignedStreamGrant,
     kind: &str,
@@ -139,7 +175,11 @@ fn intent_is_acknowledged_before_down_and_failure_fences_before_release() {
             .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
             .is_err()
     );
-    assert!(gate.ended());
+    assert!(!gate.ended());
+    assert!(
+        gate.authorize(&g.grant.grant_id, "control_keyboard", now, t)
+            .is_err()
+    );
     assert!(!executor.held());
     let trace = &state.borrow().events;
     let down = trace.iter().position(|s| s.contains("down: true")).unwrap();
@@ -226,7 +266,11 @@ fn blocking_intent_cannot_outlive_the_one_shot_permit() {
             .iter()
             .any(|s| s.contains("down: true"))
     );
-    assert!(gate.ended());
+    assert!(!gate.ended());
+    assert!(
+        gate.authorize(&g.grant.grant_id, "control_keyboard", now, t)
+            .is_err()
+    );
 }
 #[test]
 fn an_unowned_up_cannot_release_host_input() {
@@ -265,4 +309,52 @@ fn permits_are_bound_to_the_original_gate_and_action() {
         code: "KeyB".into(),
         down: true
     }));
+}
+#[test]
+fn input_failure_releases_owned_keys_without_revoking_independent_resources() {
+    let (mut gate, g, now, t) = fixture();
+    let resource = add_resource(&mut gate, &g, now, t);
+    let m = message(&g, "shortcut", json!({"name":"copy"}));
+    let permit = gate.permit(&m, 1, now, t).unwrap();
+    let trace = Rc::new(RefCell::new(Trace {
+        fail_at: Some(2),
+        ..Trace::default()
+    }));
+    let mut executor = Executor::new(Fake(trace), Arc::new(AtomicBool::new(false)), true);
+    assert!(
+        executor
+            .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
+            .is_err()
+    );
+    assert!(!gate.ended());
+    assert!(!executor.held());
+    gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, t)
+        .unwrap();
+    assert!(gate.consent(&g.grant.grant_id, now).is_err());
+    assert!(gate.admit(&g, now).is_err());
+    assert!(gate.permit(&m, 1, now, t).is_err());
+}
+#[test]
+fn resource_revocation_does_not_invalidate_an_authorized_input_permit() {
+    let (mut gate, g, now, t) = fixture();
+    let resource = add_resource(&mut gate, &g, now, t);
+    let m = message(&g, "key", json!({"code":"ControlLeft","down":true}));
+    let permit = gate.permit(&m, 1, now, t).unwrap();
+    gate.revoke(&resource.grant.grant_id);
+    assert!(
+        gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, t)
+            .is_err()
+    );
+    gate.validate_permit(&permit, 1, now, t).unwrap();
+    let trace = Rc::new(RefCell::new(Trace::default()));
+    let mut executor = Executor::new(Fake(trace), Arc::new(AtomicBool::new(false)), true);
+    executor
+        .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
+        .unwrap();
+    executor.heartbeat(&mut gate, &source(), now, t).unwrap();
+    assert!(executor.held());
+    gate.suspend_input();
+    assert!(executor.heartbeat(&mut gate, &source(), now, t).is_err());
+    assert!(!executor.held());
+    assert!(!gate.ended());
 }

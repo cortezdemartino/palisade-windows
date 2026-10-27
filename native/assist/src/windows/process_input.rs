@@ -52,6 +52,7 @@ impl ProcessInput {
         tag: usize,
         probe: bool,
         manifest: &super::image::ImageManifest,
+        owner: &super::input_owner::InputOwner,
     ) -> Result<Self, &'static str> {
         if !probe && !cfg!(feature = "native-input") {
             return Err("native-input-disabled");
@@ -66,6 +67,7 @@ impl ProcessInput {
                 },
                 &std::process::id().to_string(),
                 &tag.to_string(),
+                &owner.raw().to_string(),
             ])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -92,7 +94,16 @@ impl ProcessInput {
         });
         let ready = replies
             .recv_timeout(Duration::from_secs(3))
-            .map_err(|_| "executor-start")??;
+            .map_err(|_| "executor-start")
+            .and_then(|reply| reply);
+        let ready = match ready {
+            Ok(ready) => ready,
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(error);
+            }
+        };
         if ready.sequence != u32::MAX || !ready.accepted {
             let _ = child.kill();
             let _ = child.wait();
@@ -221,11 +232,26 @@ impl Drop for ProcessInput {
     }
 }
 
-pub fn run_child(parent_pid: u32, tag: usize, probe: bool) -> Result<(), &'static str> {
+pub fn run_child(
+    parent_pid: u32,
+    tag: usize,
+    probe: bool,
+    owner_handle: Option<usize>,
+) -> Result<(), &'static str> {
     if !probe && !cfg!(feature = "native-input") {
         return Err("native-input-disabled");
     }
     let parent = Parent::validate_executor(parent_pid, probe)?;
+    // Retain the guardian's exact ownership object through any cleanup retry.
+    // No input, hooks or readiness acknowledgment precedes successful joining.
+    let _owner = if probe {
+        None
+    } else {
+        Some(super::input_owner::InputOwner::from_parent(
+            &parent,
+            owner_handle.ok_or("input-owner-required")?,
+        )?)
+    };
     let stop = Arc::new(AtomicBool::new(false));
     let source = Arc::new(Mutex::new(None::<Source>));
     let input = Arc::new(Mutex::new(ChildInput::new(tag)));

@@ -1,5 +1,28 @@
 # Validation
 
+## Capture and permission-isolation checkpoint, October 26, 2026
+
+Windows 10.0.26300 x64, Node.js 24.20.0, Rust 1.98.1, Electron 44.7.2. Starting commit: ffff0624b4b779814605530fd432e3143d19906d. Companion inspected read-only: c0778935a6a08303bf7a9d7de8f2fa75aa8ef536.
+
+- npm run check: 112 tests passed, with no skipped or failed tests.
+- Native format and strict all-target/all-feature Clippy passed. Rust tests passed in default and all-features configurations, 42 in each (23 library, nine executor, four input, six authority tests). Input sinks are simulated; owned-window/DPAPI/NTFS/lifetime APIs run natively.
+- Eight actual subprocess groups passed against both the default release helper and all-features debug helper. The explicit hidden-process-startup visibility fixture passed. No probe path injects input.
+- The real parent/holder ownership fixture kills the initial process and refuses repeated successors until the surviving holder exits. It proves kernel-object lifetime exclusion, not physical key release.
+- The full service-view fixture renews a signed lease still listing locally suspended input. Input stays revoked while separately approved clipboard authority survives. Altered records are refused.
+- The capture runner passed against source and packaged ASAR modules with release file-protocol restrictions: isolated DOM stream access, synthetic actual DTLS video, actual app-owned window selection/pixels/source closure, and ten negative/lifecycle cases. No personal application or entire monitor was captured. See ASSIST-CAPTURE.md.
+- Packaged desktop checks passed, including the existing 30-case capture-denial fixture, controls, unread observation and description bridge. Expected renderer rejection diagnostics are negative-test evidence.
+- Independent review separately passed 12 JavaScript capture/policy tests and 19 native authority/executor/ownership/polling tests. Reported stale-timer, liveness, ownership and polling findings were fixed. Approval covers dormant components only.
+- Locked native and production dependency audits passed. Both workflow YAML files parsed.
+- npm run package:win and verify:assist-package passed. The unsigned x64 NSIS artifact is out/Palisade-Setup-0.3.0-x64.exe. SHA-256: 055036b124f2a0cdcecf8da1e7c76e1d13d686f211d964fe0d33aecf2e142662.
+
+An early owned-window fixture attempt exceeded its outer startup deadline; the fixture now allows the full selection budget and cold renderer startup. A packaged sequence also found a transient Windows image lock between test runners; the new runner retries only sharing errors for a bounded four seconds and still fails on other errors/deadline. Final packaged capture checks passed. Component liveness deadlines remain unchanged.
+
+The previous ffff062 commit passed [Windows CI](https://github.com/cortezdemartino/palisade-windows/actions/runs/40418387443). The current candidate requires its own exact-SHA run; its result is recorded with the pushed commit in the issue evidence. Do not substitute the previous CI result.
+
+No installer execution, authenticated-account upgrade, real remote input, live clipboard, physical stop shortcut, protected-desktop recovery, performance measurement or cross-client E2EE session was run. No release was signed/published or production feature activated. Full Assist remains Blocked, including unfinished Windows gateway/native IPC/resource/capture integration after the finalized companion handoff.
+
+The following sections record earlier checkpoints and do not replace the current evidence above.
+
 ## Native stream/resource component checkpoint, October 26, 2026
 
 Windows 10.0.26300 x64, Node.js 24.20.0, pinned Rust 1.98.1, Electron 44.7.2. Starting Windows SHA: c76d3370a770e811e4997d61cab738a9a9a90d3e. Companion source/fixtures: c0778935a6a08303bf7a9d7de8f2fa75aa8ef536, read-only.

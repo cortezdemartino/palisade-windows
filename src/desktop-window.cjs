@@ -8,7 +8,7 @@ const installedSessions = new WeakSet();
 function installControlsProtocol(session) {
   if (installedSessions.has(session)) return;
   installedSessions.add(session);
-  const types = { '/window-chrome.html': 'text/html', '/window-chrome.css': 'text/css', '/window-chrome.js': 'text/javascript', '/assist-picker.html': 'text/html', '/assist-picker.css': 'text/css', '/assist-picker.js': 'text/javascript' };
+  const types = { '/window-chrome.html': 'text/html', '/window-chrome.css': 'text/css', '/window-chrome.js': 'text/javascript', '/assist-picker.html': 'text/html', '/assist-picker.css': 'text/css', '/assist-picker.js': 'text/javascript', '/assist-provider.html': 'text/html' };
   session.protocol.handle('palisade-controls', async (request) => {
     const url = new URL(request.url);
     const type = types[url.pathname];

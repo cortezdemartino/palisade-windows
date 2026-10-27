@@ -46,6 +46,20 @@ test('real guardian accepts handshake/status and native stop without any input a
     await assert.rejects(guardian.status());
   } finally { guardian.close(); }
 });
+test('local ICE query proves an owned UDP binding and refuses closed or foreign-root ports', async () => {
+  const socket=require('node:dgram').createSocket('udp4');socket.bind(0,'127.0.0.1');await once(socket,'listening');
+  const port=socket.address().port,guardian=await openGuardian({binary,manifestFile,probe:true});
+  try {
+    assert.deepEqual(await guardian.inspectLocalIce([port]),{candidates:[{port,address:'127.0.0.1'}]});
+    assert.equal((await guardian.inspectLocalIce([port,port])).error,'invalid-ice-query');
+    const script=`const {openGuardian}=require(process.argv[3]);(async()=>{const g=await openGuardian({binary:process.argv[1],manifestFile:process.argv[2],probe:true});try{console.log(JSON.stringify(await g.inspectLocalIce([Number(process.argv[4])])))}finally{g.close()}})().catch(()=>process.exitCode=1);`;
+    const {execFile}=require('node:child_process');
+    const result=await new Promise((resolve,reject)=>execFile(process.execPath,['-e',script,binary,manifestFile,path.resolve('src/assist/guardian.cjs'),String(port)],{windowsHide:true,timeout:5000},(error,stdout)=>error?reject(error):resolve(JSON.parse(stdout))));
+    assert.equal(result.error,'ice-port-unowned');
+    await new Promise(resolve=>socket.close(resolve));
+    assert.equal((await guardian.inspectLocalIce([port])).error,'ice-port-unowned');
+  }finally{try{socket.close();}catch{}guardian.close();}
+});
 test('native crypto validates issuance but cannot turn a valid signed grant into authority', async () => {
   const guardian = await openGuardian({ binary, manifestFile, probe: true });
   const pair = generateKeyPairSync('ed25519'), now = Date.now();

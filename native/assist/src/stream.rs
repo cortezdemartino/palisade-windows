@@ -10,6 +10,9 @@ use std::{
 static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(1);
 const MAX_TIME: u64 = 8_640_000_000_000_000;
 const MAX_GENERATION: u64 = 9_007_199_254_740_991;
+fn is_input(capability: &str) -> bool {
+    matches!(capability, "control_mouse" | "control_keyboard")
+}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct StreamGrant {
@@ -242,6 +245,7 @@ pub struct SessionGate {
     rate: (Instant, f64),
     ended: bool,
     epoch: u64,
+    input_epoch: u64,
     instance: u64,
     peer_verified: bool,
 }
@@ -285,6 +289,7 @@ impl SessionGate {
             rate: (instant, 240.0),
             ended: false,
             epoch: 1,
+            input_epoch: 1,
             instance: NEXT_INSTANCE
                 .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_add(1))
                 .expect("endpoint instance exhausted"),
@@ -345,6 +350,24 @@ impl SessionGate {
         }
         self.consent.insert(grant_id.into());
         Ok(())
+    }
+    /// Polling may still observe a service-active grant that was locally revoked.
+    /// Validate its unchanged signed record without restoring any authority.
+    pub fn observe_grant(
+        &mut self,
+        signed: &SignedStreamGrant,
+        now: u64,
+    ) -> Result<(), &'static str> {
+        self.clock(now)?;
+        if self.revoked.contains(&signed.grant.grant_id) {
+            let previous = self.grants.get(&signed.grant.grant_id).ok_or("revoked")?;
+            if previous.canonical() != signed.grant.canonical() {
+                return Err("binding-mismatch");
+            }
+            signature(&signed.grant, &signed.signature, &self.issuer)
+        } else {
+            self.admit(signed, now)
+        }
     }
     pub fn refresh(
         &mut self,
@@ -453,12 +476,39 @@ impl SessionGate {
             return;
         }
         self.epoch = self.epoch.checked_add(1).expect("endpoint epoch exhausted");
+        if self
+            .grants
+            .get(id)
+            .is_some_and(|grant| is_input(&grant.capability))
+        {
+            self.input_epoch = self
+                .input_epoch
+                .checked_add(1)
+                .expect("input epoch exhausted");
+        }
         self.consent.remove(id);
         self.revoked.insert(id.into());
         self.sequences.remove(id);
     }
+    /// Terminal for the current input grants. A fresh lease or old consent cannot
+    /// restore them. Independently granted clipboard/files keep their own checks.
+    pub fn suspend_input(&mut self) {
+        let ids: Vec<_> = self
+            .grants
+            .values()
+            .filter(|grant| is_input(&grant.capability))
+            .map(|grant| grant.grant_id.clone())
+            .collect();
+        for id in ids {
+            self.revoke(&id);
+        }
+    }
     pub fn stop(&mut self) {
         self.epoch = self.epoch.checked_add(1).expect("endpoint epoch exhausted");
+        self.input_epoch = self
+            .input_epoch
+            .checked_add(1)
+            .expect("input epoch exhausted");
         self.ended = true;
         self.peer_verified = false;
         self.consent.clear();
@@ -493,6 +543,9 @@ impl SessionGate {
     }
     pub(crate) fn epoch(&self) -> u64 {
         self.epoch
+    }
+    pub(crate) fn input_epoch(&self) -> u64 {
+        self.input_epoch
     }
     pub fn verify_peer(&mut self, fingerprint: &str) -> Result<(), &'static str> {
         if self.ended || fingerprint != self.binding.helper_transport {
@@ -557,7 +610,7 @@ impl SessionGate {
         )?;
         Ok(ExecutionPermit {
             instance: self.instance,
-            epoch: self.epoch,
+            epoch: self.input_epoch,
             grant: message.grant.clone(),
             capability: capability.into(),
             source_generation,
@@ -573,7 +626,7 @@ impl SessionGate {
         instant: Instant,
     ) -> Result<(), &'static str> {
         if permit.instance != self.instance
-            || permit.epoch != self.epoch
+            || permit.epoch != self.input_epoch
             || source_generation != permit.source_generation
             || instant >= permit.until
         {

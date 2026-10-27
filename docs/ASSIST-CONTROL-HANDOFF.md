@@ -1,5 +1,7 @@
 # Assist control and data handoff proposal
 
+Historical proposal. Canonical v1 and stream/group v2 now exist; their exact fixtures are pinned under tests/fixtures. The current actionable handoff is [ASSIST-COMPANION-HANDOFF-PROMPT.md](ASSIST-COMPANION-HANDOFF-PROMPT.md). Do not implement the conceptual wire types below as a competing protocol. Current native and capture component status is in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md).
+
 Status: **Planned contract, not a production protocol.** Windows components implement only offline admission, planning and bounded-stream helpers. No endpoint, input, clipboard or file channel consumes these messages. The compatible current web revision is `6c7ab894862ca3767b1239594e37c322e96ff2c4` for the description-only v1 bridge, not for the proposed operations below.
 
 Update, 2026-10-25: companion ee9c2763f19e62b405bbf9a9c97f187bc5a1291a now contains the canonical palisade.assist.control v1 contract in docs/47, service grants, shared fixtures and data/input components. It is pairwise and capped at fifteen minutes. The conceptual Windows types below are not a competing wire format and must be reconciled with that actual contract. The owner has approved the native architecture and the [stream/group session amendment](ASSIST-STREAM-SESSIONS.md): viewer requests or streamer invitations, host-selected permissions and up to two hours, terminal on stream end. That amendment needs a compatible versioned companion contract; do not relax legacy v1 validation or trust its published fixture-only issuer key in production.

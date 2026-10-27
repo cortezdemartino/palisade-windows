@@ -82,13 +82,14 @@ impl<B: Backend> Executor<B> {
         let result = (|| {
             gate.tick(now, instant)?;
             if self.stop.load(Ordering::SeqCst)
-                || self.epoch.is_some_and(|epoch| epoch != gate.epoch())
+                || self.epoch.is_some_and(|epoch| epoch != gate.input_epoch())
             {
                 return Err("revoked");
             }
             self.backend.heartbeat(source)
         })();
         if result.is_err() {
+            gate.suspend_input();
             self.stop.store(true, Ordering::SeqCst);
             let _ = self.release_owned(source);
         }
@@ -124,7 +125,7 @@ impl<B: Backend> Executor<B> {
             self.backend.prepare()?;
             let (now, t) = clock()?;
             gate.validate_permit(&permit, source.generation, now, t)?;
-            self.epoch = Some(gate.epoch());
+            self.epoch = Some(gate.input_epoch());
             match action {
                 Action::Move { source_gen, .. }
                 | Action::Button { source_gen, .. }
@@ -174,7 +175,7 @@ impl<B: Backend> Executor<B> {
             Ok(())
         })();
         if result.is_err() {
-            gate.stop();
+            gate.suspend_input();
             self.stop.store(true, Ordering::SeqCst);
             let _ = self.release_owned(source);
         }

@@ -95,6 +95,8 @@ jobs:
           try {
             npm run test:window-controls
             if ($LASTEXITCODE -ne 0) { throw 'Packaged window controls verification failed.' }
+            npm run test:assist-capture
+            if ($LASTEXITCODE -ne 0) { throw 'Isolated capture component verification failed.' }
           } finally {
             Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR -ErrorAction SilentlyContinue
           }

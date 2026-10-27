@@ -18,9 +18,11 @@ Endpoint identity persists under current-user DPAPI at %LOCALAPPDATA%/Palisade/A
 
 The guardian owns the authorization gate and a write-ahead ledger. A child accepts bounded, sequenced, short-lived primitive steps over creator-bound inherited pipes. It has no listener, command launcher or elevated service. Before self-spawn, the helper checks the protected expected binary hash and retains no-write/no-delete image/ancestor locks.
 
+A fixed per-session named-event ownership object is retained by both guardian and child. Every existing object blocks a successor, regardless of signaling. The child duplicates the exact object from its validated parent and checks kernel-object identity before readiness. The guardian retains ownership through fenced mirror cleanup, including unwind. A two-process fixture kills the initial holder and proves repeated attempts remain blocked until the surviving holder exits. This proves lifetime exclusion, not physical held-key recovery.
+
 The child has another local ledger, a local activity monitor and independent parent/idle watchdog. Heartbeats contain no input. Shutdown stops steps before cleanup. Guardian cleanup fences/reaps the child before mirrored UP events. Owner Drop retains native cleanup on failures. If its guardian dies, the child retains only owned release authority, refuses protected-desktop injection and retries when Default returns. Simultaneous process/OS failure is not claimed to be recoverable.
 
-The adapter validates physical monitor bounds, source generation, virtual-desktop coordinates, per-monitor DPI, session, target SID and elevation. It denies OS/Meta keys, Alt+Tab, secure-attention/elevation shortcuts, unknown scan codes and unowned UP events. Pre-existing local mouse holds cannot become remote drags. Physical layouts, AltGr/dead keys/IME, modifier interference, crash recovery and protected-window transitions remain unqualified. This checkpoint conservatively ends the session on child/activity loss; resource continuity during input suspension remains integration work.
+The adapter validates physical monitor bounds, source generation, virtual-desktop coordinates, per-monitor DPI, session, target SID and elevation. It denies OS/Meta keys, Alt+Tab, secure-attention/elevation shortcuts, unknown scan codes and unowned UP events. Pre-existing local mouse holds cannot become remote drags. Physical layouts, AltGr/dead keys/IME, modifier interference, crash recovery and protected-window transitions remain unqualified. Input failure/suspension terminally revokes current mouse/keyboard grants and releases owned input while independently authorized resources keep their checks. A full service renewal cannot restore locally revoked input. Clock, lease, desktop/session uncertainty and Stop Assist still terminate the whole session.
 
 Probe mode simulates steps/cleanup. It does not register activity hooks, enroll identities or execute resource/input APIs, including in all-features builds. Actual subprocess checks cover readiness, no-input keepalive, EOF, idle loss, malformed frames, expiry and replay. These do not qualify physical stop shortcuts or real input.
 
@@ -47,6 +49,7 @@ npm run package:win
 npm run verify:assist-package
 $env:PALISADE_WINDOW_SMOKE_ASAR = (Resolve-Path out/win-unpacked/resources/app.asar).Path
 npm run test:window-controls
+npm run test:assist-capture
 Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR
 ~~~
 
@@ -54,4 +57,4 @@ Native tests compile both feature configurations, exercising fake sinks, owned h
 
 ## Integration gates
 
-Complete the owned DTLS gateway, capture provenance and versioned page endpoint contract before exposing operations. Reuse one native stop owner. The live watchdog must invalidate/fence and retain cleanup rather than use diagnostic immediate exit. Enforce one controller across streams and source-end teardown. Preserve resources during input suspension and require fresh approval to resume control. Qualify consent, stop, input, lock/sleep, DPI, encryption and recovery on disposable Windows devices. Installation, activation and release need separate owner approval.
+Complete the owned DTLS gateway, capture provenance and versioned page endpoint contract before exposing operations. Reuse one native stop owner. The live watchdog must invalidate/fence and retain cleanup rather than use diagnostic immediate exit. Complete canonical source-end wiring. Native controller exclusion and input/resource separation are implemented internally; qualify their live application integration. Suspended input requires fresh authorization and local approval, never an old grant or renewed lease. Qualify consent, stop, input, lock/sleep, DPI, encryption and recovery on disposable Windows devices. Installation, activation and release need separate owner approval.
