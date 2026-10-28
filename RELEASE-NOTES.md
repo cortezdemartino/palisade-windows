@@ -4,6 +4,9 @@ Current unpublished development also adds an inactive isolated capture provider 
 
 ## 0.3.0 (unpublished)
 
+- Add one cleanup barrier before application exit and update-manager copying/launch, with synchronous revocation, retained ownership, retry and pending status. Existing desktop/profile/update behavior is covered by regressions; live native holders still require coordinator integration.
+- Establish the full feature delivery ledger and W1-W10 implementation/acceptance plan, including images, transfer resume, safe drops and protected local confirmation.
+
 - Add an inactive app-owned remote input peer with actual helper-certificate checks, native-admission gating, one bounded control channel and cancellation/cleanup fixtures. Native coordinator/signing/OS input wiring remains incomplete; no production feature is enabled.
 
 - Validate isolated capture against the live selected ICE pair, reciprocal ports and fresh native socket ownership. Preserve Chromium's exact address-redaction marker without treating it as address or network-path proof.

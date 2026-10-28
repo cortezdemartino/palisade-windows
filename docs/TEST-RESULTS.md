@@ -1,5 +1,18 @@
 # Validation
 
+## Full feature plan and application cleanup barrier, October 27, 2026
+
+Starting Windows SHA: `7fcae472c041b1569233880cff96ae0a691bc7d1`, whose exact-SHA Windows CI run 40602184816 passed. Companion refreshed read-only at `ae89e414ec71a193094ef7cbee5ad678418ff6f6`. Risk: High, application exit/update and cleanup ownership. The complete feature ledger and W1-W10 plan keep all requested capabilities open until implemented and qualified.
+
+- `npm run check`: 157 application tests and configured syntax checks passed. Nine lifecycle groups and five added updater groups cover immediate/coalesced revocation, all-holder cleanup retention, reentrancy, failed/proof-only retry, invalid completion contracts, delayed status, profile flush, manager preparation before filesystem/spawn and cancellation while copying. Existing profile/updater signing/hash/channel, controls/permissions/notifications tests remain passing. Independent review separately passed all 28 focused lifecycle/updater/main-VM tests.
+- Source Electron desktop checks passed. Fresh Windows x64 NSIS packaging, native package integrity and packaged desktop/permissions/admission/native-bridge checks passed. The new actual Electron quit fixture keeps an owned window/process alive during failed/pending cleanup, reports pending status and exits only after the holder completes. Its holder is fake; no native input is exercised.
+- All five packaged capture fixture groups and all 14 packaged real-DTLS/fake-sink peer cases passed. The new main/updater/lifecycle ASAR bytes match source. Production npm audit reported zero vulnerabilities. Native sources and dependencies are unchanged from the baseline's passing 69-tests-per-configuration native/process/audit evidence; packaging rebuilt the locked default helper.
+- Current unsigned local installer SHA-256: `7c533ff428277170e975c505d39d652903cb48037be051bb9dc81148c3617a7a`. This is build evidence, not installation or release acceptance. The current push must establish its own Windows CI result; it is recorded in Windows#1 after execution.
+
+The future live coordinator must register actual authenticated child/release-holder completion; a direct guardian exit alone may leave surviving cleanup. No native coordinator/IPC, sensitive native UI guard, new mouse/keyboard/resource capability or production feature was activated by W1. Real OS input/stop, encrypted cross-client resource/media sessions, performance and installed-upgrade acceptance remain Not Verified. No private production signing key, installer execution, release signing/publication, tag change or deployment occurred.
+
+The official companion docs/42 owner-disabled Actions exception was inspected: equivalent exact-candidate managed-host local package, real-service, Chromium/Firefox and ciphertext verification replaces its CI/dispatch requirement. Missing companion CI alone is not a blocker. Unexecuted, skipped and host-limited cases remain Not Verified. Windows Actions remain enabled and required for its exact pushed revision.
+
 ## Owned remote input transport, October 27, 2026
 
 Starting Windows SHA: `9c683edc9b810a653165a28b7eca7b77ee7213d9`; companion remains `ae89e414ec71a193094ef7cbee5ad678418ff6f6`. The new transport is inactive and has no production caller, signing route or OS-input sink. It is a component checkpoint, not full Assist acceptance.

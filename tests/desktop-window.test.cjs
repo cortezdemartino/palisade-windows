@@ -119,7 +119,11 @@ test('tray close keeps the session alive, notification click restores the app, a
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
   const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, setDisplayMediaRequestHandler(fn) { this.display = fn; }, flushStorageData() {} };
   const app = Object.assign(new EventEmitter(), { setName() {}, setAppUserModelId() {}, requestSingleInstanceLock: () => true,
-    whenReady: () => Promise.resolve(), getPath: () => 'fixture-profile', getLoginItemSettings: () => ({ openAtLogin: false }), getVersion: () => '0.2.2', quit: () => app.emit('before-quit') });
+    whenReady: () => Promise.resolve(), isReady: () => true, getPath: () => 'fixture-profile', getLoginItemSettings: () => ({ openAtLogin: false }), getVersion: () => '0.2.2', quit: () => {
+      let prevented = false;
+      app.emit('before-quit', { preventDefault() { prevented = true; } });
+      if (!prevented) app.emit('will-quit');
+    } });
   class Notice extends EventEmitter { static isSupported() { return true; } constructor(options) { super(); this.options = options; } show() { notices.push(this); } }
   class Tray extends EventEmitter { setToolTip() {} setContextMenu(menu) { this.menu = menu; } }
   const electron = { app, powerMonitor: new EventEmitter(), screen: new EventEmitter(), clipboard: { writeText: text => { diagnosticText = text; } }, Notification: Notice, Tray, nativeImage: { createFromPath: () => ({}) }, session: { fromPartition: () => profile },
@@ -134,6 +138,7 @@ test('tray close keeps the session alive, notification click restores the app, a
     if (name === './assist/source-picker.cjs') return { chooseSource() {} };
     if (name === './assist/capture.cjs') return require('../src/assist/capture.cjs');
     if (name === './assist/build-policy.cjs') return require('../src/assist/build-policy.cjs');
+    if (name === './assist/lifecycle.cjs') return require('../src/assist/lifecycle.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {} }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');
@@ -166,6 +171,7 @@ test('tray close keeps the session alive, notification click restores the app, a
   assert.equal(granted, false);
   const quit = appMenu[0].submenu.find((item) => item.label === 'Quit');
   assert.equal(quit.accelerator, 'CmdOrCtrl+Q'); quit.click();
+  await new Promise(resolve => setImmediate(resolve));
   prevented = false; window.emit('close', { preventDefault: () => { prevented = true; } });
   assert.equal(prevented, false);
 });

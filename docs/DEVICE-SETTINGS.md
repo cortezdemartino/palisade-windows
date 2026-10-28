@@ -8,7 +8,9 @@ Settings apply immediately. Login remains disabled by default. Existing tray cho
 
 ## Security and recovery
 
-The hosted website has no privileged bridge. Only the isolated local controls view can issue the fixed actions. The local protocol serves three explicitly named interface files from the application archive. Navigation, subframe commands, arbitrary URLs and arbitrary file requests are denied. Diagnostics contain app/runtime versions, architecture, tray/login choices and update status, excluding account identifiers, paths, message contents and credentials. No profile clearing or destructive reset action is offered.
+The hosted website has no privileged device-settings bridge. Only the isolated local controls view can issue the fixed actions. The local protocol serves a fixed allowlist of interface files from the application archive. Navigation, subframe commands, arbitrary URLs and arbitrary file requests are denied. Diagnostics contain app/runtime versions, architecture, tray/login choices and update status, excluding account identifiers, paths, message contents and credentials. No profile clearing or destructive reset action is offered.
+
+The update action waits for application exit preparation before copying or launching the manager. Failed preparation leaves Palisade open and postpones the update. A pending quit appears in the application/tray menu and may produce a desktop notification; closing to tray still respects the saved preference. No native Assist setting is enabled by this lifecycle change.
 
 ## Verification
 

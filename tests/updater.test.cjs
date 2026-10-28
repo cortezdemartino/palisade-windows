@@ -5,7 +5,7 @@ const vm = require('node:vm');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
-async function harness({ response = 0, fail = false, release = null, networkFail = false, pending = false, packaged = true, realTransport, publicKey } = {}) {
+async function harness({ response = 0, fail = false, release = null, networkFail = false, pending = false, packaged = true, realTransport, publicKey, beforeManager = async () => {}, copyWait } = {}) {
   const calls = [], prompts = [], statuses = [];
   let quit = 0, clock = 0, networkCalls = 0;
   const timers = [], intervals = [], offers = [], signals = [];
@@ -16,7 +16,7 @@ async function harness({ response = 0, fail = false, release = null, networkFail
   const promises = {
     readFile: async file => file.endsWith('update-public-key.pem') ? (publicKey || 'test-public-key') : '[]',
     mkdtemp: async prefix => { calls.push(['mkdir', prefix]); return 'C:\\Temp\\manager-123'; },
-    copyFile: async (...args) => { calls.push(['copy', ...args]); if (fail) throw new Error('missing manager'); },
+    copyFile: async (...args) => { calls.push(['copy', ...args]); if (copyWait) await copyWait; if (fail) throw new Error('missing manager'); },
     rm: async (...args) => { calls.push(['cleanup', ...args]); }
   };
   const timer = (list, fn, delay) => { const entry = { fn, delay, active: true, unref() {} }; list.push(entry); return entry; };
@@ -42,6 +42,7 @@ async function harness({ response = 0, fail = false, release = null, networkFail
     } };
   vm.runInNewContext(await fs.readFile(path.join(__dirname, '../src/updates/updater.cjs'), 'utf8'), context);
   const controller = context.module.exports.createUpdateController(() => null, value => statuses.push(value), { now: () => clock,
+    beforeManager,
     onAvailable: (manifest, openManager) => offers.push({ manifest, openManager }),
     fetchFn: realTransport || (async (_url, { signal }) => {
       networkCalls++; signals.push(signal);
@@ -66,8 +67,57 @@ test('client delegates updates to a copied manager outside its installation and 
   assert.equal(launch[3].shell, false); assert.equal(h.quit(), 1);
 });
 test('cancel keeps the client running and creates no installer or manager files', async () => {
-  const h = await harness({ response: 1 }); await h.controller.openManager();
+  let preparations = 0;
+  const h = await harness({ response: 1, beforeManager: async () => { preparations++; } }); await h.controller.openManager();
   assert.equal(h.quit(), 0); assert.equal(h.calls.length, 0);
+  assert.equal(preparations, 0);
+});
+
+test('manager waits for the shared real cleanup barrier before copying, spawning or quitting', async () => {
+  const { createAssistLifecycle } = require('../src/assist/lifecycle.cjs');
+  const life = createAssistLifecycle(); let release, revoked = false;
+  const cleanup = new Promise(resolve => { release = resolve; });
+  life.hold({ revoke() { revoked = true; }, wait: () => cleanup });
+  const h = await harness({ beforeManager: reason => life.quiesce(reason) });
+  const opening = h.controller.openManager(); await h.settle();
+  assert.equal(revoked, true); assert.equal(life.accepting(), false);
+  assert.equal(h.calls.length, 0); assert.equal(h.quit(), 0);
+  await h.controller.openManager(); assert.equal(h.prompts.length, 1);
+  release(); await opening;
+  assert.equal(life.status().state, 'closed'); assert.equal(h.calls.filter(row => row[0] === 'spawn').length, 1); assert.equal(h.quit(), 1);
+});
+
+test('failed or invalid cleanup preparation postpones updates without a manager or bypass instruction', async () => {
+  for (const beforeManager of [async () => { throw Error('cleanup held'); }, () => false, async () => false]) {
+    const h = await harness({ beforeManager }); await h.controller.openManager();
+    assert.equal(h.calls.length, 0); assert.equal(h.quit(), 0);
+    assert.match(h.statuses.at(-1), /postponed/);
+    assert.match(h.prompts.at(-1).detail, /manager was not opened/);
+    assert.doesNotMatch(h.prompts.at(-1).detail, /repair|official.*manager/i);
+  }
+});
+
+test('missing exit preparation hook fails construction', async () => {
+  await assert.rejects(harness({ beforeManager: null }), /Exit preparation hook required/);
+});
+
+test('shutdown during cleanup cancels manager opening before any files are created', async () => {
+  let release; const preparation = new Promise(resolve => { release = resolve; });
+  const h = await harness({ beforeManager: () => preparation });
+  const opening = h.controller.openManager(); await h.settle();
+  h.controller.stop(); release(); await opening;
+  assert.equal(h.calls.length, 0); assert.equal(h.quit(), 0);
+});
+
+test('shutdown during manager copying removes only its temporary directory and never spawns', async () => {
+  let release; const copyWait = new Promise(resolve => { release = resolve; });
+  const h = await harness({ copyWait });
+  const opening = h.controller.openManager(); await h.settle();
+  assert(h.calls.some(row => row[0] === 'copy'));
+  h.controller.stop(); release(); await opening;
+  assert.equal(h.calls.some(row => row[0] === 'spawn'), false); assert.equal(h.quit(), 0);
+  assert.equal(h.calls.at(-1)[0], 'cleanup');
+  assert.equal(h.calls.at(-1)[1], 'C:\\Temp\\manager-123');
 });
 test('missing manager keeps client running and reports recovery without executing setup', async () => {
   const h = await harness({ fail: true }); await h.controller.openManager();
@@ -105,7 +155,8 @@ test('resume checks only when overdue and stops scheduling on shutdown', async (
   const h = await harness(); h.controller.start(); await h.settle();
   h.setClock(1000); h.powerMonitor.emit('resume'); await h.settle(); assert.equal(h.networkCalls(), 1);
   h.setClock(21600001); h.powerMonitor.emit('resume'); await h.settle(); assert.equal(h.networkCalls(), 2);
-  h.app.emit('before-quit'); assert.equal(h.powerMonitor.listenerCount('resume'), 0);
+  h.app.emit('before-quit'); assert.equal(h.powerMonitor.listenerCount('resume'), 1);
+  h.app.emit('will-quit'); assert.equal(h.powerMonitor.listenerCount('resume'), 0);
   assert.equal(h.timers.some(timer => timer.active), false); assert.equal(h.intervals[0].active, false);
   await h.controller.check(); assert.equal(h.networkCalls(), 2);
 });

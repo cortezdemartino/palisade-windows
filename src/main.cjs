@@ -10,6 +10,7 @@ const { installAssistBridge } = require('./assist/bridge.cjs');
 const { createCaptureController } = require('./assist/capture.cjs');
 const { chooseSource } = require('./assist/source-picker.cjs');
 const { captureEnabled } = require('./assist/build-policy.cjs');
+const { createAssistLifecycle, installQuitBarrier } = require('./assist/lifecycle.cjs');
 const { installChatNotifications } = require('./chat-notifications.cjs');
 const { createDesktopWindow } = require('./desktop-window.cjs');
 const {
@@ -33,11 +34,23 @@ const activeNotifications = new Set();
 let tray = null;
 let keepRunningInTray = false;
 let quitting = false;
+let exitWaiting = false;
 let lastExternalPromptAt = 0;
 let updaterController = null;
 let updateStatus = 'Updates: idle';
 let notificationBranding = Promise.resolve();
 let notificationStatus = 'No desktop notifications sent yet.';
+const assistLifecycle = createAssistLifecycle();
+// The live native coordinator must register its own retained child-exit holder
+// before admitting authority. This holder covers the existing capture lifecycle.
+assistLifecycle.hold({
+  revoke: () => { assistCapture?.stop(); },
+  wait: async () => { if (assistCapture?.busy()) throw Error('Capture cleanup incomplete'); },
+});
+async function prepareForExit(reason) {
+  await assistLifecycle.quiesce(reason);
+  if (app.isReady()) session.fromPartition(PARTITION).flushStorageData();
+}
 
 app.setName('Palisade');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
@@ -53,9 +66,24 @@ if (!app.requestSingleInstanceLock()) {
     mainContents?.focus();
   });
 
-  app.on('before-quit', () => {
-    quitting = true;
-    session.fromPartition(PARTITION).flushStorageData();
+  installQuitBarrier(app, {
+    prepare: prepareForExit,
+    onApproved: () => { exitWaiting = false; quitting = true; },
+    onWaiting: () => {
+      exitWaiting = true;
+      tray?.setToolTip('Palisade: stopping assistance before exit');
+      updateTrayMenu(); createApplicationMenu();
+      void notifyDesktop('Palisade is staying open while assistance and file transfers finish stopping. It will exit when cleanup completes.');
+    },
+    onBlocked: () => {
+      exitWaiting = false; quitting = false;
+      tray?.setToolTip('Palisade');
+      updateTrayMenu(); createApplicationMenu();
+      return dialog.showMessageBox({ type: 'warning', title: 'Palisade is still open',
+        message: 'Palisade could not safely finish preparing to exit.',
+        detail: 'Assistance cleanup or profile saving has not finished. Keep Palisade open, then try Quit again.',
+        buttons: ['Keep open'], noLink: true });
+    },
   });
 
   app.on('web-contents-created', (_event, webContents) => {
@@ -78,7 +106,7 @@ if (!app.requestSingleInstanceLock()) {
       updateTrayMenu();
       createApplicationMenu();
       refreshDeviceSettings?.();
-    }, { onAvailable: (manifest, openManager) => notifyDesktop(
+    }, { beforeManager: prepareForExit, onAvailable: (manifest, openManager) => notifyDesktop(
       'Palisade ' + manifest.version + ' is available. Open the update manager to install it.', openManager) });
     createApplicationMenu();
     updaterController.start();
@@ -178,9 +206,10 @@ function createMainWindow(profile) {
     if (keepRunningInTray) hideToTray();
   });
   window.on('close', (event) => {
-    if (!quitting && keepRunningInTray) {
+    if (!quitting) {
       event.preventDefault();
-      hideToTray();
+      if (keepRunningInTray) hideToTray();
+      else app.quit();
     }
   });
   window.on('closed', () => {
@@ -278,6 +307,7 @@ function updateTrayMenu() {
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: 'Open Palisade', click: openWindow },
+      ...(exitWaiting ? [{ label: 'Quit pending: stopping assistance', enabled: false }] : []),
       { label: 'Stop screen sharing and reload Palisade', enabled: assistCapture?.busy() === true, click: () => assistCapture?.stop() },
       trayPreferenceItem(),
       { type: 'separator' },
@@ -293,7 +323,6 @@ function updateTrayMenu() {
       {
         label: 'Quit Palisade',
         click: () => {
-          quitting = true;
           app.quit();
         },
       },
@@ -320,7 +349,7 @@ function createApplicationMenu() {
             detail: 'Windows x64 desktop client\nCopyright 2026 Onyx Operations Group\nApache-2.0. Palisade trademarks remain with their owner.', buttons: ['OK'],
           }) },
           { type: 'separator' },
-          { label: 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
+          { label: exitWaiting ? 'Quit pending: stopping assistance' : 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
         ],
       },
       {

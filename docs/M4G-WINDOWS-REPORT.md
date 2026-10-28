@@ -26,8 +26,9 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | Input suspension | Implemented, inactive | Independent input epoch; release/fence while resources retain separate authority; full renewal cannot restore input |
 | One-controller ownership | Implemented, inactive | Shared named-event lifetime across guardian/child; real two-process crash exclusion fixture |
 | Windows lifecycle | Experimental / Not Verified | Default desktop/SID/UIPI checks and release-only retry; physical lock/sleep/secure desktop tests pending |
+| Application quit/update ownership | Implemented for application | Shared barrier before exit/manager copy/spawn, pending status and retry; real Electron fixture uses a fake holder; native endpoint registration/physical cleanup acceptance pending |
 | Cross-client interoperability | Not Verified | No installed endpoint or full session tested |
-| Companion requirements | Blocked | Core native handoff and web adapter available; official CI evidence, resource data plane/helper authority/relay details and production issuer setup remain |
+| Companion requirements | Blocked | Core native handoff/web adapter available; remaining canonical resource/text/annotation/resume/reacquisition contracts, helper authority, relay, exact-candidate local High-risk evidence and production issuer setup remain; docs/42 owner-disabled Actions exception applies |
 | Performance | Not Verified | No invented latency, throughput or resource results |
 | Security review | Implemented for components | Capture cancellation/liveness and input ownership/polling findings resolved; product audit/acceptance pending |
 | Unit tests | Implemented | Current executed counts in TEST-RESULTS.md |
@@ -39,7 +40,7 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | Documentation | Implemented | Integration, capture, native architecture, threat model, user/operations/settings and companion prompt |
 | Issue tracking | Implemented via owner issues | Windows #1/#3/#4/#5, project #18/#33; exact checkpoint evidence posted after push |
 | Open owner interventions | Blocked | Companion changes, disposable-device acceptance and separate installation/activation/release approval |
-| Exact-SHA CI | Not Verified until hosted run | f553f4e passed run 40496936460; 2f250f6 failed capture route verification in run 40498962262; the current fix must establish its own result |
+| Exact-SHA Windows CI | Not Verified for current push until hosted run | Baseline 7fcae47 passed run 40602184816; the current plan/lifecycle push must establish its own result; historical 2f250f6 capture run remains failed |
 | Deployment | Blocked | No installer executed, production feature enabled or release published |
 | Limitations | Blocked / Not Verified | Images, transfer resume and unrestricted drag/drop unsupported; no unattended access |
 | Next integration | Blocked | Live coordinator, remote gateway/native IPC/capture wiring, canonical resource follow-up and real acceptance |

@@ -19,6 +19,7 @@ async function main() {
       ['session-policy-smoke.cjs', 'session-policy-result.json'],
       ['assist-smoke.cjs', 'assist-smoke-result.json'],
       ['assist-native-bridge-smoke.cjs', 'assist-native-bridge-result.json'],
+      ['assist-shutdown-smoke.cjs', 'assist-shutdown-result.json'],
       ['capture-admission-smoke.cjs', 'capture-admission-result.json'],
     ]) {
       const output = path.join(__dirname, '..', 'out', result);

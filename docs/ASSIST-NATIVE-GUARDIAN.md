@@ -24,6 +24,16 @@ Qualified trust is stored in issuer-qualified-v1.dpapi as a strict versioned ori
 
 For recovery, stop Assist first, revoke the affected endpoint enrollment and grants at the service, preserve the old record for review, and independently verify both old and new fingerprints. Use a reviewed release-pin migration or an explicitly reviewed administrator recovery procedure. There is no automatic reset, fallback to HTTPS or live key replacement. Never delete the endpoint identity to make a mismatch disappear. Re-enrollment and issuer recovery are not yet wired into the application UI, and their physical acceptance remains Not Verified.
 
+## Application exit and update ownership
+
+The application now shares one trusted-main lifecycle barrier between Quit and the update manager. Holders register before admitting authority, revoke synchronously and supply Promise<void> only after their owned resources and cleanup children have exited. All holders are revoked before any cleanup wait; new holders are refused after shutdown starts. A failed wait retains ownership and allows a proof-only retry without reopening authority. Normal holder completion also retains its record until cleanup is confirmed.
+
+The manager requires this preparation hook before creating/copying/spawning its executable. Stop during preparation or copying prevents launch. Update polling stops on will-quit, so a prevented quit does not silently disable automatic checks. The quit handler keeps the window alive until preparation and profile flush complete, coalesces repeated requests, reports pending cleanup and retries failures. No timeout kills a holder. A failed exit attempt requires completing exit/relaunch before new Assist authority can be admitted by this lifecycle instance.
+
+This is application wiring, not proof of native child cleanup: the current holder covers existing capture behavior, and the live coordinator must register the actual endpoint/release holders. The real Electron quit fixture uses a fake holder and confirms failed/pending cleanup keeps the window/process open, progress is reported, profile work waits, and retry exits only after completion. Actual native/OS/installed-upgrade acceptance remains required.
+
+The direct guardian's exit must not resolve the holder if an owned release-only child survives. The live broker needs authenticated evidence that every owned cleanup holder has completed and exited, including crash paths. Process-name polling or elapsed time does not supply that proof.
+
 ## Owned remote input transport
 
 The inactive trusted-main peer uses an app-owned sandboxed window and isolated preload. It has no hosted-page API, Node integration or permission grants. Its factory defaults disabled and production does not call it. The coordinator must supply a session and helper fingerprint from a grant independently verified by the native runtime. The transport itself cannot authorize input.
