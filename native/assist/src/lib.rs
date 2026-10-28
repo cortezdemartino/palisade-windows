@@ -6,6 +6,7 @@ pub mod grant;
 pub mod guard;
 pub mod input;
 pub mod issuer;
+pub mod live;
 pub mod statements;
 pub mod stream;
 #[cfg(windows)]

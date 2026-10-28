@@ -4,6 +4,10 @@ pub const MAX_FRAME: usize = 16_384;
 
 // Little-endian length prefix. Reject before allocating; EOF mid-frame is fatal.
 pub fn read_frame(reader: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
+    read_bounded(reader, MAX_FRAME)
+}
+
+pub(crate) fn read_bounded(reader: &mut impl Read, limit: usize) -> io::Result<Option<Vec<u8>>> {
     let mut prefix = [0u8; 4];
     match reader.read(&mut prefix[..1])? {
         0 => return Ok(None),
@@ -12,7 +16,7 @@ pub fn read_frame(reader: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
     }
     reader.read_exact(&mut prefix[1..])?;
     let length = u32::from_le_bytes(prefix) as usize;
-    if length == 0 || length > MAX_FRAME {
+    if length == 0 || length > limit {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "frame-size"));
     }
     let mut data = vec![0; length];
@@ -21,7 +25,11 @@ pub fn read_frame(reader: &mut impl Read) -> io::Result<Option<Vec<u8>>> {
 }
 
 pub fn write_frame(writer: &mut impl Write, data: &[u8]) -> io::Result<()> {
-    if data.is_empty() || data.len() > MAX_FRAME {
+    write_bounded(writer, data, MAX_FRAME)
+}
+
+pub(crate) fn write_bounded(writer: &mut impl Write, data: &[u8], limit: usize) -> io::Result<()> {
+    if data.is_empty() || data.len() > limit {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "frame-size"));
     }
     writer.write_all(&(data.len() as u32).to_le_bytes())?;

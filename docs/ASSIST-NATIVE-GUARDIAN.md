@@ -1,6 +1,8 @@
 # Native Assist components
 
-Status, October 26, 2026: **Experimental, inactive**. Production main/preload do not start or expose these components. The packaged helper has no sensitive Cargo features. This is not a full Assist test candidate.
+Status, October 28, 2026: **Experimental, inactive**. Production main/preload do not start or expose these components. The packaged helper has no sensitive Cargo features. This is not a full Assist test candidate.
+
+The separate [private live channel](ASSIST-LIVE-CHANNEL.md) now implements typed framing, independent cancellation/liveness and application lifecycle ownership. Its negotiated cleanup scope is strictly channel-only: no runtime, input executor, identity or resource operation can start through it. Diagnostic v1 remains unchanged. Runtime integration and authenticated cleanup ownership through descendant crashes remain W2 work; the new channel cannot attest them.
 
 ## Process and authority
 

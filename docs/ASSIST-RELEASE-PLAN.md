@@ -4,6 +4,10 @@ Baseline: Windows `7fcae472c041b1569233880cff96ae0a691bc7d1`, exact-SHA CI [4060
 
 ## Delivery commitment and ownership
 
+Progress, October 28: W1 is committed as `7afbc26be921f12ec2b722b4948a2025d7434453` and passed exact-SHA Windows CI [40610053435](https://github.com/cortezdemartino/palisade-windows/actions/runs/40610053435). W2 now has a separately negotiated, non-authorizing [private channel](ASSIST-LIVE-CHANNEL.md) with bounded queues, independent cancellation/liveness and lifecycle-before-spawn ownership. Its proof is channel-only, so it cannot attest active runtime/descendant cleanup. W2 remains unfinished until that ownership and the runtime are connected safely.
+
+Companion refreshed read-only at `82ac7de4ec2bbd5cc2fd48f3d15dbde6ea5fd375`. Docs/50 now supplies text/file channels, publisher local actions, browser-owned helper resources, relay configuration, track-name corroboration, safety capacity and cleanup events. These are integration work for Windows, not missing foundation requests for Claude. Its current contract explicitly excludes images, automatic clipboard sync, resume and drag/drop; they remain open accepted requirements. Reconcile fresh-control acquisition, complete keyboard semantics, direct annotations and real relay/joint qualification through the updated handoff.
+
 Complete all Windows features below, including their live wiring, user interfaces, negative tests, packaging and documentation. No placeholder, mock native endpoint, permanently disabled route or component-only result completes a feature. Missing companion contracts block the affected feature; they do not remove it from scope.
 
 Work on the existing Windows main checkout. No branches, worktrees, pull requests, force pushes or discarded concurrent work. The companion remains read-only here; Claude receives the exact versioned requirements in [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md). Reuse the existing bridge, native runtime, grant/lease verifier, capture and resource brokers. Do not create a competing service protocol or duplicate grant registry.
@@ -85,7 +89,7 @@ Verify fake sinks and actual process cleanup first. On approved disposable hardw
 
 ### W5. Complete clipboard and file data paths
 
-Obtain the committed canonical resource handoff first. Implement native send/receive actions and role-specific authority, connecting the existing clipboard and session-owned file brokers. A publisher lease never authorizes the helper's local resources. Resource-only sessions must work without acquiring keyboard/mouse permission.
+Integrate the committed docs/50 resource handoff and obtain its missing full-feature extensions. Implement native send/receive actions and role-specific authority, connecting the existing clipboard and session-owned file brokers. A publisher lease never authorizes the helper's local resources; the current companion uses normal browser gestures there. Resource-only sessions must work without acquiring keyboard/mouse permission.
 
 Text/image directions remain separate and default Off. Manual copy/paste and sync require explicit local/session permission, bounded formats, rate/size limits, loop prevention and immediate cleanup. Use reviewed decoding and encryption; do not log contents or promise automatic secret detection.
 
@@ -107,7 +111,7 @@ Verify UI behavior and exact native side effects together. Preserve window contr
 
 ### W7. Finish compatibility and network recovery
 
-Consume exact committed web types/fixtures. Fix/reconcile the web client's eight-call safety-queue bypass through Claude. Use only approved STUN/TURN configuration and credential lifetimes; keep private certificates in their owning peers. Test real relay, loss, delayed packets, teardown, source removal, service/renderer restart and stale session/generation rejection. Never silently restore control, clipboard or transfer permission after revocation.
+Consume exact committed web types/fixtures, including docs/50's separate four-call safety budget. Reconcile it with Windows' existing reserved safety path. Use the new operator-owned endpoint ICE route and approved credential lifetimes; keep private certificates in their owning peers. Test real relay, loss, delayed packets, teardown, source removal, service/renderer restart and stale session/generation rejection. Never silently restore control, clipboard or transfer permission after revocation.
 
 The peer's current 100ms queue bound measures residence after main receives IPC, not network/SCTP age. Resolve and test stale-input policy across transport interruption with the canonical contract before WAN acceptance. Separate media, input, collaboration and resource security evidence.
 

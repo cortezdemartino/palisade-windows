@@ -1,6 +1,8 @@
 # M4G-WINDOWS-FULL implementation report
 
-Checkpoint: October 27, 2026. **Full Assist: Blocked.** Windows has reviewed, tested inactive components; the product is not release-ready. Companion source remains read-only.
+Checkpoint: October 28, 2026. **Full Assist: Blocked.** Windows has reviewed, tested inactive components; the product is not release-ready. Companion source remains read-only.
+
+Current continuation starts at `7afbc26be921f12ec2b722b4948a2025d7434453` (Windows CI 40610053435 passed). The new [private native channel](ASSIST-LIVE-CHANNEL.md) implements bounded typed framing, independent urgent cancellation/liveness and lifecycle registration before spawn. Matching channel-only proof plus actual clean exit is required. It has no native runtime or resource authority. Runtime cleanup, crash-surviving descendants, guarded consent and source/signing/peer/resource wiring remain Windows work. Latest companion inspected: `82ac7de4ec2bbd5cc2fd48f3d15dbde6ea5fd375`; docs/50's initial text/file/relay/safety/cleanup handoff is now available for integration. Images, sync, resume and drag/drop remain explicitly unsupported there and open in the complete feature ledger. Current executed evidence is in TEST-RESULTS.md.
 
 Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d81f4c72e6cdfd1da. Earlier component work began at c76d3370a770e811e4997d61cab738a9a9a90d3e. Exact final candidate and its CI URL are recorded in the pushed commit/issue evidence. Companion inspected read-only: ae89e414ec71a193094ef7cbee5ad678418ff6f6; canonical native v1 validator is unchanged since 8f9c2a4.
 
@@ -28,7 +30,7 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | Windows lifecycle | Experimental / Not Verified | Default desktop/SID/UIPI checks and release-only retry; physical lock/sleep/secure desktop tests pending |
 | Application quit/update ownership | Implemented for application | Shared barrier before exit/manager copy/spawn, pending status and retry; real Electron fixture uses a fake holder; native endpoint registration/physical cleanup acceptance pending |
 | Cross-client interoperability | Not Verified | No installed endpoint or full session tested |
-| Companion requirements | Blocked | Core native handoff/web adapter available; remaining canonical resource/text/annotation/resume/reacquisition contracts, helper authority, relay, exact-candidate local High-risk evidence and production issuer setup remain; docs/42 owner-disabled Actions exception applies |
+| Companion requirements | Blocked | Initial docs/50 resource/relay/safety/cleanup contract available; full-feature image/sync/resume/drop, keyboard/annotation/reacquisition reconciliation, real relay/joint evidence and production issuer remain; docs/42 owner-disabled Actions exception applies |
 | Performance | Not Verified | No invented latency, throughput or resource results |
 | Security review | Implemented for components | Capture cancellation/liveness and input ownership/polling findings resolved; product audit/acceptance pending |
 | Unit tests | Implemented | Current executed counts in TEST-RESULTS.md |

@@ -29,7 +29,7 @@ async function main() {
   );
   const tests = spawnSync(
     process.execPath,
-    ['--test', 'tests/assist-guardian-process.native.cjs'],
+    ['--test', 'tests/assist-guardian-process.native.cjs', 'tests/assist-live-process.native.cjs'],
     {
       cwd: root,
       windowsHide: true,

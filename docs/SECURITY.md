@@ -53,6 +53,8 @@ The current v1 Assist API describes capabilities only and is accepted by the pin
 
 ## Inactive native guardian
 
+The separately negotiated private live channel is now an inactive channel-only foundation. It has no generic command signer or sensitive operation. It registers application ownership before spawn, reserves shutdown outside ordinary work, revokes independently of blocking dispatch/output and requires the exact launch-bound cleanup scope plus actual successful process exit. Unknown/extra/duplicate messages and unproven exits fail closed. This proof must never stand in for active runtime or surviving-child cleanup; that ownership remains a required integration gate. See [the channel contract](ASSIST-LIVE-CHANNEL.md).
+
 The [guardian foundation](ASSIST-NATIVE-GUARDIAN.md) adds current-user DPAPI identity, strict Ed25519 issuance diagnostics, bounded inherited pipes, parent/user/session checks and an independent watchdog. It accepts no current Assist authority and is not started by production main/preload. Its binary hash manifest is inside the integrity-protected ASAR; native dependency audit and package verification are required before signing. Identity corruption fails closed without automatic reset. Directory replacement races by same-user malware, initial input-desktop qualification and eventual held-key crash recovery remain unqualified. No remote input, capture, OS clipboard or file transfer is activated.
 
 ## Current inactive native and capture components

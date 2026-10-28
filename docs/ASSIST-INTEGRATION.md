@@ -1,6 +1,6 @@
 # Windows Assist integration
 
-Component checkpoint, October 27, 2026. **Full Assist: Blocked.** Windows now includes dormant native input, local consent, independent signed-lease polling and resource brokers. They are not connected to the hosted application. Production still reports capture unavailable and nativeEndpoint absent. This is not a full Assist release candidate.
+Component checkpoint, October 28, 2026. **Full Assist: Blocked.** Windows now includes dormant native input, local consent, independent signed-lease polling and resource brokers. They are not connected to the hosted application. Production still reports capture unavailable and nativeEndpoint absent. This is not a full Assist release candidate.
 
 ## Compatible contracts
 
@@ -8,7 +8,7 @@ The description-only `palisade.assist.bridge` v1 remains unchanged. Its three me
 
 Windows verifies the canonical stream/group control v2 contract at companion commit `c0778935a6a08303bf7a9d7de8f2fa75aa8ef536`. Exact source, schema and fixtures, with Git blob and LF-normalized SHA-256 provenance, are retained under tests/fixtures. Grants bind both accounts/devices, helper DTLS fingerprint, endpoint, room, stream SID, generation and an immutable deadline up to two hours. Separate twenty-second signed leases determine which grants may act. Native polling uses the endpoint key rather than Matrix tokens or page cookies.
 
-The companion source remains read-only. Companion ae89e414ec71a193094ef7cbee5ad678418ff6f6 implements the web native adapter, shared-certificate input peer, virtual keyboard, signaling and encrypted capture publication. Its browser acceptance uses a mock endpoint and does not qualify Windows. Native bridge v1 remains the unchanged docs/49 contract from 8f9c2a45da7017ee36a9567f76413da53bd76075; its exact validator blob is 62f29f433dbc20de881108b635a97eee3bde6827. The earlier service authority fixes were independently source-reviewed. Companion docs/42 requires equivalent exact-candidate local verification while its Actions remain owner-disabled; missing CI alone is not a blocker under that policy. Resource transport/actions, helper authority, relay configuration and production pin setup remain dependencies. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+The companion source remains read-only. The latest inspection is `82ac7de4ec2bbd5cc2fd48f3d15dbde6ea5fd375`. In addition to the existing web native adapter, shared-certificate input peer, virtual keyboard, signaling and encrypted capture publication, docs/50 now specifies resource channels/local actions, browser-owned helper resources, relay credentials, track-name corroboration, separate safety capacity and cleanup events. Web resource flows are documented as browser-tested against a mock endpoint, not real Windows acceptance. Windows must implement and reconcile this separately negotiated extension. Images, automatic clipboard sync, resume and drag/drop remain unsupported by that companion contract and remain open full-feature requirements. Native bridge v1 remains the pinned docs/49 contract; no existing fixture provenance is silently replaced. Companion docs/42 requires equivalent exact-candidate local verification while Actions remain owner-disabled. Missing CI alone is not a blocker. Production issuer setup and real relay/joint acceptance remain open. See [the companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
 
 ## Status
 
@@ -25,7 +25,8 @@ The companion source remains read-only. Companion ae89e414ec71a193094ef7cbee5ad6
 | Native capture | Experimental, inactive | Canonical operation-labelled stream and one-time tentative SID binding reuse existing picker/provider; real bridge/app-owned window pixels and source-stop pass; live coordinator and cross-client publication acceptance remain |
 | Native bridge | Implemented, inactive | Exact two-member native v1 surface, strict messages, live-document witness, private event nonce, bounded requests, cancellation and terminal cleanup scopes; real Electron fixture uses a fake coordinator |
 | Owned remote DTLS gateway | Experimental, inactive | Actual helper certificate checks, native-admission boundary, single control channel, bounded packets, cancellation and retained cleanup; real Electron tests use a fake native sink |
-| Live native coordinator | In progress / Blocked | Transport signing, canonical peer/resource actions and native IPC still need integration and qualification |
+| Private live channel | Implemented, inactive | Separate closed protocol, bounded reader/writer, independent pulses/cancellation, lifecycle-before-spawn and nonce/scope plus actual exit proof; channel-only, no runtime authority |
+| Live native coordinator | Planned / Blocked | Runtime/descendant cleanup ownership, guarded UI, signing, source/peer/resource actions and real integration remain; channel-only proof cannot attest active children |
 | Virtual keyboard, full toolbar and annotations | Experimental / Blocked | Companion web controls exist; Windows endpoint integration and real acceptance remain |
 | Complete cross-client Assist | Not Verified | No installed endpoint or real encrypted control/transfer session exercised |
 | Activation/release | Blocked | Integration review, disposable-device qualification and separate owner approval required |
@@ -44,7 +45,7 @@ Clipboard defaults Off and supports bounded text only. Sync additionally require
 
 ## Verification and next integration
 
-The executable sequence, dependencies and release gates are in [ASSIST-RELEASE-PLAN.md](ASSIST-RELEASE-PLAN.md). The publisher-side resource adapter does not authorize a Windows helper's local files or clipboard; that role requires its own finalized native authority.
+The executable sequence, dependencies and release gates are in [ASSIST-RELEASE-PLAN.md](ASSIST-RELEASE-PLAN.md). The [private live channel](ASSIST-LIVE-CHANNEL.md) completes only the non-authorizing portion of W2. The publisher-side resource adapter does not authorize a Windows helper's local files or clipboard; docs/50 uses ordinary browser gestures/permissions on that side. Any later native-helper resource mode needs independent native authority.
 
 See [isolated capture](ASSIST-CAPTURE.md), [native components](ASSIST-NATIVE-GUARDIAN.md), [test results](TEST-RESULTS.md), [threat model](ASSIST-THREAT-MODEL.md) and [milestone report](M4G-WINDOWS-REPORT.md). A passing build or probe does not qualify physical input, issuer enrollment, encrypted viewing or cross-client transfer.
 

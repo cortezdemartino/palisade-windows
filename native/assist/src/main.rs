@@ -65,6 +65,12 @@ fn run() -> Result<(), &'static str> {
 fn run() -> Result<(), &'static str> {
     use palisade_assist_guardian::windows::{lifecycle::NativeStop, parent::Parent};
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.len() == 2 && ["--live", "--live-probe"].contains(&args[0].as_str()) {
+        return palisade_assist_guardian::windows::live::run(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[0] == "--live-probe",
+        );
+    }
     if (args.len() == 3 && args[0] == "--executor-probe")
         || (args.len() == 4 && args[0] == "--executor")
     {

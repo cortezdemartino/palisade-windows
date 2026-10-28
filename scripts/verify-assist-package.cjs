@@ -16,7 +16,7 @@ async function verifyAssistPackage(resources = path.resolve('out/win-unpacked/re
     await fs.writeFile(manifest, extractFile(archive, path.normalize('src/assist/guardian-integrity.json')));
     await verifyGuardian(path.join(resources, 'assist/Palisade-Assist.exe'), manifest);
     const main = extractFile(archive, path.normalize('src/main.cjs')).toString('utf8');
-    if (/openGuardian|assist[\\/]guardian\.cjs/.test(main)) throw new Error('Unqualified native helper must not start in production');
+    if (/openGuardian|openLiveChannel|assist[\\/](?:guardian|live-channel)\.cjs/.test(main)) throw new Error('Unqualified native helper must not start in production');
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
 module.exports = { verifyAssistPackage };

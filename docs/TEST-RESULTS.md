@@ -1,5 +1,17 @@
 # Validation
 
+## Private live channel checkpoint, October 28, 2026
+
+Starting Windows SHA: `7afbc26be921f12ec2b722b4948a2025d7434453`; its exact-SHA Windows CI run 40610053435 passed. Companion refreshed read-only at `82ac7de4ec2bbd5cc2fd48f3d15dbde6ea5fd375`; docs/50 now supplies the initial text/file/relay/cleanup extension. No companion acceptance was executed by the Windows agent.
+
+- `npm run check`: 166 application tests and configured syntax checks passed. Nine new live-channel groups cover lifecycle-before-spawn, cancellation during verification, failed launches, exact cleanup scope/nonce plus actual exit, full ordinary capacity with reserved shutdown, late results, fragmented/coalesced responses, malformed/duplicate/UTF-8/oversized output, backpressure and external abort.
+- Rust format/strict Clippy passed. The native suite passed 72 tests in each default/all-features configuration: 49 library, 12 executor, four input-model and seven stream-authority tests. A first run exposed Serde's internally tagged unit-variant acceptance of extra fields; explicit empty struct command variants fixed it, and the suite passed afterward. Diagnostic framing remains 16,384 bytes; only the separate private protocol uses 65,536.
+- Sixteen actual Windows subprocess groups passed in each configuration, plus the hidden-startup visibility fixture. New live probes repeat adjacent handshake/shutdown, interrupt eight stalled calls, maintain pulses during a 5.5-second ordinary wait, refuse malformed/replayed/partial/unsafe frames, bound queue/output pressure, detect parent death and retain failed lifecycle ownership after an unproven probe crash. No probe injects input, opens an identity/clipboard or starts a native session.
+- Fresh Windows x64 NSIS packaging and native integrity passed. Packaged desktop/permissions/admission/quit checks, all five capture groups and all 14 actual-DTLS/fake-sink peer cases passed. The new channel and existing main ASAR bytes match source. The sixteen Chromium bad-IPC terminations are intentional admission negatives. Locked native and production npm audits found zero vulnerabilities.
+- Independent read-only review cleared the inactive channel-only slice after the shutdown metadata-publication race was fixed and independently passed the initial eight JavaScript groups. A ninth launch-failure group was subsequently added and passed locally. Native/runtime cleanup panics and crash-surviving descendants remain pre-authority integration requirements, not qualified by these tests.
+
+Unsigned local installer SHA-256: `23034c283f58ebd2b173146f23820c578b9b7b0eece6b5431f8b7a67de52acf3`. The new push needs its own exact-SHA Windows CI result, recorded in Windows#1 after execution. No installation, signing, native activation or release publication occurred. Full Assist remains Blocked: this channel cannot start the runtime or attest active input/resource/descendant cleanup. Physical Windows, encrypted joint sessions, working TURN, performance and installed-upgrade acceptance remain Not Verified.
+
 ## Full feature plan and application cleanup barrier, October 27, 2026
 
 Starting Windows SHA: `7fcae472c041b1569233880cff96ae0a691bc7d1`, whose exact-SHA Windows CI run 40602184816 passed. Companion refreshed read-only at `ae89e414ec71a193094ef7cbee5ad678418ff6f6`. Risk: High, application exit/update and cleanup ownership. The complete feature ledger and W1-W10 plan keep all requested capabilities open until implemented and qualified.
