@@ -55,9 +55,10 @@ pub fn now() -> Result<u64, &'static str> {
 }
 pub struct LeasePoller {
     cancel: Arc<AtomicBool>,
-    worker: Option<thread::JoinHandle<()>>,
+    worker: crate::cleanup::RetainedWorker,
     gate: Arc<Mutex<SessionGate>>,
     on_loss: Arc<dyn Fn() + Send + Sync>,
+    cleanup_failed: bool,
 }
 fn apply_response(
     guard: &mut SessionGate,
@@ -150,12 +151,12 @@ impl LeasePoller {
                         guard.stop();
                     }
                     on_loss();
-                    return;
+                    return Ok(());
                 }
                 // Five seconds from request start, not five seconds after a slow response.
                 while started.elapsed() < Duration::from_secs(5) {
                     if flag.load(Ordering::SeqCst) {
-                        return;
+                        return Ok(());
                     }
                     thread::sleep(Duration::from_millis(25));
                     let invalid = gate
@@ -168,31 +169,52 @@ impl LeasePoller {
                         .unwrap_or(true);
                     if invalid {
                         on_loss();
-                        return;
+                        return Ok(());
                     }
                 }
             }
+            Ok(())
         });
         Self {
             cancel,
-            worker: Some(worker),
+            worker: crate::cleanup::RetainedWorker::new(worker),
             gate: retained_gate,
             on_loss: retained_loss,
+            cleanup_failed: false,
+        }
+    }
+    pub(crate) fn cancel_flag(&self) -> Arc<AtomicBool> {
+        self.cancel.clone()
+    }
+    pub fn finish(&mut self) -> Result<(), &'static str> {
+        self.cancel.store(true, Ordering::SeqCst);
+        let mut guard = self.gate.lock().unwrap_or_else(|error| {
+            self.cleanup_failed = true;
+            error.into_inner()
+        });
+        guard.stop();
+        drop(guard);
+        if crate::cleanup::attempt(|| {
+            (self.on_loss)();
+            Ok(())
+        })
+        .is_err()
+        {
+            self.cleanup_failed = true;
+        }
+        if self.worker.join().is_err() {
+            self.cleanup_failed = true;
+        }
+        if self.cleanup_failed {
+            Err("lease-cleanup-failed")
+        } else {
+            Ok(())
         }
     }
 }
 impl Drop for LeasePoller {
     fn drop(&mut self) {
-        self.cancel.store(true, Ordering::SeqCst);
-        if let Ok(mut guard) = self.gate.lock() {
-            guard.stop();
-        }
-        (self.on_loss)();
-        if let Some(worker) = self.worker.take() {
-            if worker.thread().id() != thread::current().id() {
-                let _ = worker.join();
-            }
-        }
+        let _ = crate::cleanup::attempt(|| self.finish());
     }
 }
 #[cfg(test)]

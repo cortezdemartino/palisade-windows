@@ -520,6 +520,108 @@ fn closing_a_session_does_not_wait_for_its_busy_native_operation() {
     worker.join().unwrap();
 }
 #[test]
+fn urgent_resource_revocation_does_not_wait_for_registry_or_authority_locks() {
+    let fixture = Fixture::new();
+    let gate = fixture.gate.lock().unwrap();
+    let operations = fixture.files.state.operations.lock().unwrap();
+    let revoker = fixture.files.revoker();
+    let started = Instant::now();
+    revoker.revoke();
+    fixture.files.close();
+    assert!(started.elapsed() < Duration::from_millis(250));
+    assert!(fixture.files.state.closed.load(Ordering::SeqCst));
+    drop(operations);
+    drop(gate);
+    fixture.files.wait_cleanup().unwrap();
+}
+#[test]
+fn cleanup_waits_for_a_selecting_operation_and_both_owned_stores() {
+    let fixture = Fixture::new();
+    let files = fixture.files.clone();
+    let send = files
+        .request_send(SEND, "transfer_retained_select")
+        .unwrap();
+    let (entered, entering) = mpsc::channel();
+    let (release, released) = mpsc::channel();
+    let selection = thread::spawn(move || {
+        assert!(
+            files
+                .select_with(&send, |_store, _op| {
+                    entered.send(()).unwrap();
+                    released.recv_timeout(Duration::from_secs(3)).unwrap();
+                    Err("fixture-cancelled")
+                })
+                .is_err()
+        );
+    });
+    entering.recv_timeout(Duration::from_secs(3)).unwrap();
+    let files = fixture.files.clone();
+    let (done, completed) = mpsc::channel();
+    let waiting = thread::spawn(move || {
+        done.send(files.wait_cleanup()).unwrap();
+    });
+    assert!(completed.recv_timeout(Duration::from_millis(50)).is_err());
+    release.send(()).unwrap();
+    selection.join().unwrap();
+    assert_eq!(
+        completed.recv_timeout(Duration::from_secs(3)).unwrap(),
+        Ok(())
+    );
+    waiting.join().unwrap();
+    fixture.files.wait_cleanup().unwrap();
+    assert!(fixture.empty());
+}
+#[test]
+fn poisoned_registry_is_recovered_only_for_release_and_never_reports_success() {
+    let fixture = Fixture::new();
+    let receive = fixture
+        .files
+        .request_receive(RECEIVE, "transfer_poisoned_cleanup", metadata())
+        .unwrap();
+    fixture
+        .selected_receive(&receive, &fixture.root.join("poison.txt"))
+        .unwrap();
+    let files = fixture.files.clone();
+    assert!(
+        thread::spawn(move || {
+            let _held = files.state.operations.lock().unwrap();
+            panic!("intentional registry poison");
+        })
+        .join()
+        .is_err()
+    );
+    assert!(fixture.files.wait_cleanup().is_err());
+    assert!(fixture.files.wait_cleanup().is_err());
+    assert!(fixture.empty());
+    assert!(!fixture.root.join("poison.txt").exists());
+}
+#[test]
+fn an_empty_operation_registry_cannot_hide_either_busy_store() {
+    let fixture = Fixture::new();
+    let sending = fixture.files.state.store(Direction::Send).lock().unwrap();
+    let receiving = fixture
+        .files
+        .state
+        .store(Direction::Receive)
+        .lock()
+        .unwrap();
+    let files = fixture.files.clone();
+    let (done, complete) = mpsc::channel();
+    let waiter = thread::spawn(move || {
+        done.send(files.wait_cleanup()).unwrap();
+    });
+    assert!(complete.recv_timeout(Duration::from_millis(50)).is_err());
+    drop(sending);
+    assert!(complete.recv_timeout(Duration::from_millis(50)).is_err());
+    drop(receiving);
+    assert_eq!(
+        complete.recv_timeout(Duration::from_secs(3)).unwrap(),
+        Ok(())
+    );
+    waiter.join().unwrap();
+    fixture.files.wait_cleanup().unwrap();
+}
+#[test]
 fn expired_covering_lease_cancels_all_file_work_without_waiting_for_packets() {
     let fixture = Fixture::new();
     let receive = fixture

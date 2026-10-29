@@ -29,6 +29,7 @@ Starting Windows revision for this bridge continuation: a7d381b2b92d0bf7f23c9d4d
 | One-controller ownership | Implemented, inactive | Shared named-event lifetime across guardian/child; real two-process crash exclusion fixture |
 | Windows lifecycle | Experimental / Not Verified | Default desktop/SID/UIPI checks and release-only retry; physical lock/sleep/secure desktop tests pending |
 | Application quit/update ownership | Implemented for application | Shared barrier before exit/manager copy/spawn, pending status and retry; real Electron fixture uses a fake holder; native endpoint registration/physical cleanup acceptance pending |
+| Native revocation/retained cleanup | Implemented, inactive | Atomic revokers, separate joins, retained/sticky failed owners, exact-grant consent, two-store/watcher completion and actual release panic probe; live scope/descendant/physical proof pending |
 | Cross-client interoperability | Not Verified | No installed endpoint or full session tested |
 | Companion requirements | Blocked | Initial docs/50 resource/relay/safety/cleanup contract available; full-feature image/sync/resume/drop, keyboard/annotation/reacquisition reconciliation, real relay/joint evidence and production issuer remain; docs/42 owner-disabled Actions exception applies |
 | Performance | Not Verified | No invented latency, throughput or resource results |

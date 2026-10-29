@@ -25,7 +25,7 @@ app.whenReady().then(async () => {
   await desktop.contents.executeJavaScript('document.getElementById("dm").innerHTML = "<span class=rail__badge>2</span>"; document.getElementById("dm").setAttribute("aria-label", "Direct messages, 2 unread")');
   await waitForCount(2); assert.equal(snapshots.at(-1).baseline, false);
   await desktop.contents.executeJavaScript('document.getElementById("dm").setAttribute("aria-label", "Direct messages")');
-  await pause(300); assert.equal(snapshots.at(-1).count, 0);
+  await waitForCount(0);
   const unread = nativeImage.createFromPath(path.join(root, 'assets/icon-unread.png'));
   if (process.env.PALISADE_WINDOW_SMOKE_ASAR) {
     const brandingIcon = nativeImage.createFromPath(path.join(path.dirname(root), 'notification-icon.png'));

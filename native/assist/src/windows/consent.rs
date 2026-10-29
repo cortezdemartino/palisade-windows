@@ -27,17 +27,33 @@ pub enum Decision {
 }
 struct Context {
     cancel: Arc<AtomicBool>,
+    session_stop: Option<Arc<AtomicBool>>,
+    input_stop: Option<Arc<AtomicBool>>,
     result: Arc<Mutex<Option<bool>>>,
     until: Instant,
     alive: Cell<bool>,
 }
+impl Context {
+    fn cancelled(&self) -> bool {
+        self.cancel.load(Ordering::SeqCst)
+            || self
+                .session_stop
+                .as_ref()
+                .is_some_and(|s| s.load(Ordering::SeqCst))
+            || self
+                .input_stop
+                .as_ref()
+                .is_some_and(|s| s.load(Ordering::SeqCst))
+    }
+}
 pub struct Prompt {
     cancel: Arc<AtomicBool>,
     result: Arc<Mutex<Decision>>,
-    worker: Option<thread::JoinHandle<()>>,
+    worker: crate::cleanup::RetainedWorker,
     gate: Arc<Mutex<SessionGate>>,
     grant_id: String,
     delivered: bool,
+    cleanup_failed: bool,
 }
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
@@ -68,15 +84,33 @@ fn expiry(time: u64) -> Result<String, &'static str> {
         ))
     }
 }
+// Independent capability decisions must not be invalidated by another grant's
+// epoch. The exact original grant, own revocation and session clock still bind it.
+fn approve_current(
+    gate: &mut SessionGate,
+    offered: &StreamGrant,
+    time: u64,
+) -> Result<(), &'static str> {
+    let current = gate.pending_grant(&offered.grant_id, time)?;
+    if current.canonical() != offered.canonical() {
+        return Err("binding-mismatch");
+    }
+    gate.consent(&offered.grant_id, time)
+}
 impl Prompt {
     pub fn request(
         gate: Arc<Mutex<SessionGate>>,
         grant_id: &str,
         current_source: Option<Arc<Mutex<Source>>>,
+        session_stop: Arc<AtomicBool>,
+        input_stop: Arc<AtomicBool>,
     ) -> Result<Self, &'static str> {
-        let (grant, epoch) = {
+        if session_stop.load(Ordering::SeqCst) {
+            return Err("revoked");
+        }
+        let grant = {
             let mut guard = gate.lock().map_err(|_| "endpoint-failed")?;
-            (guard.pending_grant(grant_id, now()?)?, guard.epoch())
+            guard.pending_grant(grant_id, now()?)?
         };
         if !safe_identity(&grant.helper_account) || !safe_identity(&grant.helper_device) {
             return Err("unsafe-identity");
@@ -134,6 +168,8 @@ impl Prompt {
         let worker = thread::spawn(move || {
             let context = Context {
                 cancel: flag.clone(),
+                session_stop: Some(session_stop.clone()),
+                input_stop: input.then_some(input_stop),
                 result: Arc::new(Mutex::new(None)),
                 until: Instant::now() + Duration::from_secs(60),
                 alive: Cell::new(false),
@@ -142,7 +178,7 @@ impl Prompt {
             if approved {
                 let accept = (|| {
                     let mut guard = gate.lock().map_err(|_| "endpoint-failed")?;
-                    if flag.load(Ordering::SeqCst) || guard.epoch() != epoch {
+                    if context.cancelled() {
                         return Err("revoked");
                     }
                     if let Some(source) = &source {
@@ -156,11 +192,11 @@ impl Prompt {
                         };
                         source.current_monitor()?;
                     }
-                    let current = guard.pending_grant(&grant.grant_id, now()?)?;
-                    if current.canonical() != grant.canonical() {
-                        return Err("binding-mismatch");
-                    };
-                    guard.consent(&grant.grant_id, now()?)?;
+                    approve_current(&mut guard, &grant, now()?)?;
+                    if context.cancelled() {
+                        guard.revoke(&grant.grant_id);
+                        return Err("revoked");
+                    }
                     *output.lock().map_err(|_| "endpoint-failed")? =
                         Decision::Allowed(Box::new(grant));
                     Ok::<_, &'static str>(())
@@ -171,14 +207,16 @@ impl Prompt {
             } else {
                 *output.lock().unwrap() = Decision::Denied;
             }
+            Ok(())
         });
         Ok(Self {
             cancel,
             result,
-            worker: Some(worker),
+            worker: crate::cleanup::RetainedWorker::new(worker),
             gate: retained_gate,
             grant_id: retained_id,
             delivered: false,
+            cleanup_failed: false,
         })
     }
     pub fn decision(&self) -> Decision {
@@ -194,18 +232,33 @@ impl Prompt {
         }
         decision
     }
+    pub fn cancel(&self) {
+        self.cancel.store(true, Ordering::SeqCst);
+    }
+    pub fn finish(&mut self) -> Result<(), &'static str> {
+        // UI cancellation precedes even a poisoned/busy gate lock.
+        self.cancel();
+        let mut guard = self.gate.lock().unwrap_or_else(|error| {
+            self.cleanup_failed = true;
+            error.into_inner()
+        });
+        if !self.delivered {
+            guard.revoke(&self.grant_id);
+        }
+        drop(guard);
+        if self.worker.join().is_err() {
+            self.cleanup_failed = true;
+        }
+        if self.cleanup_failed {
+            Err("consent-cleanup-failed")
+        } else {
+            Ok(())
+        }
+    }
 }
 impl Drop for Prompt {
     fn drop(&mut self) {
-        if let Ok(mut guard) = self.gate.lock() {
-            self.cancel.store(true, Ordering::SeqCst);
-            if !self.delivered {
-                guard.revoke(&self.grant_id);
-            }
-        }
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
-        }
+        let _ = crate::cleanup::attempt(|| self.finish());
     }
 }
 pub(crate) fn confirm_file(
@@ -224,6 +277,8 @@ pub(crate) fn confirm_file(
     }
     let context = Context {
         cancel,
+        session_stop: None,
+        input_stop: None,
         result: Arc::new(Mutex::new(None)),
         until: Instant::now() + Duration::from_secs(60),
         alive: Cell::new(false),
@@ -247,6 +302,8 @@ pub(crate) fn confirm_enrollment(
     super::input::ordinary_desktop()?;
     let context = Context {
         cancel,
+        session_stop: None,
+        input_stop: None,
         result: Arc::new(Mutex::new(None)),
         until: Instant::now() + Duration::from_secs(60),
         alive: Cell::new(false),
@@ -257,6 +314,8 @@ pub(crate) fn confirm_issuer(text: &str, cancel: Arc<AtomicBool>) -> Result<bool
     super::input::ordinary_desktop()?;
     let context = Context {
         cancel,
+        session_stop: None,
+        input_stop: None,
         result: Arc::new(Mutex::new(None)),
         until: Instant::now() + Duration::from_secs(90),
         alive: Cell::new(false),
@@ -264,6 +323,9 @@ pub(crate) fn confirm_issuer(text: &str, cancel: Arc<AtomicBool>) -> Result<bool
     Ok(unsafe { show(&context, text, "I compared the key") })
 }
 unsafe fn show(context: &Context, text: &str, allow_label: &str) -> bool {
+    if context.cancelled() {
+        return false;
+    }
     unsafe {
         let module = GetModuleHandleW(ptr::null());
         let class = WNDCLASSW {
@@ -346,7 +408,7 @@ unsafe fn show(context: &Context, text: &str, allow_label: &str) -> bool {
         SetForegroundWindow(hwnd);
         SetFocus(deny);
         let mut message = std::mem::zeroed();
-        while !context.cancel.load(Ordering::SeqCst)
+        while !context.cancelled()
             && Instant::now() < context.until
             && context.result.lock().unwrap().is_none()
             && GetMessageW(&mut message, ptr::null_mut(), 0, 0) > 0
@@ -360,7 +422,7 @@ unsafe fn show(context: &Context, text: &str, allow_label: &str) -> bool {
             KillTimer(hwnd, 1);
             DestroyWindow(hwnd);
         }
-        *context.result.lock().unwrap() == Some(true)
+        !context.cancelled() && *context.result.lock().unwrap() == Some(true)
     }
 }
 unsafe extern "system" fn procedure(
@@ -396,5 +458,89 @@ unsafe extern "system" fn procedure(
             }
         }
         DefWindowProcW(hwnd, message, wparam, lparam)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn context(session_stop: Arc<AtomicBool>, input_stop: Option<Arc<AtomicBool>>) -> Context {
+        Context {
+            cancel: Arc::new(AtomicBool::new(false)),
+            session_stop: Some(session_stop),
+            input_stop,
+            result: Arc::new(Mutex::new(None)),
+            until: Instant::now() + Duration::from_secs(1),
+            alive: Cell::new(false),
+        }
+    }
+    #[test]
+    fn session_and_input_revocation_cancel_only_the_appropriate_pending_ui() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let input = Arc::new(AtomicBool::new(false));
+        let native_input = context(stop.clone(), Some(input.clone()));
+        let resource = context(stop.clone(), None);
+        input.store(true, Ordering::SeqCst);
+        assert!(native_input.cancelled());
+        assert!(!resource.cancelled());
+        stop.store(true, Ordering::SeqCst);
+        assert!(resource.cancelled());
+        // Pre-cancelled UI never creates/shows a native window.
+        assert!(!unsafe { show(&native_input, "unused fixture", "unused fixture") });
+        assert!(!unsafe { show(&resource, "unused fixture", "unused fixture") });
+    }
+    #[test]
+    fn exact_resource_consent_survives_input_revoke_but_never_own_revoke_or_changed_grant() {
+        use crate::stream::{Binding, SignedStreamGrant};
+        use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+        use ed25519_dalek::{Signer, SigningKey};
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let time = fixture["now"].as_u64().unwrap();
+        let key = SigningKey::from_bytes(&[42; 32]);
+        let input: SignedStreamGrant =
+            serde_json::from_value(fixture["grants"]["valid"][1]["signed"].clone()).unwrap();
+        let g = &input.grant;
+        let binding = Binding {
+            session: g.session.clone(),
+            room: g.room.clone(),
+            stream: g.stream.clone(),
+            publisher_account: g.publisher_account.clone(),
+            publisher_device: g.publisher_device.clone(),
+            helper_account: g.helper_account.clone(),
+            helper_device: g.helper_device.clone(),
+            helper_transport: g.helper_transport.clone(),
+            endpoint: g.endpoint.clone().unwrap(),
+        };
+        let mut gate = SessionGate::new(
+            key.verifying_key().to_bytes(),
+            binding,
+            time,
+            0,
+            Instant::now(),
+        );
+        let sign = |grant: StreamGrant| SignedStreamGrant {
+            signature: URL_SAFE_NO_PAD.encode(key.sign(&grant.canonical()).to_bytes()),
+            grant,
+        };
+        gate.admit(&sign(g.clone()), time).unwrap();
+        let mut resource = g.clone();
+        resource.capability = "clipboard_to_host".into();
+        resource.endpoint = None;
+        resource.grant_id = "grant_resource_consent".into();
+        resource.nonce = "resource_consent_nonce".into();
+        resource.generation += 1;
+        gate.admit(&sign(resource.clone()), time).unwrap();
+        gate.suspend_input();
+        approve_current(&mut gate, &resource, time).unwrap();
+        assert!(approve_current(&mut gate, g, time).is_err());
+        let mut changed = resource.clone();
+        changed.helper_device = "DIFFERENT".into();
+        assert!(approve_current(&mut gate, &changed, time).is_err());
+        gate.revoke(&resource.grant_id);
+        assert!(approve_current(&mut gate, &resource, time).is_err());
+        gate.stop();
+        assert!(approve_current(&mut gate, &resource, time).is_err());
     }
 }

@@ -22,6 +22,31 @@ struct Output {
     response: Response,
     delivered: Option<mpsc::SyncSender<Result<(), &'static str>>>,
 }
+/// Fixed no-authority process fixture also used against the actual release
+/// executable. cargo test alone does not prove its panic strategy.
+pub fn cleanup_probe(parent_pid: u32) -> Result<(), &'static str> {
+    let _parent = Parent::validate(parent_pid, true)?;
+    struct Payload;
+    impl Drop for Payload {
+        fn drop(&mut self) {
+            panic!("intentional cleanup probe payload");
+        }
+    }
+    let failed = crate::cleanup::RetainedWorker::new(thread::spawn(|| {
+        std::panic::panic_any(Payload);
+    }));
+    if failed.join() != Err("cleanup-worker-panicked")
+        || failed.join() != Err("cleanup-worker-panicked")
+    {
+        return Err("cleanup-probe-failed");
+    }
+    let later = crate::cleanup::RetainedWorker::new(thread::spawn(|| Ok(())));
+    later.join()?;
+    let bytes = serde_json::to_vec(&serde_json::json!({"protocol":"palisade.assist.cleanup-probe","version":1,
+        "authority":"none","synthetic":true,"panic":"retained-failure","retry":"retained-failure","later":"joined"})).map_err(|_| "invalid-response")?;
+    crate::framing::write_frame(&mut std::io::stdout().lock(), &bytes)
+        .map_err(|_| "live-pipe-failed")
+}
 fn emit(
     output: &mpsc::SyncSender<Output>,
     sequence: u32,

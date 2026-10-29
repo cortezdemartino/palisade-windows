@@ -119,3 +119,15 @@ test('actual live parent death revokes without waiting for an ordinary request',
   try { process.kill(pid); } catch {}
   assert.fail('live probe survived parent death');
 });
+test('actual helper build contains cleanup panic, keeps failure sticky and joins later work', async () => {
+  const p = raw({ mode: '--cleanup-probe', drain: false });
+  const closed = once(p.child, 'close');
+  const chunks = []; p.child.stdout.on('data', chunk => { chunks.push(chunk); });
+  try {
+    const [code, signal] = await p.exit; await closed; assert.equal(signal, null); assert.equal(code, 0);
+    const bytes = Buffer.concat(chunks); assert.ok(bytes.length > 4 && bytes.length <= 1024);
+    assert.equal(bytes.readUInt32LE(0), bytes.length - 4);
+    assert.deepEqual(JSON.parse(bytes.subarray(4).toString('utf8')), { protocol: 'palisade.assist.cleanup-probe',
+      version: 1, authority: 'none', synthetic: true, panic: 'retained-failure', retry: 'retained-failure', later: 'joined' });
+  } finally { p.close(); }
+});

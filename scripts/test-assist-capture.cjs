@@ -3,16 +3,7 @@ const { spawnSync } = require('node:child_process');
 const path = require('node:path'),
   fs = require('node:fs/promises');
 const { flipFuses, getCurrentFuseWire, FuseVersion, FuseV1Options } = require('@electron/fuses');
-async function unlocked(operation) {
-  // Windows may briefly retain an image/scan lock after the preceding fixture.
-  // Retry only sharing violations; every other error and the deadline fail CI.
-  for (let attempt = 0; ; attempt++) {
-    try { return await operation(); } catch (error) {
-      if (!['EBUSY', 'EPERM'].includes(error.code) || attempt >= 40) throw error;
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
-}
+const { unlocked } = require('./fixture-image-lock.cjs');
 async function main() {
   await require('./build-assist-preload.cjs').buildAssistPreload();
   const root = path.resolve(__dirname, '..'),

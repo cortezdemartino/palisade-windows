@@ -541,9 +541,6 @@ impl SessionGate {
     pub fn highest_generation(&self) -> u64 {
         self.highest_grant
     }
-    pub(crate) fn epoch(&self) -> u64 {
-        self.epoch
-    }
     pub(crate) fn input_epoch(&self) -> u64 {
         self.input_epoch
     }

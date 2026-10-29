@@ -26,6 +26,7 @@ The companion source remains read-only. The latest inspection is `82ac7de4ec2bbd
 | Native bridge | Implemented, inactive | Exact two-member native v1 surface, strict messages, live-document witness, private event nonce, bounded requests, cancellation and terminal cleanup scopes; real Electron fixture uses a fake coordinator |
 | Owned remote DTLS gateway | Experimental, inactive | Actual helper certificate checks, native-admission boundary, single control channel, bounded packets, cancellation and retained cleanup; real Electron tests use a fake native sink |
 | Private live channel | Implemented, inactive | Separate closed protocol, bounded reader/writer, independent pulses/cancellation, lifecycle-before-spawn and nonce/scope plus actual exit proof; channel-only, no runtime authority |
+| Native revocation/cleanup split | Implemented, inactive | Prepared atomic revoker, separate retained joins/sticky failures, own-grant consent, bounded resource close and explicit two-store/watcher completion; live runtime and physical acceptance remain |
 | Live native coordinator | Planned / Blocked | Runtime/descendant cleanup ownership, guarded UI, signing, source/peer/resource actions and real integration remain; channel-only proof cannot attest active children |
 | Virtual keyboard, full toolbar and annotations | Experimental / Blocked | Companion web controls exist; Windows endpoint integration and real acceptance remain |
 | Complete cross-client Assist | Not Verified | No installed endpoint or real encrypted control/transfer session exercised |

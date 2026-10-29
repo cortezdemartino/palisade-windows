@@ -39,7 +39,7 @@ The lifecycle holder resolves only after a matching terminal cleanup reply **and
 ## Required before attaching the runtime
 
 - Retain authenticated ownership of every executor/cleanup descendant before authority can start. Guardian crash must not hide a surviving child. A non-killing, no-breakaway Windows Job Object is a candidate; verify actual accounting after closing admission rather than relying solely on notifications/job signaling. A handle-publication design must close the crash-before-child-report race. This remains implementation work.
-- Split runtime atomic revocation from retained cleanup/join. Prompt drops, gate locks, file sweeps, network waits and thread joins cannot run on the urgent reader/watchdog path. Existing runtime worker/poller join failures must be treated as failed cleanup, never ignored success.
+- Use the implemented runtime atomic revoker and retained cleanup/join APIs when attaching it. Prompt drops, gate locks, file sweeps, network waits and thread joins stay off the urgent reader/watchdog path. Failed/panicked cleanup stays failed, and file completion requires its watcher and both stores to finish. These internal APIs still require live integration and physical qualification; channel-only proof does not attest them.
 - Keep SessionGate/LeasePoller as one grant registry. Complete source/enrollment/generation binding, guarded local UI, purpose-bound owned-answer signing, observed-certificate checks and input readiness before dispatching a packet.
 - Extend private commands/results only with those enforced prerequisites and explicit negotiated cleanup ownership. Do not widen `channel-only` by changing a feature boolean. Complete real disposable-device acceptance and the existing owner activation gate.
 

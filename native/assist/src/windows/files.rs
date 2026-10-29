@@ -29,7 +29,7 @@ use windows_sys::{
     core::w,
 };
 mod bound;
-pub use bound::{FileRequest, FileSelection, SessionFiles};
+pub use bound::{FileRequest, FileRevoker, FileSelection, SessionFiles};
 const FILE_LIMIT: u64 = 1024 * 1024 * 1024;
 const SESSION_LIMIT: u64 = 4 * FILE_LIMIT;
 #[derive(Clone, Deserialize, Serialize, PartialEq, Eq)]

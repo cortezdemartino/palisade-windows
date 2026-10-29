@@ -3,14 +3,15 @@ const { spawn } = require('node:child_process');
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { flipFuses, getCurrentFuseWire, FuseVersion, FuseV1Options } = require('@electron/fuses');
+const { unlocked } = require('./fixture-image-lock.cjs');
 async function main() {
   await require('./build-assist-preload.cjs').buildAssistPreload();
   const executable = require('electron');
   const fuse = FuseV1Options.GrantFileProtocolExtraPrivileges;
-  const original = await getCurrentFuseWire(executable);
+  const original = await unlocked(() => getCurrentFuseWire(executable));
   try {
     // Exercise the same restricted file loading used by release builds.
-    await flipFuses(executable, { version: FuseVersion.V1, [fuse]: false });
+    await unlocked(() => flipFuses(executable, { version: FuseVersion.V1, [fuse]: false }));
     const env = { ...process.env };
     delete env.ELECTRON_RUN_AS_NODE;
     for (const [script, result] of [
@@ -28,7 +29,7 @@ async function main() {
         const child = spawn(executable, [path.join(__dirname, script)], {
           cwd: path.join(__dirname, '..'), env, stdio: 'inherit', windowsHide: true,
         });
-        child.once('error', reject); child.once('exit', resolve);
+        child.once('error', reject); child.once('close', resolve);
       });
       if (code !== 0) throw new Error(script + ' failed.');
       const evidence = JSON.parse(await fs.readFile(output, 'utf8'));
@@ -39,7 +40,7 @@ async function main() {
     }
     console.log('Window controls, unread observer and permission boundaries pass with release file-protocol restrictions.');
   } finally {
-    await flipFuses(executable, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 });
+    await unlocked(() => flipFuses(executable, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }));
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

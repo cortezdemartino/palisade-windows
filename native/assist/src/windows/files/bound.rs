@@ -83,12 +83,17 @@ struct Operation {
 struct State {
     authority: Authority,
     closed: Arc<AtomicBool>,
+    failed: AtomicBool,
     operations: Mutex<BTreeMap<Direction, Arc<Operation>>>,
     // Opposite-direction dialogs/hashing cannot block each other. Both shards
     // share the same session-lifetime quota; cancellation does not refund it.
     stores: [Mutex<FileStore>; 2],
 }
 impl State {
+    fn fail(&self) {
+        self.closed.store(true, Ordering::SeqCst);
+        self.failed.store(true, Ordering::SeqCst);
+    }
     fn store(&self, direction: Direction) -> &Mutex<FileStore> {
         &self.stores[match direction {
             Direction::Send => 0,
@@ -120,11 +125,18 @@ impl State {
         })();
         if result.is_err() {
             op.cancel.store(true, Ordering::SeqCst);
+            if matches!(result, Err("resource-failed" | "endpoint-failed")) {
+                self.fail();
+            }
         }
         result
     }
     fn retire(&self, op: &Arc<Operation>) {
-        if let Ok(mut operations) = self.operations.lock() {
+        {
+            let mut operations = self.operations.lock().unwrap_or_else(|error| {
+                self.fail();
+                error.into_inner()
+            });
             if operations
                 .get(&op.direction)
                 .is_some_and(|current| Arc::ptr_eq(current, op))
@@ -136,9 +148,9 @@ impl State {
     fn sweep(&self) -> bool {
         let snapshot: Vec<_> = match self.operations.lock() {
             Ok(ops) => ops.values().cloned().collect(),
-            Err(_) => {
-                self.closed.store(true, Ordering::SeqCst);
-                return false;
+            Err(error) => {
+                self.fail();
+                error.into_inner().values().cloned().collect()
             }
         };
         for op in snapshot {
@@ -154,11 +166,15 @@ impl State {
                 Ok(store) => store,
                 Err(std::sync::TryLockError::WouldBlock) => continue,
                 Err(std::sync::TryLockError::Poisoned(error)) => {
-                    self.closed.store(true, Ordering::SeqCst);
+                    self.fail();
                     error.into_inner()
                 }
             };
-            if let Ok(mut token) = op.token.lock() {
+            {
+                let mut token = op.token.lock().unwrap_or_else(|error| {
+                    self.fail();
+                    error.into_inner()
+                });
                 if let Some(token) = token.take() {
                     store.cancel(&token);
                 }
@@ -166,10 +182,30 @@ impl State {
             drop(store);
             self.retire(&op);
         }
-        self.operations
+        let mut busy = false;
+        if self.closed.load(Ordering::SeqCst) {
+            // Even a retired operation may still have a busy store. Ownership
+            // is complete only after both shards have released every handle.
+            for store in &self.stores {
+                match store.try_lock() {
+                    Ok(mut store) => store.transfers.clear(),
+                    Err(std::sync::TryLockError::WouldBlock) => busy = true,
+                    Err(std::sync::TryLockError::Poisoned(error)) => {
+                        self.fail();
+                        error.into_inner().transfers.clear();
+                    }
+                }
+            }
+        }
+        !self
+            .operations
             .lock()
-            .map(|ops| !ops.is_empty())
-            .unwrap_or(false)
+            .unwrap_or_else(|error| {
+                self.fail();
+                error.into_inner()
+            })
+            .is_empty()
+            || busy
     }
 }
 /// Native-owned request, never deserialized from the hosted page. Dropping a
@@ -195,7 +231,14 @@ pub struct FileSelection {
 }
 pub struct SessionFiles {
     state: Arc<State>,
-    watcher: Option<thread::JoinHandle<()>>,
+    watcher: crate::cleanup::RetainedWorker,
+}
+#[derive(Clone)]
+pub struct FileRevoker(Arc<AtomicBool>);
+impl FileRevoker {
+    pub fn revoke(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
 }
 struct SelectionGuard<'a>(&'a Operation);
 impl Drop for SelectionGuard<'_> {
@@ -229,6 +272,7 @@ impl SessionFiles {
         let state = Arc::new(State {
             authority,
             closed: closed.clone(),
+            failed: AtomicBool::new(false),
             operations: Mutex::new(BTreeMap::new()),
             stores: [
                 Mutex::new(FileStore::with_quota(closed.clone(), quota.clone())),
@@ -245,7 +289,11 @@ impl SessionFiles {
                     }
                     let active = watched.sweep();
                     if watched.closed.load(Ordering::SeqCst) && !active {
-                        break;
+                        return if watched.failed.load(Ordering::SeqCst) {
+                            Err("resource-cleanup-failed")
+                        } else {
+                            Ok(())
+                        };
                     }
                     thread::sleep(Duration::from_millis(25));
                 }
@@ -253,7 +301,7 @@ impl SessionFiles {
             .map_err(|_| "resource-watch-unavailable")?;
         Ok(Self {
             state,
-            watcher: Some(watcher),
+            watcher: crate::cleanup::RetainedWorker::new(watcher),
         })
     }
     fn begin(
@@ -477,25 +525,27 @@ impl SessionFiles {
         result
     }
     pub fn close(&self) {
-        self.state.closed.store(true, Ordering::SeqCst);
-        if let Ok(ops) = self.state.operations.lock() {
+        self.revoker().revoke();
+        if let Ok(ops) = self.state.operations.try_lock() {
             for op in ops.values() {
                 op.cancel.store(true, Ordering::SeqCst);
             }
         }
-        self.state.sweep();
-        // A blocked OS I/O call must not block local stop or app teardown. The
-        // cleanup-only watcher retains owned handles until I/O unwinds; process
-        // exit still closes/delete-on-close stages through Windows itself.
+        // The watcher owns sweeps/I/O. Urgent callers never take a blocking lock.
+    }
+    pub fn revoker(&self) -> FileRevoker {
+        FileRevoker(self.state.closed.clone())
+    }
+    pub fn wait_cleanup(&self) -> Result<(), &'static str> {
+        self.close();
+        self.watcher.join()
     }
 }
 impl Drop for SessionFiles {
     fn drop(&mut self) {
         self.close();
-        if let Some(watcher) = self.watcher.take() {
-            if watcher.is_finished() {
-                let _ = watcher.join();
-            }
+        if self.watcher.is_finished() {
+            let _ = self.watcher.join();
         }
     }
 }

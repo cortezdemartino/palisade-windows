@@ -4,6 +4,8 @@ Current unpublished development also adds an inactive isolated capture provider 
 
 ## 0.3.0 (unpublished)
 
+- Separate native immediate revocation from retained cleanup, preserve independent pending resource consent and report failed joins on every retry. Enable caught Rust panic cleanup in the helper release profile and verify its actual executable with a non-authorizing probe. Live native integration remains incomplete and inactive.
+
 - Add a separate, inactive private native channel with bounded typed messages, independent shutdown/liveness and lifecycle ownership before spawn. Matching channel-only cleanup proof and actual exit are both required; crashes cannot bypass the barrier. No native session is connected or activated.
 
 - Add one cleanup barrier before application exit and update-manager copying/launch, with synchronous revocation, retained ownership, retry and pending status. Existing desktop/profile/update behavior is covered by regressions; live native holders still require coordinator integration.

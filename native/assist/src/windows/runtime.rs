@@ -37,6 +37,30 @@ pub struct Acknowledgement {
 enum Work {
     Packet(String, mpsc::SyncSender<Result<(), &'static str>>),
 }
+/// Prepared before authority and cloned into urgent readers/watchdogs. Calling
+/// either method touches only atomics, never registry/UI/network/join locks.
+#[derive(Clone)]
+pub struct RuntimeRevoker {
+    stop: Arc<AtomicBool>,
+    input_stop: Arc<AtomicBool>,
+    ready: Arc<AtomicBool>,
+    lease_cancel: Arc<AtomicBool>,
+    files: Option<super::files::FileRevoker>,
+}
+impl RuntimeRevoker {
+    pub fn suspend_input(&self) {
+        self.input_stop.store(true, Ordering::SeqCst);
+        self.ready.store(false, Ordering::SeqCst);
+    }
+    pub fn revoke(&self) {
+        self.stop.store(true, Ordering::SeqCst);
+        self.suspend_input();
+        self.lease_cancel.store(true, Ordering::SeqCst);
+        if let Some(files) = &self.files {
+            files.revoke();
+        }
+    }
+}
 pub struct StreamRuntime {
     gate: Arc<Mutex<SessionGate>>,
     source: Option<Arc<Mutex<Source>>>,
@@ -46,9 +70,11 @@ pub struct StreamRuntime {
     prompts: BTreeMap<String, Prompt>,
     poller: Option<LeasePoller>,
     work: mpsc::SyncSender<Work>,
-    worker: Option<thread::JoinHandle<()>>,
+    worker: crate::cleanup::RetainedWorker,
     ready: Arc<AtomicBool>,
     files: Option<Arc<SessionFiles>>,
+    lease_cancel: Arc<AtomicBool>,
+    cleanup_failed: bool,
 }
 impl StreamRuntime {
     pub fn begin(
@@ -108,6 +134,7 @@ impl StreamRuntime {
             gate.clone(),
             Arc::new(move || lost.store(true, Ordering::SeqCst)),
         );
+        let lease_cancel = poller.cancel_flag();
         let (work, receive) = mpsc::sync_channel(1);
         let ready = Arc::new(AtomicBool::new(false));
         let input_stop = Arc::new(AtomicBool::new(false));
@@ -281,17 +308,31 @@ impl StreamRuntime {
             }
             worker_stop.store(true, Ordering::SeqCst);
             worker_ready.store(false, Ordering::SeqCst);
-            if let Ok(mut gate) = worker_gate.lock() {
-                gate.stop();
-            }
+            let mut failed = false;
+            worker_gate
+                .lock()
+                .unwrap_or_else(|error| {
+                    failed = true;
+                    error.into_inner()
+                })
+                .stop();
             if let (Some(mut executor), Some(source)) = (executor, worker_source) {
-                if let Ok(source) = source.lock() {
+                {
+                    let source = source.lock().unwrap_or_else(|error| {
+                        failed = true;
+                        error.into_inner()
+                    });
                     // Fence/reap the child before mirror cleanup; protected desktops
                     // keep only a release retry alive, never new remote input.
                     while executor.release_owned(&source).is_err() {
                         thread::sleep(Duration::from_millis(100));
                     }
                 }
+            }
+            if failed {
+                Err("input-cleanup-failed")
+            } else {
+                Ok(())
             }
         });
         Ok(Self {
@@ -303,9 +344,11 @@ impl StreamRuntime {
             prompts: BTreeMap::new(),
             poller: Some(poller),
             work,
-            worker: Some(worker),
+            worker: crate::cleanup::RetainedWorker::new(worker),
             ready,
             files,
+            lease_cancel,
+            cleanup_failed: false,
         })
     }
     pub fn request_consent(&mut self, id: &str) -> Result<(), &'static str> {
@@ -317,7 +360,13 @@ impl StreamRuntime {
         }
         self.prompts.insert(
             id.into(),
-            Prompt::request(self.gate.clone(), id, self.source.clone())?,
+            Prompt::request(
+                self.gate.clone(),
+                id,
+                self.source.clone(),
+                self.stop.clone(),
+                self.input_stop.clone(),
+            )?,
         );
         Ok(())
     }
@@ -326,7 +375,11 @@ impl StreamRuntime {
             return Err("revoked");
         }
         let prompt = self.prompts.get_mut(id).ok_or("consent-required")?;
-        let result = match prompt.take_decision() {
+        let decision = prompt.take_decision();
+        if !matches!(decision, Decision::Pending) {
+            prompt.finish()?;
+        }
+        let result = match decision {
             Decision::Pending => Acknowledgement {
                 grant_id: id.into(),
                 signature: None,
@@ -432,29 +485,103 @@ impl StreamRuntime {
     /// and releases input before relinquishing controller ownership. New input
     /// requires a fresh Assist authorization; old consent/leases cannot resume it.
     pub fn suspend_input(&self) {
-        self.input_stop.store(true, Ordering::SeqCst);
-        self.ready.store(false, Ordering::SeqCst);
-        if let Ok(mut gate) = self.gate.lock() {
-            gate.suspend_input();
+        self.revoker().suspend_input();
+    }
+    pub fn revoker(&self) -> RuntimeRevoker {
+        RuntimeRevoker {
+            stop: self.stop.clone(),
+            input_stop: self.input_stop.clone(),
+            ready: self.ready.clone(),
+            lease_cancel: self.lease_cancel.clone(),
+            files: self.files.as_ref().map(|f| f.revoker()),
         }
     }
-    pub fn stop(&mut self) {
-        self.stop.store(true, Ordering::SeqCst);
+    /// Blocking retained cleanup, never the urgent path. Attempt every owner
+    /// even after an earlier failure; repeated stop cannot erase that failure.
+    pub fn stop(&mut self) -> Result<(), &'static str> {
+        self.revoker().revoke();
+        for prompt in self.prompts.values() {
+            prompt.cancel();
+        }
+        let mut gate = self.gate.lock().unwrap_or_else(|error| {
+            self.cleanup_failed = true;
+            error.into_inner()
+        });
+        gate.stop();
+        drop(gate);
+        let mut completed = Vec::new();
+        for (id, prompt) in &mut self.prompts {
+            if crate::cleanup::attempt(|| prompt.finish()).is_err() {
+                self.cleanup_failed = true;
+            } else {
+                completed.push(id.clone());
+            }
+        }
+        for id in completed {
+            if crate::cleanup::attempt(|| {
+                drop(self.prompts.remove(&id));
+                Ok(())
+            })
+            .is_err()
+            {
+                self.cleanup_failed = true;
+            }
+        }
+        let poller_complete = self
+            .poller
+            .as_mut()
+            .is_none_or(|poller| crate::cleanup::attempt(|| poller.finish()).is_ok());
+        if poller_complete {
+            if crate::cleanup::attempt(|| {
+                drop(self.poller.take());
+                Ok(())
+            })
+            .is_err()
+            {
+                self.cleanup_failed = true;
+            }
+        } else {
+            self.cleanup_failed = true;
+        }
+        if self.worker.join().is_err() {
+            self.cleanup_failed = true;
+        }
         if let Some(files) = &self.files {
-            files.close();
+            if crate::cleanup::attempt(|| files.wait_cleanup()).is_err() {
+                self.cleanup_failed = true;
+            }
         }
-        if let Ok(mut gate) = self.gate.lock() {
-            gate.stop();
-        }
-        self.prompts.clear();
-        self.poller.take();
-        if let Some(worker) = self.worker.take() {
-            let _ = worker.join();
+        if self.cleanup_failed {
+            Err("runtime-cleanup-failed")
+        } else {
+            Ok(())
         }
     }
 }
 impl Drop for StreamRuntime {
     fn drop(&mut self) {
-        self.stop();
+        let _ = crate::cleanup::attempt(|| self.stop());
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn input_only_revocation_preserves_resource_and_poller_flags() {
+        let revoker = RuntimeRevoker {
+            stop: Arc::new(AtomicBool::new(false)),
+            input_stop: Arc::new(AtomicBool::new(false)),
+            ready: Arc::new(AtomicBool::new(true)),
+            lease_cancel: Arc::new(AtomicBool::new(false)),
+            files: None,
+        };
+        revoker.suspend_input();
+        assert!(revoker.input_stop.load(Ordering::SeqCst));
+        assert!(!revoker.ready.load(Ordering::SeqCst));
+        assert!(!revoker.stop.load(Ordering::SeqCst));
+        assert!(!revoker.lease_cancel.load(Ordering::SeqCst));
+        revoker.revoke();
+        assert!(revoker.stop.load(Ordering::SeqCst));
+        assert!(revoker.lease_cancel.load(Ordering::SeqCst));
     }
 }
