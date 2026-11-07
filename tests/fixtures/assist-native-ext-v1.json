@@ -1,0 +1,575 @@
+{
+  "note": "Shared fixtures for palisade.assist.native.ext v1 (docs/50). The endpoint key comes from a PUBLISHED fixture-only seed and must never be trusted outside tests.",
+  "endpointPublicKey": "9IjJnDhgTd6sWk5OTkmxc983_SuJrXyUKbVG06_1M2c",
+  "requests": {
+    "valid": [
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "id": "ext_hello_0001",
+        "op": "ext.hello",
+        "versions": [1]
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "id": "ext_text_00001",
+        "op": "resource.send-text",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0005"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "id": "ext_file_00001",
+        "op": "resource.offer-file",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0006"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "id": "ext_cancel_001",
+        "op": "resource.cancel",
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "page-supplied path",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_file_00002",
+          "op": "resource.offer-file",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0006",
+          "path": "C:\\\\Users\\\\a\\\\secret.txt"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "page-supplied clipboard text",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_text_00002",
+          "op": "resource.send-text",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005",
+          "text": "x"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "page approval boolean",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_text_00003",
+          "op": "resource.send-text",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005",
+          "approved": true
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "save destination from the page",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_save_00001",
+          "op": "resource.save-file",
+          "session": "sassist_fixture_0001",
+          "transfer": "transfer_fixture_0001",
+          "destination": "C:\\\\Windows"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "clipboard read",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_read_00001",
+          "op": "resource.read-clipboard",
+          "session": "sassist_fixture_0001"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "v1 protocol name",
+        "message": {
+          "p": "palisade.assist.native",
+          "v": 1,
+          "id": "ext_hello_0002",
+          "op": "ext.hello",
+          "versions": [1]
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "other version",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_hello_0003",
+          "op": "ext.hello",
+          "versions": [1]
+        },
+        "error": "unsupported-version"
+      }
+    ]
+  },
+  "responses": {
+    "valid": [
+      {
+        "op": "ext.hello",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_hello_0001",
+          "ok": true,
+          "result": {
+            "version": 1,
+            "features": {
+              "cleanupEvents": true,
+              "clipboardText": true,
+              "files": true
+            }
+          }
+        }
+      },
+      {
+        "op": "resource.send-text",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_text_00001",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0001"
+          }
+        }
+      },
+      {
+        "op": "resource.send-text",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_text_00001",
+          "ok": false,
+          "error": "consent-denied"
+        }
+      },
+      {
+        "op": "resource.send-text",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_text_00001",
+          "ok": false,
+          "error": "unsupported"
+        }
+      },
+      {
+        "op": "resource.offer-file",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_file_00001",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0001"
+          }
+        }
+      },
+      {
+        "op": "resource.offer-file",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_file_00001",
+          "ok": false,
+          "error": "cancelled"
+        }
+      },
+      {
+        "op": "resource.cancel",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_cancel_001",
+          "ok": true,
+          "result": {}
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "file name in a result",
+        "op": "resource.offer-file",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_file_00001",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0001",
+            "name": "secret.txt"
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "clipboard text in a result",
+        "op": "resource.send-text",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_text_00001",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0001",
+            "text": "x"
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown error",
+        "op": "resource.cancel",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_cancel_001",
+          "ok": false,
+          "error": "nope"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "events": {
+    "valid": [
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "event": "resource.status",
+        "seq": 1,
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001",
+        "kind": "file",
+        "direction": "to-guest",
+        "state": "awaiting-acceptance",
+        "bytes": 0,
+        "total": 4096,
+        "reason": null
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "event": "resource.status",
+        "seq": 2,
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001",
+        "kind": "file",
+        "direction": "to-guest",
+        "state": "transferring",
+        "bytes": 2048,
+        "total": 4096,
+        "reason": null
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "event": "resource.status",
+        "seq": 3,
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001",
+        "kind": "file",
+        "direction": "to-guest",
+        "state": "complete",
+        "bytes": 4096,
+        "total": 4096,
+        "reason": null
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "event": "resource.status",
+        "seq": 4,
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0002",
+        "kind": "file",
+        "direction": "to-host",
+        "state": "rejected",
+        "bytes": 0,
+        "total": 10,
+        "reason": "local-denied"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "event": "cleanup",
+        "seq": 5,
+        "session": "sassist_fixture_0001",
+        "state": "pending",
+        "reason": "local-stop"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "event": "cleanup",
+        "seq": 6,
+        "session": "sassist_fixture_0001",
+        "state": "complete",
+        "reason": "local-stop"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "file name in status",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "event": "resource.status",
+          "seq": 7,
+          "session": "sassist_fixture_0001",
+          "transfer": "transfer_fixture_0001",
+          "kind": "file",
+          "direction": "to-guest",
+          "state": "complete",
+          "bytes": 1,
+          "total": 1,
+          "reason": null,
+          "name": "secret.txt"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "cleanup claiming success as authority",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "event": "cleanup",
+          "seq": 8,
+          "session": "sassist_fixture_0001",
+          "state": "authorized",
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "clipboard contents event",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "event": "clipboard.changed",
+          "seq": 9,
+          "text": "secret"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "dataPlane": {
+    "valid": [
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0005",
+        "gen": 3,
+        "seq": 1,
+        "kind": "clipboard-text",
+        "text": "synthetic clipboard text"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0006",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-offer",
+        "transfer": "transfer_fixture_0001",
+        "name": "report.txt",
+        "size": 4096,
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0006",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-accept",
+        "transfer": "transfer_fixture_0001"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0006",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-complete",
+        "transfer": "transfer_fixture_0001",
+        "chunks": 1
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0006",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-receipt",
+        "transfer": "transfer_fixture_0001",
+        "result": "verified",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0006",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-receipt",
+        "transfer": "transfer_fixture_0001",
+        "result": "saved",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_fixture_0001",
+        "grant": "sgrant_fixture_0006",
+        "gen": 3,
+        "seq": 1,
+        "kind": "file-receipt",
+        "transfer": "transfer_fixture_0001",
+        "result": "integrity-failure",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "receipt in a version 1 session",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 1,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 3,
+          "seq": 1,
+          "kind": "file-receipt",
+          "transfer": "transfer_fixture_0001",
+          "result": "saved",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "version": 1,
+        "error": "invalid-message"
+      },
+      {
+        "name": "receipt with unknown result",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 3,
+          "seq": 1,
+          "kind": "file-receipt",
+          "transfer": "transfer_fixture_0001",
+          "result": "executed",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "version": 2,
+        "error": "invalid-message"
+      },
+      {
+        "name": "receipt with uppercase digest",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 3,
+          "seq": 1,
+          "kind": "file-receipt",
+          "transfer": "transfer_fixture_0001",
+          "result": "saved",
+          "sha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+        },
+        "version": 2,
+        "error": "invalid-message"
+      },
+      {
+        "name": "offer with a path",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 3,
+          "seq": 1,
+          "kind": "file-offer",
+          "transfer": "transfer_fixture_0001",
+          "name": "..\\\\..\\\\Windows\\\\win.ini",
+          "size": 1,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "version": 2,
+        "error": "invalid-message"
+      },
+      {
+        "name": "offer with a destination",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 3,
+          "seq": 1,
+          "kind": "file-offer",
+          "transfer": "transfer_fixture_0001",
+          "name": "a.txt",
+          "size": 1,
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "destination": "C:\\\\"
+        },
+        "version": 2,
+        "error": "invalid-message"
+      },
+      {
+        "name": "image clipboard",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 3,
+          "seq": 1,
+          "kind": "clipboard-image",
+          "data": "iVBOR"
+        },
+        "version": 2,
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "statements": [
+    {
+      "name": "endpoint relay configuration request",
+      "statement": "cGFsaXNhZGUuYXNzaXN0LmNvbnRyb2wvZW5kcG9pbnQtaWNlL3YyCmVuZHBvaW50X2ZpeHR1cmVfMDEKMTgwMDAwMDMwMDAwMA",
+      "text": "palisade.assist.control/endpoint-ice/v2\nendpoint_fixture_01\n1800000300000",
+      "signature": "SgviHbYSOVGV33YjlJP0sbtG0L5cAqV01MElCvYS7D4Bji8m_cQWNToLsxvmGA2eUCyAPX-4a01YSP4ea_3WAQ"
+    }
+  ]
+}

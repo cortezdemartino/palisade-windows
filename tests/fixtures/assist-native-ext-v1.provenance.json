@@ -1,0 +1,17 @@
+{
+  "upstream": "cortezdemartino/project-palisade",
+  "commit": "82ac7de4ec2bbd5cc2fd48f3d15dbde6ea5fd375",
+  "status": "pinned-test-input-only; no native resource runtime is enabled",
+  "files": [
+    {
+      "source": "docs/assist-native/ext-v1/fixtures.json",
+      "local": "assist-native-ext-v1.json",
+      "gitBlob": "c645d94a924690a9040c7b57cd99a87244e68093"
+    },
+    {
+      "source": "apps/web/src/assist/native/extension.ts",
+      "local": "assist-native-ext-v1.web.ts",
+      "gitBlob": "87b36a93a3c2d4fad53da2a9f43a2735eaf87bf0"
+    }
+  ]
+}
