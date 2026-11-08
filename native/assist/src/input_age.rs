@@ -6,6 +6,7 @@ pub struct InputAgeGuard {
     baseline: Option<i128>,
     last_sender_ms: Option<u64>,
 }
+
 impl InputAgeGuard {
     pub fn new() -> Self {
         Self::default()
@@ -29,9 +30,11 @@ impl InputAgeGuard {
         Ok(())
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn canonical_profile2_input_age_sequences() {
         let cases: serde_json::Value = serde_json::from_str(include_str!(concat!(
@@ -52,6 +55,7 @@ mod tests {
             }
         }
     }
+
     #[test]
     fn peer_reset_and_replay_release() {
         let mut old = InputAgeGuard::new();
