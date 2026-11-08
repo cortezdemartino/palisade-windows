@@ -1,0 +1,592 @@
+{
+  "note": "palisade.assist.native.ext version 2 (docs/51 §3). ext.hello and its answer always use a version 1 envelope; every later request, answer and event uses v: 2. Version 1 fixtures (ext-v1) are unchanged.",
+  "requests": {
+    "valid": [
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 1,
+        "id": "ext_hello_0010",
+        "op": "ext.hello",
+        "versions": [2, 1]
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_text_00010",
+        "op": "resource.send-text",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0005"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_image_0010",
+        "op": "resource.send-image",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0005"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_files_0010",
+        "op": "resource.offer-files",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0006"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_drop_00010",
+        "op": "resource.drop-surface",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0006"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_resume_010",
+        "op": "resource.resume",
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_sync_00010",
+        "op": "resource.sync",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0005",
+        "state": "on"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_sync_00011",
+        "op": "resource.sync",
+        "session": "sassist_fixture_0001",
+        "grantId": "sgrant_fixture_0005",
+        "state": "off"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "id": "ext_cancel_010",
+        "op": "resource.cancel",
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "v2 operation in a version 1 envelope",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_image_0011",
+          "op": "resource.send-image",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005"
+        },
+        "error": "unsupported-version"
+      },
+      {
+        "name": "v2 operation after negotiating version 1",
+        "version": 1,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_image_0012",
+          "op": "resource.send-image",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "hello in a version 2 envelope",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_hello_0011",
+          "op": "ext.hello",
+          "versions": [2]
+        },
+        "error": "unsupported-version"
+      },
+      {
+        "name": "page-supplied image bytes",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_image_0013",
+          "op": "resource.send-image",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005",
+          "data": "iVBOR"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "page-supplied file list",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_files_0011",
+          "op": "resource.offer-files",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0006",
+          "paths": ["C:\\a.txt"]
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "drop surface with page files",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_drop_00011",
+          "op": "resource.drop-surface",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0006",
+          "files": []
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "sync with a duration from the page",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_sync_00012",
+          "op": "resource.sync",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005",
+          "state": "on",
+          "durationMs": 1
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "sync with unknown state",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_sync_00013",
+          "op": "resource.sync",
+          "session": "sassist_fixture_0001",
+          "grantId": "sgrant_fixture_0005",
+          "state": "always"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "resume naming an offset",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_resume_011",
+          "op": "resource.resume",
+          "session": "sassist_fixture_0001",
+          "transfer": "transfer_fixture_0001",
+          "from": 3
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "clipboard monitor",
+        "version": 2,
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_watch_0001",
+          "op": "resource.watch-clipboard",
+          "session": "sassist_fixture_0001"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "responses": {
+    "valid": [
+      {
+        "op": "ext.hello",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_hello_0010",
+          "ok": true,
+          "result": {
+            "version": 2,
+            "features": {
+              "cleanupEvents": true,
+              "clipboardImage": true,
+              "clipboardSync": true,
+              "clipboardText": true,
+              "dropSurface": true,
+              "fileResume": true,
+              "files": true,
+              "input2": true,
+              "multiFile": true
+            }
+          }
+        }
+      },
+      {
+        "op": "ext.hello",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_hello_0010",
+          "ok": true,
+          "result": {
+            "version": 1,
+            "features": {
+              "cleanupEvents": true,
+              "clipboardText": true,
+              "files": false
+            }
+          }
+        }
+      },
+      {
+        "op": "resource.send-image",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_image_0010",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0001"
+          }
+        }
+      },
+      {
+        "op": "resource.offer-files",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_files_0010",
+          "ok": true,
+          "result": {
+            "transfers": ["transfer_fixture_0001", "transfer_fixture_0002"]
+          }
+        }
+      },
+      {
+        "op": "resource.drop-surface",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_drop_00010",
+          "ok": true,
+          "result": {}
+        }
+      },
+      {
+        "op": "resource.resume",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_resume_010",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0003"
+          }
+        }
+      },
+      {
+        "op": "resource.sync",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_sync_00010",
+          "ok": true,
+          "result": {}
+        }
+      },
+      {
+        "op": "resource.sync",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_sync_00010",
+          "ok": false,
+          "error": "consent-denied"
+        }
+      },
+      {
+        "op": "resource.send-image",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_image_0010",
+          "ok": false,
+          "error": "unsupported"
+        }
+      },
+      {
+        "op": "resource.resume",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_resume_010",
+          "ok": false,
+          "error": "stale-operation"
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "name": "hello v2 with v1 feature keys",
+        "op": "ext.hello",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_hello_0010",
+          "ok": true,
+          "result": {
+            "version": 2,
+            "features": {
+              "cleanupEvents": true,
+              "clipboardText": true,
+              "files": true
+            }
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "hello with an unoffered version",
+        "op": "ext.hello",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_hello_0010",
+          "ok": true,
+          "result": {
+            "version": 3,
+            "features": {
+              "cleanupEvents": true,
+              "clipboardImage": true,
+              "clipboardSync": true,
+              "clipboardText": true,
+              "dropSurface": true,
+              "fileResume": true,
+              "files": true,
+              "input2": true,
+              "multiFile": true
+            }
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "file list with paths",
+        "op": "resource.offer-files",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_files_0010",
+          "ok": true,
+          "result": {
+            "transfers": ["C:\\a.txt"]
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "empty file list",
+        "op": "resource.offer-files",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_files_0010",
+          "ok": true,
+          "result": {
+            "transfers": []
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "duplicate transfer IDs",
+        "op": "resource.offer-files",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_files_0010",
+          "ok": true,
+          "result": {
+            "transfers": ["transfer_fixture_0001", "transfer_fixture_0001"]
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "image answer with bytes",
+        "op": "resource.send-image",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "id": "ext_image_0010",
+          "ok": true,
+          "result": {
+            "transfer": "transfer_fixture_0001",
+            "data": "iVBOR"
+          }
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "v1 envelope after negotiating v2",
+        "op": "resource.sync",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "id": "ext_sync_00010",
+          "ok": true,
+          "result": {}
+        },
+        "error": "unsupported-version"
+      }
+    ]
+  },
+  "events": {
+    "valid": [
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "event": "resource.status",
+        "seq": 1,
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001",
+        "kind": "image",
+        "direction": "to-guest",
+        "state": "transferring",
+        "bytes": 100,
+        "total": 1000,
+        "reason": null,
+        "resumable": false
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "event": "resource.status",
+        "seq": 2,
+        "session": "sassist_fixture_0001",
+        "transfer": "transfer_fixture_0001",
+        "kind": "file",
+        "direction": "to-guest",
+        "state": "failed",
+        "bytes": 400,
+        "total": 1000,
+        "reason": "stalled",
+        "resumable": true
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "event": "sync.status",
+        "seq": 3,
+        "session": "sassist_fixture_0001",
+        "capability": "clipboard_to_guest",
+        "state": "on",
+        "reason": null
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "event": "sync.status",
+        "seq": 4,
+        "session": "sassist_fixture_0001",
+        "capability": "clipboard_to_host",
+        "state": "off",
+        "reason": "revoked"
+      },
+      {
+        "p": "palisade.assist.native.ext",
+        "v": 2,
+        "event": "cleanup",
+        "seq": 5,
+        "session": "sassist_fixture_0001",
+        "state": "pending",
+        "reason": "revoked"
+      }
+    ],
+    "invalid": [
+      {
+        "name": "v2 status without resumable",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "event": "resource.status",
+          "seq": 6,
+          "session": "sassist_fixture_0001",
+          "transfer": "transfer_fixture_0001",
+          "kind": "file",
+          "direction": "to-guest",
+          "state": "transferring",
+          "bytes": 1,
+          "total": 2,
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "sync status naming file capability",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "event": "sync.status",
+          "seq": 7,
+          "session": "sassist_fixture_0001",
+          "capability": "file_to_guest",
+          "state": "on",
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "sync status with clipboard text",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 2,
+          "event": "sync.status",
+          "seq": 8,
+          "session": "sassist_fixture_0001",
+          "capability": "clipboard_to_guest",
+          "state": "on",
+          "reason": null,
+          "text": "secret"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "event in a version 1 envelope",
+        "message": {
+          "p": "palisade.assist.native.ext",
+          "v": 1,
+          "event": "sync.status",
+          "seq": 9,
+          "session": "sassist_fixture_0001",
+          "capability": "clipboard_to_guest",
+          "state": "on",
+          "reason": null
+        },
+        "error": "unsupported-version"
+      }
+    ]
+  },
+  "safety": {
+    "ops": ["resource.cancel", "resource.sync(state: off)"],
+    "note": "Safety requests use the reserved budget of docs/50 §6 (4 outstanding, 10 s) in addition to the native v1 safety operations."
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "upstream": "cortezdemartino/project-palisade",
+  "commit": "ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6",
+  "status": "pinned-contract-fixture-only; no active native authority or resources",
+  "fixtureSha256": {
+    "assist-control-v2-profile2.json": "5ea9ea3b3440c379525fc0e8be9cc98860542152ecce8ee4049de9e5d65b5885",
+    "assist-native-ext-v2.json": "6ccc5cfa26e94b1d534f3b9c8ff4d474f23622acf7100ef0da2e713f37eafdc6"
+  },
+  "files": [
+    {
+      "source": "docs/assist-control/v2-profile2/fixtures.json",
+      "local": "tests/fixtures/assist-control-v2-profile2.json",
+      "gitBlob": "915cbf90825cdea7756e622935bc8873a1a4332b"
+    },
+    {
+      "source": "docs/assist-native/ext-v2/fixtures.json",
+      "local": "tests/fixtures/assist-native-ext-v2.json",
+      "gitBlob": "39d72ff26de86b2018fb66e6deafab4415d7891d"
+    },
+    {
+      "source": "apps/web/src/assist/control/protocol.ts",
+      "local": "tests/fixtures/assist-control-profile2.web.ts",
+      "gitBlob": "b287b2ee6acce7d2d8597fc80ae3216c3152c53c"
+    },
+    {
+      "source": "apps/web/src/assist/native/extension.ts",
+      "local": "tests/fixtures/assist-native-ext-v2.web.ts",
+      "gitBlob": "0619f0d6c98dee247caf27619d117a7154b1c74b"
+    }
+  ]
+}

@@ -1,0 +1,1350 @@
+{
+  "note": "FIXTURE-ONLY keys and data (docs/51). Never trust these keys outside tests. Profile 2 kinds use the control version 2 envelope and are sent only to a receiver that declared the kind's feature.",
+  "issuerPublicKey": "pPCjJqdDagxJfWG1bud3XUc1jXrhfYl2GI8FkYpgIUM",
+  "features": {
+    "input-move": "input2",
+    "input-button": "input2",
+    "input-wheel": "input2",
+    "input-key": "input2",
+    "input-text": "input2",
+    "input-shortcut": "input2",
+    "clipboard-image": "clipboardImage",
+    "clipboard-sync": "clipboardSync",
+    "file-resume-offer": "fileResume",
+    "file-resume-accept": "fileResume"
+  },
+  "keyCodesAdded": [
+    "F13",
+    "F14",
+    "F15",
+    "F16",
+    "F17",
+    "F18",
+    "F19",
+    "F20",
+    "F21",
+    "F22",
+    "F23",
+    "F24",
+    "Numpad0",
+    "Numpad1",
+    "Numpad2",
+    "Numpad3",
+    "Numpad4",
+    "Numpad5",
+    "Numpad6",
+    "Numpad7",
+    "Numpad8",
+    "Numpad9",
+    "NumpadAdd",
+    "NumpadSubtract",
+    "NumpadMultiply",
+    "NumpadDivide",
+    "NumpadDecimal",
+    "NumpadEnter",
+    "NumLock",
+    "CapsLock",
+    "ScrollLock",
+    "ContextMenu",
+    "IntlBackslash",
+    "IntlRo",
+    "IntlYen",
+    "KanaMode",
+    "Lang1",
+    "Lang2",
+    "Convert",
+    "NonConvert"
+  ],
+  "protectedCombinations": [
+    ["ControlLeft", "AltLeft", "Delete"],
+    ["ControlLeft", "AltLeft", "NumpadDecimal"],
+    ["AltLeft", "Tab"],
+    ["ControlLeft", "ShiftLeft", "Escape"],
+    ["AltLeft", "Escape"]
+  ],
+  "limits": {
+    "imageBytes": 16777216,
+    "imageSide": 16384,
+    "imagePixels": 33554432,
+    "textInputChars": 256,
+    "inputMaxAgeMs": 300,
+    "inputBufferedBytes": 8192,
+    "receiveQuotaBytes": 536870912,
+    "queueFiles": 32,
+    "resumeWindowMs": 600000
+  },
+  "messages": {
+    "valid": [
+      {
+        "name": "input-move",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-move",
+          "x": 0.25,
+          "y": 0.75,
+          "sourceGen": 1,
+          "t": 1200
+        }
+      },
+      {
+        "name": "input-move (edges)",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 2,
+          "kind": "input-move",
+          "x": 0,
+          "y": 1,
+          "sourceGen": 1,
+          "t": 1201
+        }
+      },
+      {
+        "name": "input-button back",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 3,
+          "kind": "input-button",
+          "button": "back",
+          "down": true,
+          "sourceGen": 1,
+          "t": 1300
+        }
+      },
+      {
+        "name": "input-button forward up",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 4,
+          "kind": "input-button",
+          "button": "forward",
+          "down": false,
+          "sourceGen": 1,
+          "t": 1301
+        }
+      },
+      {
+        "name": "input-wheel horizontal",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 5,
+          "kind": "input-wheel",
+          "dx": -240,
+          "dy": 0,
+          "sourceGen": 1,
+          "t": 1400
+        }
+      },
+      {
+        "name": "input-wheel vertical",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 6,
+          "kind": "input-wheel",
+          "dx": 0,
+          "dy": 120,
+          "sourceGen": 1,
+          "t": 1401
+        }
+      },
+      {
+        "name": "input-key repeat",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": true,
+          "repeat": true,
+          "t": 1500
+        }
+      },
+      {
+        "name": "input-key numpad",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 8,
+          "kind": "input-key",
+          "code": "Numpad7",
+          "down": true,
+          "repeat": false,
+          "t": 1501
+        }
+      },
+      {
+        "name": "input-key F24",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 9,
+          "kind": "input-key",
+          "code": "F24",
+          "down": false,
+          "repeat": false,
+          "t": 1502
+        }
+      },
+      {
+        "name": "input-key AltGr",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 10,
+          "kind": "input-key",
+          "code": "AltRight",
+          "down": true,
+          "repeat": false,
+          "t": 1503
+        }
+      },
+      {
+        "name": "input-key IntlBackslash",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 11,
+          "kind": "input-key",
+          "code": "IntlBackslash",
+          "down": true,
+          "repeat": false,
+          "t": 1504
+        }
+      },
+      {
+        "name": "input-text accented",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "café ñ",
+          "t": 1600
+        }
+      },
+      {
+        "name": "input-text CJK and emoji",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 13,
+          "kind": "input-text",
+          "text": "日本語 😀",
+          "t": 1601
+        }
+      },
+      {
+        "name": "input-text right-to-left",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 14,
+          "kind": "input-text",
+          "text": "مرحبا",
+          "t": 1602
+        }
+      },
+      {
+        "name": "input-shortcut",
+        "feature": "input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 15,
+          "kind": "input-shortcut",
+          "name": "selectAll",
+          "t": 1700
+        }
+      },
+      {
+        "name": "clipboard-image",
+        "feature": "clipboardImage",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/png",
+          "width": 1920,
+          "height": 1080,
+          "size": 524288,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5"
+        }
+      },
+      {
+        "name": "clipboard-sync on",
+        "feature": "clipboardSync",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 17,
+          "kind": "clipboard-sync",
+          "state": "on"
+        }
+      },
+      {
+        "name": "clipboard-sync off",
+        "feature": "clipboardSync",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 18,
+          "kind": "clipboard-sync",
+          "state": "off"
+        }
+      },
+      {
+        "name": "file-resume-offer",
+        "feature": "fileResume",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 19,
+          "kind": "file-resume-offer",
+          "transfer": "transfer_fixture_0202",
+          "previous": "transfer_fixture_0201",
+          "name": "report.pdf",
+          "size": 3000000,
+          "sha256": "bd5105fea71b97f08de59633869f764339a325a2e67f69b978a6023aadbc9704"
+        }
+      },
+      {
+        "name": "file-resume-accept",
+        "feature": "fileResume",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 20,
+          "kind": "file-resume-accept",
+          "transfer": "transfer_fixture_0202",
+          "from": 12
+        }
+      },
+      {
+        "name": "file-resume-accept from start",
+        "feature": "fileResume",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 21,
+          "kind": "file-resume-accept",
+          "transfer": "transfer_fixture_0202",
+          "from": 0
+        }
+      }
+    ],
+    "invalid": [
+      {
+        "version": 1,
+        "name": "profile 2 kind in a version 1 session",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 1,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": true,
+          "repeat": true,
+          "t": 1500
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "receiver did not declare input2",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": true,
+          "repeat": true,
+          "t": 1500
+        },
+        "error": "unsupported",
+        "features": []
+      },
+      {
+        "version": 2,
+        "name": "receiver did not declare clipboardImage",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/png",
+          "width": 1920,
+          "height": 1080,
+          "size": 524288,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5"
+        },
+        "error": "unsupported",
+        "features": ["input2", "clipboardSync", "fileResume"]
+      },
+      {
+        "version": 2,
+        "name": "key-up marked as repeat",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": false,
+          "repeat": true,
+          "t": 1500
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "OS key",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "MetaLeft",
+          "down": true,
+          "repeat": true,
+          "t": 1500
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "Print Screen",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "PrintScreen",
+          "down": true,
+          "repeat": true,
+          "t": 1500
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "media key",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "AudioVolumeUp",
+          "down": true,
+          "repeat": true,
+          "t": 1500
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "missing t",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": true,
+          "repeat": true
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "negative t",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": true,
+          "repeat": true,
+          "t": -1
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "fractional t",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 7,
+          "kind": "input-key",
+          "code": "ArrowDown",
+          "down": true,
+          "repeat": true,
+          "t": 1.5
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "text with a control character",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "a\u0007b",
+          "t": 1600
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "text with a newline (use Enter)",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "a\nb",
+          "t": 1600
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "text with a lone surrogate",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "a?",
+          "t": 1600
+        },
+        "error": "invalid-message",
+        "textCodeUnits": [97, 55296]
+      },
+      {
+        "version": 2,
+        "name": "text not NFC",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "café",
+          "t": 1600
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "text too long",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "t": 1600
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "empty text",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0103",
+          "gen": 5,
+          "seq": 12,
+          "kind": "input-text",
+          "text": "",
+          "t": 1600
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "unknown mouse button",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 3,
+          "kind": "input-button",
+          "button": "x1",
+          "down": true,
+          "sourceGen": 1,
+          "t": 1300
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "zero wheel",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 5,
+          "kind": "input-wheel",
+          "dx": 0,
+          "dy": 0,
+          "sourceGen": 1,
+          "t": 1400
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "fractional wheel",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 5,
+          "kind": "input-wheel",
+          "dx": -240,
+          "dy": 1.5,
+          "sourceGen": 1,
+          "t": 1400
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "wheel over range",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0102",
+          "gen": 5,
+          "seq": 5,
+          "kind": "input-wheel",
+          "dx": -240,
+          "dy": 1201,
+          "sourceGen": 1,
+          "t": 1400
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "image as JPEG",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/jpeg",
+          "width": 1920,
+          "height": 1080,
+          "size": 524288,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5"
+        },
+        "error": "unsupported"
+      },
+      {
+        "version": 2,
+        "name": "image inline data",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/png",
+          "width": 1920,
+          "height": 1080,
+          "size": 524288,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5",
+          "data": "iVBOR"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "image too large",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/png",
+          "width": 1920,
+          "height": 1080,
+          "size": 16777217,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "image side over 16384",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/png",
+          "width": 16385,
+          "height": 1080,
+          "size": 524288,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "image over 32 megapixels",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 16,
+          "kind": "clipboard-image",
+          "transfer": "transfer_fixture_0101",
+          "format": "image/png",
+          "width": 8192,
+          "height": 8192,
+          "size": 524288,
+          "sha256": "9bc365f2514351337f5a124f26bf21920fd03bb21c634fa94756d22a893a7cd5"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "sync with unknown state",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0005",
+          "gen": 5,
+          "seq": 1,
+          "kind": "clipboard-sync",
+          "state": "maybe"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "resume naming itself",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 19,
+          "kind": "file-resume-offer",
+          "transfer": "transfer_fixture_0202",
+          "previous": "transfer_fixture_0202",
+          "name": "report.pdf",
+          "size": 3000000,
+          "sha256": "bd5105fea71b97f08de59633869f764339a325a2e67f69b978a6023aadbc9704"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "resume with a path",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 19,
+          "kind": "file-resume-offer",
+          "transfer": "transfer_fixture_0202",
+          "previous": "transfer_fixture_0201",
+          "name": "..\\secret.txt",
+          "size": 3000000,
+          "sha256": "bd5105fea71b97f08de59633869f764339a325a2e67f69b978a6023aadbc9704"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "resume from a negative chunk",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 1,
+          "kind": "file-resume-accept",
+          "transfer": "transfer_fixture_0202",
+          "from": -1
+        },
+        "error": "invalid-message"
+      },
+      {
+        "version": 2,
+        "name": "resume with a destination",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_fixture_0001",
+          "grant": "sgrant_fixture_0006",
+          "gen": 5,
+          "seq": 19,
+          "kind": "file-resume-offer",
+          "transfer": "transfer_fixture_0202",
+          "previous": "transfer_fixture_0201",
+          "name": "report.pdf",
+          "size": 3000000,
+          "sha256": "bd5105fea71b97f08de59633869f764339a325a2e67f69b978a6023aadbc9704",
+          "destination": "C:\\Windows"
+        },
+        "error": "invalid-message"
+      }
+    ]
+  },
+  "inputAge": {
+    "maxAgeMs": 300,
+    "sequences": [
+      {
+        "name": "steady stream with a constant clock offset",
+        "events": [
+          {
+            "t": 0,
+            "arrival": 50000,
+            "release": false,
+            "expect": "accepted"
+          },
+          {
+            "t": 100,
+            "arrival": 50110,
+            "release": false,
+            "expect": "accepted"
+          },
+          {
+            "t": 200,
+            "arrival": 50290,
+            "release": false,
+            "expect": "accepted"
+          }
+        ]
+      },
+      {
+        "name": "events delayed in transit are dropped; releases are always applied",
+        "events": [
+          {
+            "t": 0,
+            "arrival": 1000,
+            "release": false,
+            "expect": "accepted"
+          },
+          {
+            "t": 50,
+            "arrival": 1400,
+            "release": false,
+            "expect": "stale-input"
+          },
+          {
+            "t": 60,
+            "arrival": 1410,
+            "release": true,
+            "expect": "accepted"
+          },
+          {
+            "t": 2000,
+            "arrival": 3010,
+            "release": false,
+            "expect": "accepted"
+          }
+        ]
+      },
+      {
+        "name": "t going backwards is a replay",
+        "events": [
+          {
+            "t": 500,
+            "arrival": 2000,
+            "release": false,
+            "expect": "accepted"
+          },
+          {
+            "t": 499,
+            "arrival": 2001,
+            "release": false,
+            "expect": "replay"
+          }
+        ]
+      }
+    ]
+  },
+  "reacquisition": {
+    "note": "After input authority ends (native suspension, peer.close, lost connectivity, revocation, replacement) the service issues NEW input grants: new grantId and nonce, a generation above every earlier grant, the original approvedAt and sessionDeadline, the same helperTransport and endpoint. The old grant stays terminal. Resource grants are untouched and never restore input. The endpoint admits a fresh grant for a capability only when its earlier grant for that capability is locally revoked and its cleanup completed, shows local consent again and accepts input only on a NEW native peer (new peer.offer).",
+    "original": {
+      "grant": {
+        "issuer": "palisade",
+        "protocol": "palisade.assist.control",
+        "version": 2,
+        "session": "sassist_fixture_0001",
+        "room": "!voicechannel:palisade.test",
+        "stream": "TR_fixtureStream0001",
+        "approvedAt": 1800000000000,
+        "sessionDeadline": 1800007200000,
+        "expiresAt": 1800007200000,
+        "publisherAccount": "@streamer:palisade.test",
+        "publisherDevice": "STREAMERDEVICE",
+        "helperAccount": "@helper:palisade.test",
+        "helperDevice": "HELPERDEVICE",
+        "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+        "grantId": "sgrant_fixture_0101",
+        "capability": "control_mouse",
+        "generation": 3,
+        "nonce": "nonce_stream_fixture_0101",
+        "issuedAt": 1800000000000,
+        "endpoint": "endpoint_fixture_01"
+      },
+      "signature": "uszDEv60uqIxzozNnp9FcIKbTcUHg-FWsTaCez_3P6guu4HXu1BhCzHHtFk0KIRczeAOBLT7I0pEygq-bPqbAA"
+    },
+    "resource": {
+      "grant": {
+        "issuer": "palisade",
+        "protocol": "palisade.assist.control",
+        "version": 2,
+        "session": "sassist_fixture_0001",
+        "room": "!voicechannel:palisade.test",
+        "stream": "TR_fixtureStream0001",
+        "approvedAt": 1800000000000,
+        "sessionDeadline": 1800007200000,
+        "expiresAt": 1800007200000,
+        "publisherAccount": "@streamer:palisade.test",
+        "publisherDevice": "STREAMERDEVICE",
+        "helperAccount": "@helper:palisade.test",
+        "helperDevice": "HELPERDEVICE",
+        "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+        "grantId": "sgrant_fixture_0005",
+        "capability": "clipboard_to_host",
+        "generation": 3,
+        "nonce": "nonce_stream_fixture_0005",
+        "issuedAt": 1800000000000,
+        "endpoint": null
+      },
+      "signature": "nnfP4lJt6IkWcVRN2KUQdGq-bd_Fzq1Y5TMgKi_s8fiIXd43PHS4fhY4FzCRgSliQ_t-DDWXeE2zbZEKIJvADA"
+    },
+    "fresh": {
+      "grant": {
+        "issuer": "palisade",
+        "protocol": "palisade.assist.control",
+        "version": 2,
+        "session": "sassist_fixture_0001",
+        "room": "!voicechannel:palisade.test",
+        "stream": "TR_fixtureStream0001",
+        "approvedAt": 1800000000000,
+        "sessionDeadline": 1800007200000,
+        "expiresAt": 1800007200000,
+        "publisherAccount": "@streamer:palisade.test",
+        "publisherDevice": "STREAMERDEVICE",
+        "helperAccount": "@helper:palisade.test",
+        "helperDevice": "HELPERDEVICE",
+        "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+        "grantId": "sgrant_fixture_0102",
+        "capability": "control_mouse",
+        "generation": 5,
+        "nonce": "nonce_stream_fixture_0102",
+        "issuedAt": 1800001200000,
+        "endpoint": "endpoint_fixture_01"
+      },
+      "signature": "RA4cHg-kLk-Rrr9IDYK8x8vFekjL7rp5UQFu2se7KVKZsGq9d37ISWA3rLo84qVYUerpMPosgGdUMPn6mp65DQ"
+    },
+    "leaseAfterRevocation": {
+      "lease": {
+        "issuer": "palisade",
+        "protocol": "palisade.assist.control",
+        "version": 2,
+        "kind": "lease",
+        "session": "sassist_fixture_0001",
+        "stream": "TR_fixtureStream0001",
+        "generation": 4,
+        "grants": ["sgrant_fixture_0005"],
+        "issuedAt": 1800001260000,
+        "expiresAt": 1800001280000,
+        "sessionDeadline": 1800007200000
+      },
+      "signature": "m9nfIAiDT-OoMfZTvO9DmHQzAJBmxzSJe24BBoVpLeF0q7rm5op6swzZypcDXVwzJygjIEt4PB2gjqxQegpoBw"
+    },
+    "leaseWithFresh": {
+      "lease": {
+        "issuer": "palisade",
+        "protocol": "palisade.assist.control",
+        "version": 2,
+        "kind": "lease",
+        "session": "sassist_fixture_0001",
+        "stream": "TR_fixtureStream0001",
+        "generation": 5,
+        "grants": ["sgrant_fixture_0005", "sgrant_fixture_0102"],
+        "issuedAt": 1800001260000,
+        "expiresAt": 1800001280000,
+        "sessionDeadline": 1800007200000
+      },
+      "signature": "bwm8rdYaOUO0Rq-hFR4WHmCDmWiQvvFNYIxhCeK3gpQtSvfcIzgetprMqvQ6FsB1hkxfiPpyg7J-QP4_nj-XAQ"
+    },
+    "expect": {
+      "session": "sassist_fixture_0001",
+      "room": "!voicechannel:palisade.test",
+      "stream": "TR_fixtureStream0001",
+      "publisherAccount": "@streamer:palisade.test",
+      "publisherDevice": "STREAMERDEVICE",
+      "helperAccount": "@helper:palisade.test",
+      "helperDevice": "HELPERDEVICE",
+      "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+      "sessionDeadline": 1800007200000,
+      "now": 1800001261000
+    },
+    "invalid": [
+      {
+        "name": "fresh grant moving the deadline",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007140000,
+            "expiresAt": 1800007140000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "grantId": "sgrant_fixture_0103",
+            "capability": "control_mouse",
+            "generation": 5,
+            "nonce": "nonce_stream_fixture_0103",
+            "issuedAt": 1800001200000,
+            "endpoint": "endpoint_fixture_01"
+          },
+          "signature": "VXAtZD_tX7lBQyYBNhqmRMwNFZ8KQPXx8JYPnmjj1Nbhh2cQhZAx9wQ0rRxdtaTdVyoTVAlNn5LlcycjfubIBg"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "fresh grant for another helper certificate",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 03:08:0D:12:17:1C:21:26:2B:30:35:3A:3F:44:49:4E:53:58:5D:62:67:6C:71:76:7B:80:85:8A:8F:94:99:9E",
+            "grantId": "sgrant_fixture_0104",
+            "capability": "control_mouse",
+            "generation": 5,
+            "nonce": "nonce_stream_fixture_0104",
+            "issuedAt": 1800001200000,
+            "endpoint": "endpoint_fixture_01"
+          },
+          "signature": "XX3cyXSuaV0A3CTPxOH7MUJek2CLrt_ZRLBfBW8pUDjYg8asiRE8ese9FeKju1eclRy_WKuae-8mpa4X6XbqBw"
+        },
+        "error": "binding-mismatch"
+      },
+      {
+        "name": "fresh grant below the highest accepted generation",
+        "signed": {
+          "grant": {
+            "issuer": "palisade",
+            "protocol": "palisade.assist.control",
+            "version": 2,
+            "session": "sassist_fixture_0001",
+            "room": "!voicechannel:palisade.test",
+            "stream": "TR_fixtureStream0001",
+            "approvedAt": 1800000000000,
+            "sessionDeadline": 1800007200000,
+            "expiresAt": 1800007200000,
+            "publisherAccount": "@streamer:palisade.test",
+            "publisherDevice": "STREAMERDEVICE",
+            "helperAccount": "@helper:palisade.test",
+            "helperDevice": "HELPERDEVICE",
+            "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+            "grantId": "sgrant_fixture_0105",
+            "capability": "control_mouse",
+            "generation": 2,
+            "nonce": "nonce_stream_fixture_0105",
+            "issuedAt": 1800001200000,
+            "endpoint": "endpoint_fixture_01"
+          },
+          "signature": "m0PlePH_j5p6jms-GYnoxZJ8CXJTT8jKaoD9qyjJtf6dKy6F8Vjl50ZJiHNrbOLZAGOh1RqvcuvvmrS_007LCg"
+        },
+        "minimumGeneration": 3,
+        "error": "stale-generation"
+      }
+    ],
+    "endpointRules": [
+      "Refuse a fresh grant whose approvedAt differs from the session's first accepted grant (Windows SessionGate: 'revoked').",
+      "Refuse a second live grant for the same capability; admit the fresh one only after the earlier grant was revoked locally (suspension/stop/peer loss) and cleanup completed.",
+      "Never reuse consent, sequence numbers or the native peer of the earlier grant; input waits for a new peer.offer whose observed certificate equals helperTransport."
+    ]
+  },
+  "transport": {
+    "endpointPublicKey": "9IjJnDhgTd6sWk5OTkmxc983_SuJrXyUKbVG06_1M2c",
+    "valid": {
+      "name": "endpoint answer bound to its fingerprint and the approved helper certificate",
+      "statement": "palisade.assist.control/endpoint-transport/v2\nsassist_fixture_0001\nendpoint_fixture_01\nsha-256 28:2B:2E:31:34:37:3A:3D:40:43:46:49:4C:4F:52:55:58:5B:5E:61:64:67:6A:6D:70:73:76:79:7C:7F:82:85\nsha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+      "signature": "yEam8YHHUR-GjHivkEsGdHlcuBe6HPqblYzWf_HF5jq8gKoOAJs4RrzIIKfRp-Xav3VypjqntNq80vhx66eaCQ",
+      "answerFingerprint": "sha-256 28:2B:2E:31:34:37:3A:3D:40:43:46:49:4C:4F:52:55:58:5B:5E:61:64:67:6A:6D:70:73:76:79:7C:7F:82:85",
+      "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9"
+    },
+    "invalid": [
+      {
+        "name": "answer SDP carries another certificate than the signed one",
+        "signature": "yEam8YHHUR-GjHivkEsGdHlcuBe6HPqblYzWf_HF5jq8gKoOAJs4RrzIIKfRp-Xav3VypjqntNq80vhx66eaCQ",
+        "answerFingerprint": "sha-256 03:08:0D:12:17:1C:21:26:2B:30:35:3A:3F:44:49:4E:53:58:5D:62:67:6C:71:76:7B:80:85:8A:8F:94:99:9E",
+        "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+        "expect": "refused"
+      },
+      {
+        "name": "statement signed for another helper certificate",
+        "signature": "DadY2Vv1vHfQp2jtQjEkY8dAhUBR4-Ywd_L7Iil2walx1S0y1WdoXlnGrtCweCC7M6xCMw2w4poQuVo2WVKOAA",
+        "answerFingerprint": "sha-256 28:2B:2E:31:34:37:3A:3D:40:43:46:49:4C:4F:52:55:58:5B:5E:61:64:67:6A:6D:70:73:76:79:7C:7F:82:85",
+        "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+        "expect": "refused"
+      },
+      {
+        "name": "statement signed by another key",
+        "signature": "OUHLla1Yk--yRuhtAoeQxX3g6sVvPr7E0DbQ66ub8o84c0AqHCl2Hf0qlZXtOvkM3a1Ip7KkYvDgtIVWXN4pBA",
+        "answerFingerprint": "sha-256 28:2B:2E:31:34:37:3A:3D:40:43:46:49:4C:4F:52:55:58:5B:5E:61:64:67:6A:6D:70:73:76:79:7C:7F:82:85",
+        "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+        "expect": "refused"
+      }
+    ],
+    "revokedSession": {
+      "name": "an ended session has no lease: nothing acts, nothing reconnects",
+      "view": {
+        "id": "sassist_fixture_0001",
+        "ended": "revoked",
+        "grants": [
+          {
+            "grant": {
+              "issuer": "palisade",
+              "protocol": "palisade.assist.control",
+              "version": 2,
+              "session": "sassist_fixture_0001",
+              "room": "!voicechannel:palisade.test",
+              "stream": "TR_fixtureStream0001",
+              "approvedAt": 1800000000000,
+              "sessionDeadline": 1800007200000,
+              "expiresAt": 1800007200000,
+              "publisherAccount": "@streamer:palisade.test",
+              "publisherDevice": "STREAMERDEVICE",
+              "helperAccount": "@helper:palisade.test",
+              "helperDevice": "HELPERDEVICE",
+              "helperTransport": "sha-256 10:17:1E:25:2C:33:3A:41:48:4F:56:5D:64:6B:72:79:80:87:8E:95:9C:A3:AA:B1:B8:BF:C6:CD:D4:DB:E2:E9",
+              "grantId": "sgrant_fixture_0101",
+              "capability": "control_mouse",
+              "generation": 3,
+              "nonce": "nonce_stream_fixture_0101",
+              "issuedAt": 1800000000000,
+              "endpoint": "endpoint_fixture_01"
+            },
+            "state": "revoked"
+          }
+        ],
+        "lease": null
+      },
+      "expect": "no-authority"
+    },
+    "relay": [
+      {
+        "name": "relay-only policy with no relay configured",
+        "ice": {
+          "iceServers": [],
+          "iceTransportPolicy": "relay"
+        },
+        "expect": "no-connection-no-fallback"
+      },
+      {
+        "name": "relay unreachable",
+        "ice": {
+          "iceServers": [
+            {
+              "urls": ["turn:turn.invalid:3478"],
+              "username": "1800000600:pseudonym",
+              "credential": "x"
+            }
+          ],
+          "iceTransportPolicy": "relay"
+        },
+        "expect": "no-connection-no-fallback"
+      }
+    ]
+  }
+}
