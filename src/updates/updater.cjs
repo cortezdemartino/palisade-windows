@@ -29,10 +29,10 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
         await notify({ type: 'info', message: 'The update manager is included in installed Windows builds.', buttons: ['OK'] });
         return;
       }
-      const answer = await notify({ type: 'question', title: 'Palisade Installer & Update Manager',
-        message: 'Open the manager and exit Palisade?',
+      const answer = await notify({ type: 'question', title: 'Palisade Update Manager',
+        message: 'Open the update manager and exit Palisade?',
         detail: 'Save your work first. The manager checks for releases and handles installation, updates and repairs. Your profile is retained.',
-        buttons: ['Open manager and exit', 'Cancel'], defaultId: 1, cancelId: 1 });
+        buttons: ['Open Update Manager and exit', 'Cancel'], defaultId: 1, cancelId: 1 });
       if (answer.response !== 0 || stopped) return;
       preparing = true;
       onStatus('Updates: preparing to exit');
@@ -65,7 +65,7 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
       }
       onStatus('Updates: manager unavailable');
       await notify({ type: 'warning', message: 'Palisade could not open its update manager.',
-        detail: 'Use the official Palisade Installer & Update Manager to update or repair this installation. Palisade has not been changed.', buttons: ['OK'] });
+        detail: 'Use the official Palisade Update Manager to update or repair this installation. Palisade has not been changed.', buttons: ['OK'] });
     } finally { managerBusy = false; }
   }
   async function check(manual = false) {

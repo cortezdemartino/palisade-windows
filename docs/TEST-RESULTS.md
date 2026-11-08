@@ -1,5 +1,7 @@
 # Validation
 
+The combined desktop fix is now v0.3.3 after the owner requested **Open Update Manager** wording while v0.3.2 was awaiting publication. Exact v0.3.2 Windows CI42531849621 passed; its protected release run42532678660 was cancelled before signing/publication. Preserve tag v0.3.2 at7019c65. The v0.3.3 candidate adds only the requested wording and version/docs to the verified registration/tray implementation. The companion handoff remains queued afterward.
+
 ## Windows registration and silent tray, November 8, 2026
 
 Started at f53527cd33c43e7929a7e5c988e1397949388f28 (published v0.3.1). Windows inspection found an installed v0.2.11 client, valid client shortcuts, and a legacy Electron.lnk from October 17 carrying the production Palisade app ID. The app catalog omitted Palisade. Development main code assigned that production ID to Electron, allowing the conflicting shortcut.

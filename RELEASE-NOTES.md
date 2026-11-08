@@ -1,11 +1,16 @@
 # Release notes
 
-## 0.3.2
+## 0.3.3
 
 - Repair Windows Start/Search registration and give the running window explicit taskbar relaunch identity.
 - Separate development identity and remove only legacy development shortcuts incorrectly claiming Palisade's app ID.
 - Refresh installer shortcuts and executable lookup registration; show Onyx Operations Group as publisher.
 - Minimize and close to the tray quietly, while retaining message notifications.
+- Rename the action to **Open Update Manager** across menus, settings and dialogs.
+
+## 0.3.2 (unpublished)
+
+The publication was stopped to include the additional wording fix in v0.3.3. Its existing tag is retained unchanged.
 
 ## 0.3.1
 

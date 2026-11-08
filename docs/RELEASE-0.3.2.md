@@ -1,5 +1,7 @@
 # Palisade Windows 0.3.2
 
+Unpublished. The release workflow was cancelled before signing/publication to include the update-manager wording correction in v0.3.3. Preserve the existing v0.3.2 tag; do not move or reuse it. See [v0.3.3](RELEASE-0.3.3.md).
+
 - Register the installed application consistently for Windows Start, Search, taskbar grouping and user-selected pinning, with explicit executable, icon and relaunch details.
 - Repair the Start menu entry during upgrades and packaged startup. Remove an old development `Electron.lnk` only when it incorrectly uses Palisade's application ID; preserve unrelated Electron shortcuts.
 - Separate development Electron identity from the installed application so test runs cannot take over Palisade's Windows app entry.

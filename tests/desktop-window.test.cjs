@@ -114,7 +114,7 @@ test('local preload exposes only fixed controls and strips Electron events from 
 
 test('tray close stays silent, explicit notification click restores the app, and Quit really exits', async () => {
   const notices = []; const externalSettings = []; let diagnosticText;
-  let hidden = 0, shown = 0, focused = 0, appMenu, openSettings, deviceAction;
+  let hidden = 0, shown = 0, focused = 0, appMenu, trayMenu, openSettings, deviceAction;
   const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() {}, focus: () => focused++ });
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
   const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, setDisplayMediaRequestHandler(fn) { this.display = fn; }, flushStorageData() {} };
@@ -126,7 +126,7 @@ test('tray close stays silent, explicit notification click restores the app, and
       if (!prevented) app.emit('will-quit');
     } });
   class Notice extends EventEmitter { static isSupported() { return true; } constructor(options) { super(); this.options = options; } show() { notices.push(this); } }
-  class Tray extends EventEmitter { setToolTip() {} setContextMenu(menu) { this.menu = menu; } }
+  class Tray extends EventEmitter { setToolTip() {} setContextMenu(menu) { this.menu = menu; trayMenu = menu; } }
   const electron = { app, powerMonitor: new EventEmitter(), screen: new EventEmitter(), clipboard: { writeText: text => { diagnosticText = text; } }, Notification: Notice, Tray, nativeImage: { createFromPath: () => ({}) }, session: { fromPartition: () => profile },
     Menu: { getApplicationMenu: () => ({ items: [{ submenu: { popup: (options) => { settingsPopup = options; } } }] }), buildFromTemplate: (value) => value, setApplicationMenu: (value) => { appMenu = value; } }, dialog: { showMessageBox: async () => ({ response: 1 }) }, shell: { openExternal: async url => { externalSettings.push(url); } } };
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'), process: { platform: 'win32', arch: 'x64', versions: { electron: '44.7.2' } }, require(name) {
@@ -159,6 +159,8 @@ test('tray close stays silent, explicit notification click restores the app, and
   assert.match(diagnosticText, /Palisade 0.2.2/);
   assert.doesNotMatch(diagnosticText, /fixture-profile|palisade.onyxops.org|token|session/i);
   assert.ok(appMenu[0].submenu.some((item) => item.label === 'Minimize and close to tray'));
+  assert.ok(appMenu[0].submenu.some((item) => item.label === 'Open Update Manager'));
+  assert.ok(trayMenu.some((item) => item.label === 'Open Update Manager'));
   let prevented = false;
   window.emit('close', { preventDefault: () => { prevented = true; } });
   await new Promise(resolve => setImmediate(resolve));

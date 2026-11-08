@@ -2,7 +2,7 @@
 
 ## Queued after the Windows registration and silent-tray release
 
-Owner supplied the M4G-WEB-6 handoff for companion commit `5b82bc90e4997f35dd18273427c258fe54eefb95`. Complete the current desktop v0.3.2 work first, then inspect that committed handoff read-only and integrate its canonical changes. This queue does not change existing pinned fixtures or activate Assist.
+Owner supplied the M4G-WEB-6 handoff for companion commit `5b82bc90e4997f35dd18273427c258fe54eefb95`. Complete the current desktop v0.3.3 work first, then inspect that committed handoff read-only and integrate its canonical changes. This queue does not change existing pinned fixtures or activate Assist.
 
 1. Read companion `docs/52-ASSIST-WINDOWS-ACCEPTANCE.md`, `docs/51-ASSIST-FEATURE-COMPLETION.md`, `docs/assist-interop/manifest.json` and `docs/evidence/m4g-web-6-integration-acceptance.md`. Verify the source blobs and hashes independently before re-pinning.
 2. The handoff reports a deliberate v2-only change to `protocol.ts`, blob `9d499137d469280c8798e72bed4ef88b56a318c3`; v1 and the seven existing fixtures/extension source remain unchanged. New `docs/assist-control/v2-release/fixtures.json` SHA-256: `1bc0231199e1c342fa885f3dd30bbe84e3db2b671c7b14c083067143bed73cc6`. Interop manifest SHA-256: `4ab9e541ac052fac32ca340a0585848e42cbc0388fde0530c493319d1ce17e03`.

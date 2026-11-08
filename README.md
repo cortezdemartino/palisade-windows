@@ -37,7 +37,7 @@ npm run test:assist-capture
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.3.2-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.3.3-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
 
 ## Updates
 

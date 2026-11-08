@@ -18,7 +18,7 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Candidate output: `out/Palisade-Setup-0.3.2-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Candidate output: `out/Palisade-Setup-0.3.3-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
@@ -42,8 +42,8 @@ The signing script confirms the private key matches the public key shipped with 
 4. Tag the exact reviewed commit and push the tag:
 
 ```powershell
-git tag v0.3.2
-git push origin v0.3.2
+git tag v0.3.3
+git push origin v0.3.3
 ```
 
 The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs all three manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
@@ -97,3 +97,5 @@ NSIS refreshes the installed-scope Start menu shortcut on updates, records App P
 Packaged startup reuses a correct all-users shortcut or repairs its per-user shortcut with an explicit target, icon, working directory and existing app ID, registers executable lookup under HKCU, and removes only an Electron shortcut that incorrectly uses the production Palisade ID. Development uses a distinct app ID. The running packaged window has explicit relaunch metadata. The app does not change pinning policies, clear Windows databases or pin itself.
 
 Run `npm run check`, build Windows, then run `npm run test:window-controls` with `PALISADE_WINDOW_SMOKE_ASAR` pointing to the packaged archive. That runner includes a real Windows shortcut roundtrip and native window metadata fixture in an isolated output folder; registry commands are intercepted there. Physical installer/upgrade/uninstall and interactive taskbar pin acceptance remain separate manual checks. Do not confuse the isolated fixture with a full installation test.
+
+The v0.3.2 release workflow was stopped before signing/publication when the owner requested the update-manager wording fix. Keep its tag unchanged at7019c65ebc9168095f4752a74b30bdb60a38ffa6 and use the fresh v0.3.3 tag for the combined desktop update.

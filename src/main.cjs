@@ -320,7 +320,7 @@ function updateTrayMenu() {
         label: 'Check for Updates', click: () => void updaterController?.check(true),
       },
       {
-        label: 'Open Installer & Update Manager', click: () => void updaterController?.openManager(),
+        label: 'Open Update Manager', click: () => void updaterController?.openManager(),
       },
       { type: 'separator' },
       {
@@ -342,7 +342,7 @@ function createApplicationMenu() {
           { label: updateStatus, enabled: false },
           { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => mainContents?.reload() },
           { label: 'Check for Updates', click: () => void updaterController?.check(true) },
-          { label: 'Open Installer & Update Manager', click: () => void updaterController?.openManager() },
+          { label: 'Open Update Manager', click: () => void updaterController?.openManager() },
           trayPreferenceItem(),
           { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged,
             checked: app.getLoginItemSettings().openAtLogin,
