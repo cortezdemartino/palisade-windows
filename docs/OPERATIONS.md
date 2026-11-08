@@ -18,7 +18,7 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Candidate output: `out/Palisade-Setup-0.3.1-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Candidate output: `out/Palisade-Setup-0.3.2-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
@@ -42,8 +42,8 @@ The signing script confirms the private key matches the public key shipped with 
 4. Tag the exact reviewed commit and push the tag:
 
 ```powershell
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.3.2
+git push origin v0.3.2
 ```
 
 The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs all three manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
@@ -89,3 +89,11 @@ The component capture runner also executes against packaged ASAR modules in both
 ## Assist Profile 2 verification
 
 Use Node 22 for the existing TypeScript contract harness, matching the Windows Actions configuration. System Node 26 rejects transform mode; do not disable provenance checks to bypass it. Run `npm run check`, `npm run test:assist-native` and the no-input process/package checks before pushing native changes. The Profile 2 fixture bytes and provenance remain pinned. See [the component evidence](evidence/2026-11-08-profile2-native.md) for scope and unverified gates. Keep sensitive Cargo features disabled in distributed artifacts. No production signing, installation or activation is authorized by a component test pass.
+
+## Windows shell registration
+
+NSIS refreshes the installed-scope Start menu shortcut on updates, records App Paths and InstallLocation, and writes the product publisher metadata. The custom uninstall hook removes only App Paths values still pointing at that installation. Normal NSIS shortcut removal remains in place. The app ID, install GUID and account/session locations are unchanged.
+
+Packaged startup reuses a correct all-users shortcut or repairs its per-user shortcut with an explicit target, icon, working directory and existing app ID, registers executable lookup under HKCU, and removes only an Electron shortcut that incorrectly uses the production Palisade ID. Development uses a distinct app ID. The running packaged window has explicit relaunch metadata. The app does not change pinning policies, clear Windows databases or pin itself.
+
+Run `npm run check`, build Windows, then run `npm run test:window-controls` with `PALISADE_WINDOW_SMOKE_ASAR` pointing to the packaged archive. That runner includes a real Windows shortcut roundtrip and native window metadata fixture in an isolated output folder; registry commands are intercepted there. Physical installer/upgrade/uninstall and interactive taskbar pin acceptance remain separate manual checks. Do not confuse the isolated fixture with a full installation test.

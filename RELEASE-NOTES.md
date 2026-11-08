@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.3.2
+
+- Repair Windows Start/Search registration and give the running window explicit taskbar relaunch identity.
+- Separate development identity and remove only legacy development shortcuts incorrectly claiming Palisade's app ID.
+- Refresh installer shortcuts and executable lookup registration; show Onyx Operations Group as publisher.
+- Minimize and close to the tray quietly, while retaining message notifications.
+
 ## 0.3.1
 
 Desktop update containing reviewed inactive Assist components, stricter native input validation and Quit/update cleanup preparation. Full Assist remains unavailable and disabled. See [the release notes](docs/RELEASE-0.3.1.md) for scope and unverified acceptance gates.

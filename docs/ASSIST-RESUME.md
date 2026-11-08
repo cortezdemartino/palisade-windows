@@ -1,5 +1,16 @@
 # Assist continuation checkpoint
 
+## Queued after the Windows registration and silent-tray release
+
+Owner supplied the M4G-WEB-6 handoff for companion commit `5b82bc90e4997f35dd18273427c258fe54eefb95`. Complete the current desktop v0.3.2 work first, then inspect that committed handoff read-only and integrate its canonical changes. This queue does not change existing pinned fixtures or activate Assist.
+
+1. Read companion `docs/52-ASSIST-WINDOWS-ACCEPTANCE.md`, `docs/51-ASSIST-FEATURE-COMPLETION.md`, `docs/assist-interop/manifest.json` and `docs/evidence/m4g-web-6-integration-acceptance.md`. Verify the source blobs and hashes independently before re-pinning.
+2. The handoff reports a deliberate v2-only change to `protocol.ts`, blob `9d499137d469280c8798e72bed4ef88b56a318c3`; v1 and the seven existing fixtures/extension source remain unchanged. New `docs/assist-control/v2-release/fixtures.json` SHA-256: `1bc0231199e1c342fa885f3dd30bbe84e3db2b671c7b14c083067143bed73cc6`. Interop manifest SHA-256: `4ab9e541ac052fac32ca340a0585848e42cbc0388fde0530c493319d1ce17e03`.
+3. Reconcile native `stream.rs` and all affected gateway/executor checks: v2 release-all may use an active mouse or keyboard grant, but releases only input held by that sender under that grant. Never add keyboard permission to a mouse-only session; preserve wrong-session, revoked/resource-grant and unowned-release refusal/no-op semantics and independent endpoint teardown.
+4. Keep the separate new-grant/cleanup/consent/peer requirements, extension v2 dispatch and guarded native UI work in the existing full Assist plan. Run canonical fixtures and targeted negatives before broader checks. WIN-P01, WIN-I05 and WIN-L02 require approved disposable-device qualification; do not run remote-input acceptance on the owner's desktop.
+
+Reported companion results are 1019 web and 280 service units plus two full Chromium runs (22 passed/one Firefox-only skip each). These results have not been rerun here. Firefox, working TURN and the real Windows endpoint remain Not Verified in that handoff. No deployment or enablement is inferred. Existing issue references: project#18 comment6725632964, project#33 comment6725634554, Windows#4 comment6725638644. Architecture approval is already recorded; retain the existing installation/activation/physical/release gates.
+
 ## November 8 Profile 2 continuation
 
 Companion refreshed read-only at `ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6`; Windows began at `87daf784daa48d1ce3b64460dcf67fa27cb71a93`. Docs/51 now defines the full added web contracts. Native Profile 2 parsing, key/button/Unicode execution and authoritative age/queue admission are implemented as an inactive component. [Scope and evidence](evidence/2026-11-08-profile2-native.md). Full live coordinator, crash-surviving cleanup, protected approval UI, fresh control generations and extension v2 resources remain unfinished. Do not ask Claude to recreate the new contracts. The mouse-only release-all defect is tracked in Windows #4.

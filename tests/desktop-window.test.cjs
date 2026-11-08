@@ -112,13 +112,14 @@ test('local preload exposes only fixed controls and strips Electron events from 
   unsubscribe(); assert.equal(ipcRenderer.listenerCount('palisade:window-state'), 0);
 });
 
-test('tray close keeps the session alive, notification click restores the app, and Quit really exits', async () => {
+test('tray close stays silent, explicit notification click restores the app, and Quit really exits', async () => {
   const notices = []; const externalSettings = []; let diagnosticText;
   let hidden = 0, shown = 0, focused = 0, appMenu, openSettings, deviceAction;
   const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() {}, focus: () => focused++ });
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
   const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, setDisplayMediaRequestHandler(fn) { this.display = fn; }, flushStorageData() {} };
-  const app = Object.assign(new EventEmitter(), { setName() {}, setAppUserModelId() {}, requestSingleInstanceLock: () => true,
+  let appId;
+  const app = Object.assign(new EventEmitter(), { setName() {}, setAppUserModelId(value) { appId = value; }, requestSingleInstanceLock: () => true,
     whenReady: () => Promise.resolve(), isReady: () => true, getPath: () => 'fixture-profile', getLoginItemSettings: () => ({ openAtLogin: false }), getVersion: () => '0.2.2', quit: () => {
       let prevented = false;
       app.emit('before-quit', { preventDefault() { prevented = true; } });
@@ -132,6 +133,7 @@ test('tray close keeps the session alive, notification click restores the app, a
     if (name === 'electron') return electron;
     if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote }; } };
     if (name === './windows-notification-branding.cjs') return { APP_ID: 'org.onyxops.palisade', ensureNotificationBranding: async () => {} };
+    if (name === './windows-app-registration.cjs') return require('../src/windows-app-registration.cjs');
     if (name === './chat-notifications.cjs') return { installChatNotifications() {} };
     if (name === './session-policy.cjs') return require('../src/session-policy.cjs');
     if (name === './assist/bridge.cjs') return { installAssistBridge: () => ({ dispose() {} }) };
@@ -146,6 +148,7 @@ test('tray close keeps the session alive, notification click restores the app, a
   } };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/main.cjs'), 'utf8'), context);
   await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(appId, 'org.onyxops.palisade.development');
   assert.equal(openSettings().version, '0.2.2');
   deviceAction('tray-off');
   assert.equal(openSettings().keepRunningInTray, false);
@@ -159,9 +162,11 @@ test('tray close keeps the session alive, notification click restores the app, a
   let prevented = false;
   window.emit('close', { preventDefault: () => { prevented = true; } });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(prevented, true); assert.equal(hidden, 1); assert.equal(notices.length, 1);
+  assert.equal(prevented, true); assert.equal(hidden, 1); assert.equal(notices.length, 0);
+  window.emit('minimize'); assert.equal(hidden, 2); assert.equal(notices.length, 0);
+  deviceAction('notification-test'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(notices.length, 1);
   notices[0].emit('click'); assert.equal(shown, 1); assert.equal(focused, 1);
-  window.emit('minimize'); assert.equal(hidden, 2); assert.equal(notices.length, 1);
   let granted;
   profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: remote.getURL(), isMainFrame: true });
   assert.equal(granted, true);

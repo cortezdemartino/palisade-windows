@@ -16,6 +16,7 @@ async function main() {
     delete env.ELECTRON_RUN_AS_NODE;
     for (const [script, result] of [
       ['window-controls-smoke.cjs', 'tabler-controls-result.json'],
+      ['windows-registration-smoke.cjs', 'windows-registration-result.json'],
       ['chat-notifications-smoke.cjs', 'chat-notifications-result.json'],
       ['session-policy-smoke.cjs', 'session-policy-result.json'],
       ['assist-smoke.cjs', 'assist-smoke-result.json'],

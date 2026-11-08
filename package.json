@@ -1,8 +1,9 @@
 {
   "name": "@palisade/desktop",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Windows desktop client for Palisade",
+  "author": "Onyx Operations Group",
   "license": "Apache-2.0",
   "main": "src/main.cjs",
   "engines": {
@@ -74,6 +75,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
+      "shortcutName": "Palisade",
+      "include": "assets/installer.nsh",
       "artifactName": "Palisade-Setup-${version}-${arch}.${ext}",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false

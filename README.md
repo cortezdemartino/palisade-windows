@@ -2,11 +2,12 @@
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
-**Development version: 0.3.0, unpublished.** Windows 10/11, x64. Assist screen sharing and remote control remain disabled. The client is under active development and has not undergone an independent security audit.
+**Windows 10/11, x64.** Download the current desktop version from [Releases](https://github.com/cortezdemartino/palisade-windows/releases). Assist screen sharing and remote control remain disabled. The client is under active development and has not undergone an independent security audit.
 
 ## Features
 
 - Dedicated application window, single-instance behavior and system tray
+- Windows Start/Search registration and user-selected Start/taskbar pinning; silent minimize-to-tray behavior
 - Existing Palisade account and Matrix device support
 - Sandboxed web renderer without Node.js integration; narrow versioned Assist description API
 - HTTPS navigation restrictions and confirmation for external links
@@ -36,7 +37,7 @@ npm run test:assist-capture
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.3.0-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.3.2-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
 
 ## Updates
 

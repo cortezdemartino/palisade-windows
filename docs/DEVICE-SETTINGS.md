@@ -25,3 +25,5 @@ This candidate has no native Assist capture setting or source chooser. Capture r
 The packaged guardian foundation has no activation toggle and is not started by normal application use. Its inclusion does not change the unavailable Assist report or grant any device permissions. Full Assist controls remain unavailable until the canonical authority and native acceptance gates are complete.
 
 Assist remains unavailable in the current Windows build. There is no setting that authorizes native control or bypasses the hosted capture policy. Internal component tests do not enable remote input, clipboard monitoring or file access. Once integrated, each session must display its independently approved permissions and expiry; accepting a call or viewing a stream does not grant those permissions.
+
+Minimizing or closing to the tray stays silent. The unread icon and message notifications remain active according to the existing settings. Send test notification remains available for checking banners explicitly.

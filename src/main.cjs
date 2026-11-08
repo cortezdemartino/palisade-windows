@@ -3,6 +3,7 @@
 const { app, desktopCapturer, powerMonitor, screen, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
 const path = require('node:path');
 const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
+const { appDetails, ensureAppRegistration } = require('./windows-app-registration.cjs');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
 const { installSessionPolicy } = require('./session-policy.cjs');
@@ -29,7 +30,6 @@ let mainContents = null;
 let assistCapture = null;
 let assistBridge = null;
 let refreshDeviceSettings = null;
-let trayNoticeShown = false;
 const activeNotifications = new Set();
 let tray = null;
 let keepRunningInTray = false;
@@ -53,7 +53,8 @@ async function prepareForExit(reason) {
 }
 
 app.setName('Palisade');
-if (process.platform === 'win32') app.setAppUserModelId(APP_ID);
+// Development Electron must never take the installed client's shell identity.
+if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? APP_ID : APP_ID + '.development');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -92,6 +93,10 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   app.whenReady().then(() => {
+    void ensureAppRegistration({ packaged: app.isPackaged, shell, appData: app.getPath('appData') }).catch(() => {
+      notificationStatus = 'Windows app registration could not be repaired. Run the official installer to repair it.';
+      refreshDeviceSettings?.();
+    });
     notificationBranding = ensureNotificationBranding({ packaged: app.isPackaged }).then(() => true).catch(() => {
       notificationStatus = 'Windows notification branding could not be registered.';
       refreshDeviceSettings?.();
@@ -151,6 +156,8 @@ function createMainWindow(profile) {
   });
   refreshDeviceSettings = desktop.refreshSettings;
   window = desktop.window;
+  const identity = appDetails({ packaged: app.isPackaged });
+  if (identity) window.setAppDetails(identity);
   const contents = mainContents = desktop.contents;
   assistCapture = createCaptureController({ enabled: captureEnabled, getContents: () => contents, getWindow: () => window,
     enumerate: options => desktopCapturer.getSources(options), choose: chooseSource, onState: () => updateTrayMenu(),
@@ -270,10 +277,6 @@ async function notifyDesktop(body, onClick = openWindow) {
 
 function hideToTray() {
   window?.hide();
-  if (!trayNoticeShown) {
-    trayNoticeShown = true;
-    notifyDesktop('Palisade is still running in the tray. Messages and notifications remain available.');
-  }
 }
 
 function createTray() {
