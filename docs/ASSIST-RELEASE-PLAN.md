@@ -1,5 +1,9 @@
 # Complete Windows Assist delivery plan
 
+## November 8 Profile 2 continuation
+
+Companion refreshed read-only at `ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6`; Windows began at `87daf784daa48d1ce3b64460dcf67fa27cb71a93`. Docs/51 now defines the full added web contracts. Native Profile 2 parsing, key/button/Unicode execution and authoritative age/queue admission are implemented as an inactive component. [Scope and evidence](evidence/2026-11-08-profile2-native.md). Full live coordinator, crash-surviving cleanup, protected approval UI, fresh control generations and extension v2 resources remain unfinished. Do not ask Claude to recreate the new contracts. The mouse-only release-all defect is tracked in Windows #4.
+
 Baseline: Windows `7fcae472c041b1569233880cff96ae0a691bc7d1`, exact-SHA CI [40602184816](https://github.com/cortezdemartino/palisade-windows/actions/runs/40602184816) passed. Companion inspected read-only at `ae89e414ec71a193094ef7cbee5ad678418ff6f6`. Native bridge v1 remains the canonical docs/49 contract. Existing evidence: 143 application tests, 69 native tests in each configuration, process probes, NSIS/package checks and 14 actual Electron transport fixtures with a fake input sink. These are component results, not full Assist acceptance.
 
 ## Delivery commitment and ownership

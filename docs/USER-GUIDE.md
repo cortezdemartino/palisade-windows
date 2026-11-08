@@ -58,3 +58,7 @@ Planned direction: an eligible stream viewer can request to assist, or the strea
 The device now reports Assist v1 capabilities, with capture and native endpoint unavailable. This build cannot control another desktop or transfer clipboard/files. No guest virtual keyboard, control approval, clipboard sync or file save workflow is active. Those actions require separately approved native/backend capabilities; do not interpret accepting a call as permission. The inactive screen-sharing stop action is not a certified native-input emergency stop. Continue using the approved browser view-only workflow where enabled, and end assistance to leave it. See the integration guide for blocked/unverified states and owner review steps.
 
 The build includes inactive native consent/input/resource components and an isolated capture provider for upcoming Assist integration. It does not run during normal use and does not enable control, clipboard or file transfers. No extra setup or key copying is required.
+
+## Assist development candidate
+
+Full native Assist remains unavailable in this build. The November 8 component implements extended keyboard, Unicode and mouse-button handling, but it is not connected to the hosted application. There is no setting that safely enables it. Do not install a privileged test build on a personal desktop. Once a disposable-device candidate is approved, follow its recorded setup and acceptance procedure; an ordinary update must not silently enable native control.

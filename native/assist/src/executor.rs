@@ -148,7 +148,10 @@ impl<B: Backend> Executor<B> {
                 _ => (),
             }
             let plan = match action {
-                Action::Shortcut(_) | Action::ReleaseAll => self.ledger.clone().plan(action)?,
+                Action::Shortcut(_)
+                | Action::Text(_)
+                | Action::RepeatKey(_)
+                | Action::ReleaseAll => self.ledger.clone().plan(action)?,
                 _ => vec![action.clone()],
             };
             for step in plan {
@@ -164,7 +167,9 @@ impl<B: Backend> Executor<B> {
                 }
                 let down = matches!(
                     step,
-                    Action::Key { down: true, .. } | Action::Button { down: true, .. }
+                    Action::Key { down: true, .. }
+                        | Action::Button { down: true, .. }
+                        | Action::Unicode { down: true, .. }
                 );
                 if down {
                     self.ledger.plan(&step)?;

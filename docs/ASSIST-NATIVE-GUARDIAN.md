@@ -1,5 +1,9 @@
 # Native Assist components
 
+## November 8 Profile 2 continuation
+
+Companion refreshed read-only at `ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6`; Windows began at `87daf784daa48d1ce3b64460dcf67fa27cb71a93`. Docs/51 now defines the full added web contracts. Native Profile 2 parsing, key/button/Unicode execution and authoritative age/queue admission are implemented as an inactive component. [Scope and evidence](evidence/2026-11-08-profile2-native.md). Full live coordinator, crash-surviving cleanup, protected approval UI, fresh control generations and extension v2 resources remain unfinished. Do not ask Claude to recreate the new contracts. The mouse-only release-all defect is tracked in Windows #4.
+
 Status, October 28, 2026: **Experimental, inactive**. Production main/preload do not start or expose these components. The packaged helper has no sensitive Cargo features. This is not a full Assist test candidate.
 
 The separate [private live channel](ASSIST-LIVE-CHANNEL.md) now implements typed framing, independent cancellation/liveness and application lifecycle ownership. Its negotiated cleanup scope is strictly channel-only: no runtime, input executor, identity or resource operation can start through it. Diagnostic v1 remains unchanged. Runtime integration and authenticated cleanup ownership through descendant crashes remain W2 work; the new channel cannot attest them.

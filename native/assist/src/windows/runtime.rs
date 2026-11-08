@@ -13,7 +13,6 @@ use super::{
 };
 use crate::{
     executor::Executor,
-    input,
     stream::{Binding, SessionGate, SignedStreamGrant},
 };
 use serde::Serialize;
@@ -35,8 +34,9 @@ pub struct Acknowledgement {
     pub state: &'static str,
 }
 enum Work {
-    Packet(String, mpsc::SyncSender<Result<(), &'static str>>),
+    Packet(String, Instant, mpsc::SyncSender<Result<(), &'static str>>),
 }
+pub use crate::input::InputProfile;
 /// Prepared before authority and cloned into urgent readers/watchdogs. Calling
 /// either method touches only atomics, never registry/UI/network/join locks.
 #[derive(Clone)]
@@ -84,6 +84,25 @@ impl StreamRuntime {
         source: Option<Source>,
         stop_surface: &NativeStop,
         manifest: super::image::ImageManifest,
+    ) -> Result<Self, &'static str> {
+        Self::begin_with_profile(
+            enrolled,
+            binding,
+            grants,
+            source,
+            stop_surface,
+            manifest,
+            InputProfile::Legacy,
+        )
+    }
+    pub fn begin_with_profile(
+        enrolled: EnrolledIdentity<'_>,
+        binding: Binding,
+        grants: &[SignedStreamGrant],
+        source: Option<Source>,
+        stop_surface: &NativeStop,
+        manifest: super::image::ImageManifest,
+        profile: InputProfile,
     ) -> Result<Self, &'static str> {
         if !cfg!(any(feature = "native-input", feature = "native-resources")) {
             return Err("endpoint-disabled");
@@ -268,12 +287,11 @@ impl StreamRuntime {
                     }
                 }
                 let packet = match receive.recv_timeout(Duration::from_millis(20)) {
-                    Ok(Work::Packet(p, reply)) => (p, reply),
+                    Ok(Work::Packet(p, arrived, reply)) => (p, arrived, reply),
                     Err(mpsc::RecvTimeoutError::Timeout) => continue,
                     Err(_) => break,
                 };
                 let result = (|| {
-                    let message = input::parse(&packet.0)?;
                     let source = worker_source
                         .as_ref()
                         .ok_or("capture-required")?
@@ -284,8 +302,13 @@ impl StreamRuntime {
                     if executor.is_none() {
                         return Err("input-not-ready");
                     }
-                    let permit =
-                        gate.permit(&message, source.generation, lease::now()?, Instant::now())?;
+                    let (permit, message, queued_until) = gate.permit_packet(
+                        &packet.0,
+                        profile,
+                        source.generation,
+                        lease::now()?,
+                        (packet.1, Instant::now()),
+                    )?;
                     executor.as_mut().ok_or("endpoint-failed")?.dispatch(
                         permit,
                         &mut gate,
@@ -294,6 +317,7 @@ impl StreamRuntime {
                         || {
                             if worker_stop.load(Ordering::SeqCst)
                                 || worker_input_stop.load(Ordering::SeqCst)
+                                || Instant::now() >= queued_until
                             {
                                 return Err("revoked");
                             }
@@ -301,10 +325,13 @@ impl StreamRuntime {
                         },
                     )
                 })();
-                if result.is_err() && result != Err("input-not-ready") {
+                if result.is_err()
+                    && result != Err("input-not-ready")
+                    && result != Err("stale-input")
+                {
                     worker_input_stop.store(true, Ordering::SeqCst);
                 }
-                let _ = packet.1.send(result);
+                let _ = packet.2.send(crate::input::packet_result(result));
             }
             worker_stop.store(true, Ordering::SeqCst);
             worker_ready.store(false, Ordering::SeqCst);
@@ -442,6 +469,9 @@ impl StreamRuntime {
             .verify_peer(fingerprint)
     }
     pub fn packet(&self, packet: String) -> Result<(), &'static str> {
+        if packet.len() > 16_384 {
+            return Err("too-large");
+        }
         if self.stop.load(Ordering::SeqCst) {
             return Err("revoked");
         }
@@ -450,7 +480,7 @@ impl StreamRuntime {
         }
         let (send, receive) = mpsc::sync_channel(1);
         self.work
-            .try_send(Work::Packet(packet, send))
+            .try_send(Work::Packet(packet, Instant::now(), send))
             .map_err(|_| "rate-limited")?;
         receive
             .recv_timeout(Duration::from_millis(250))

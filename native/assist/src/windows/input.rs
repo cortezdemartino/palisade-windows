@@ -1,7 +1,7 @@
 //! Dormant OS adapter. Default builds cannot dispatch input, even with a fabricated caller.
 use crate::executor::Backend;
 pub use crate::executor::Source;
-use crate::input::{Action, Ledger, scan_code};
+use crate::input::{Action, Ledger, scan_code2};
 use std::mem::{size_of, zeroed};
 use windows_sys::Win32::{
     Foundation::*,
@@ -216,7 +216,7 @@ impl WindowsBackend {
     fn send(&self, action: &Action) -> Result<(), &'static str> {
         match action {
             Action::Key { code, down } => {
-                let (scan, extended) = scan_code(code).ok_or("invalid-message")?;
+                let (scan, extended) = scan_code2(code).ok_or("invalid-message")?;
                 self.submit(INPUT {
                     r#type: INPUT_KEYBOARD,
                     Anonymous: INPUT_0 {
@@ -232,6 +232,18 @@ impl WindowsBackend {
                     },
                 })
             }
+            Action::Unicode { unit, down } => self.submit(INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: 0,
+                        wScan: *unit,
+                        dwFlags: KEYEVENTF_UNICODE | if *down { 0 } else { KEYEVENTF_KEYUP },
+                        time: 0,
+                        dwExtraInfo: self.tag,
+                    },
+                },
+            }),
             Action::Button { button, down, .. } => {
                 let flag = match (button.as_str(), *down) {
                     ("left", true) => MOUSEEVENTF_LEFTDOWN,
@@ -240,9 +252,18 @@ impl WindowsBackend {
                     ("right", false) => MOUSEEVENTF_RIGHTUP,
                     ("middle", true) => MOUSEEVENTF_MIDDLEDOWN,
                     ("middle", false) => MOUSEEVENTF_MIDDLEUP,
+                    ("back" | "forward", true) => MOUSEEVENTF_XDOWN,
+                    ("back" | "forward", false) => MOUSEEVENTF_XUP,
                     _ => return Err("invalid-message"),
                 };
-                self.mouse(flag, 0)
+                self.mouse(
+                    flag,
+                    match button.as_str() {
+                        "back" => 1,
+                        "forward" => 2,
+                        _ => 0,
+                    },
+                )
             }
             Action::Wheel { dx, dy, .. } => {
                 if *dy != 0 {
@@ -295,7 +316,10 @@ impl ChildInput {
         let mut backend = WindowsBackend::new(self.tag);
         let result = (|| {
             action.validate()?;
-            if matches!(action, Action::Shortcut(_) | Action::ReleaseAll) {
+            if matches!(
+                action,
+                Action::Shortcut(_) | Action::Text(_) | Action::RepeatKey(_) | Action::ReleaseAll
+            ) {
                 return Err("invalid-message");
             }
             backend.prepare()?;
@@ -311,8 +335,13 @@ impl ChildInput {
             }
             let down = matches!(
                 action,
-                Action::Key { down: true, .. } | Action::Button { down: true, .. }
+                Action::Key { down: true, .. }
+                    | Action::Button { down: true, .. }
+                    | Action::Unicode { down: true, .. }
             );
+            if matches!(action, Action::Unicode { down: true, .. }) && self.owned.modifiers_held() {
+                return Err("held-input");
+            }
             if down {
                 self.owned.plan(action)?;
             }
@@ -362,6 +391,8 @@ impl Backend for WindowsBackend {
                 ("left", VK_LBUTTON),
                 ("middle", VK_MBUTTON),
                 ("right", VK_RBUTTON),
+                ("back", VK_XBUTTON1),
+                ("forward", VK_XBUTTON2),
             ] {
                 if GetAsyncKeyState(vk as i32) < 0
                     && !owned.is_held(&Action::Button {
@@ -376,9 +407,12 @@ impl Backend for WindowsBackend {
         }
         match action {
             Action::Move { .. } => (),
-            _ => target(source, matches!(action, Action::Key { .. }))?,
+            _ => target(
+                source,
+                matches!(action, Action::Key { .. } | Action::Unicode { .. }),
+            )?,
         }
-        if matches!(action, Action::Key { .. }) {
+        if matches!(action, Action::Key { .. } | Action::Unicode { .. }) {
             unsafe {
                 for (code, vk) in [
                     ("ControlLeft", VK_LCONTROL),
@@ -405,7 +439,7 @@ impl Backend for WindowsBackend {
             unsafe {
                 let vk = match action {
                     Action::Key { code, down: true } => {
-                        let (scan, extended) = scan_code(code).ok_or("invalid-message")?;
+                        let (scan, extended) = scan_code2(code).ok_or("invalid-message")?;
                         MapVirtualKeyW(
                             u32::from(scan) | if extended { 0xe000 } else { 0 },
                             MAPVK_VSC_TO_VK_EX,
@@ -417,6 +451,8 @@ impl Backend for WindowsBackend {
                         "left" => VK_LBUTTON as i32,
                         "middle" => VK_MBUTTON as i32,
                         "right" => VK_RBUTTON as i32,
+                        "back" => VK_XBUTTON1 as i32,
+                        "forward" => VK_XBUTTON2 as i32,
                         _ => return Err("invalid-message"),
                     },
                     _ => 0,

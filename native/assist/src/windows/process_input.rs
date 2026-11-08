@@ -198,7 +198,9 @@ impl Backend for ProcessInput {
         if self.fenced {
             if !matches!(
                 action,
-                Action::Key { down: false, .. } | Action::Button { down: false, .. }
+                Action::Key { down: false, .. }
+                    | Action::Button { down: false, .. }
+                    | Action::Unicode { down: false, .. }
             ) || !self.mirror.is_held(action)
             {
                 return Err("cleanup-only");

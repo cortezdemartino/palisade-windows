@@ -8,6 +8,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
 };
+use unicode_normalization::UnicodeNormalization;
 #[derive(Clone, Debug, PartialEq, serde::Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub enum Action {
@@ -31,6 +32,13 @@ pub enum Action {
         down: bool,
     },
     Shortcut(String),
+    Text(String),
+    RepeatKey(String),
+    /// Internal, individually ledgered UTF-16 step. Never decoded from the wire.
+    Unicode {
+        unit: u16,
+        down: bool,
+    },
     ReleaseAll,
 }
 impl Action {
@@ -46,7 +54,7 @@ impl Action {
             Action::Button {
                 button, source_gen, ..
             } => {
-                ["left", "middle", "right"].contains(&button.as_str())
+                ["left", "middle", "right", "back", "forward"].contains(&button.as_str())
                     && (1..=1_000_000).contains(source_gen)
             }
             Action::Wheel { dx, dy, source_gen } => {
@@ -54,8 +62,11 @@ impl Action {
                     && dy.abs_diff(0) <= 1200
                     && (1..=1_000_000).contains(source_gen)
             }
-            Action::Key { code, .. } => scan_code(code).is_some(),
+            Action::Key { code, .. } => scan_code2(code).is_some(),
             Action::Shortcut(name) => shortcut(name).is_some(),
+            Action::Text(text) => valid_text(text),
+            Action::RepeatKey(code) => scan_code2(code).is_some(),
+            Action::Unicode { .. } => true,
             Action::ReleaseAll => true,
         };
         if valid {
@@ -270,6 +281,178 @@ pub fn scan_code(code: &str) -> Option<(u16, bool)> {
         _ => return None,
     })
 }
+/// Profile 2 additions; legacy wire decoding continues to use scan_code.
+pub fn scan_code2(code: &str) -> Option<(u16, bool)> {
+    if let Some(scan) = scan_code(code) {
+        return Some(scan);
+    }
+    if let Some(n) = code.strip_prefix('F').and_then(|v| v.parse::<u16>().ok()) {
+        if code == format!("F{n}") && (13..=24).contains(&n) {
+            return Some((if n == 24 { 0x76 } else { 0x64 + n - 13 }, false));
+        }
+    }
+    Some(match code {
+        "Numpad0" => (0x52, false),
+        "Numpad1" => (0x4f, false),
+        "Numpad2" => (0x50, false),
+        "Numpad3" => (0x51, false),
+        "Numpad4" => (0x4b, false),
+        "Numpad5" => (0x4c, false),
+        "Numpad6" => (0x4d, false),
+        "Numpad7" => (0x47, false),
+        "Numpad8" => (0x48, false),
+        "Numpad9" => (0x49, false),
+        "NumpadAdd" => (0x4e, false),
+        "NumpadSubtract" => (0x4a, false),
+        "NumpadMultiply" => (0x37, false),
+        "NumpadDivide" => (0x35, true),
+        "NumpadDecimal" => (0x53, false),
+        "NumpadEnter" => (0x1c, true),
+        "NumLock" => (0x45, false),
+        "CapsLock" => (0x3a, false),
+        "ScrollLock" => (0x46, false),
+        "ContextMenu" => (0x5d, true),
+        "IntlBackslash" => (0x56, false),
+        "IntlRo" => (0x73, false),
+        "IntlYen" => (0x7d, false),
+        "KanaMode" => (0x70, false),
+        "Lang1" => (0x72, false),
+        "Lang2" => (0x71, false),
+        "Convert" => (0x79, false),
+        "NonConvert" => (0x7b, false),
+        _ => return None,
+    })
+}
+pub fn valid_text(text: &str) -> bool {
+    let units = text.encode_utf16().count();
+    (1..=256).contains(&units)
+        && text.chars().eq(text.nfc())
+        && !text.chars().any(|c| {
+            c <= '\u{1f}'
+                || ('\u{7f}'..='\u{9f}').contains(&c)
+                || matches!(c, '\u{fffe}' | '\u{ffff}')
+        })
+}
+
+pub struct Profile2Message {
+    pub message: Message,
+    pub sender_ms: u64,
+    pub repeat: bool,
+}
+/// Trusted peer setup fixes this once; wire content cannot select a profile.
+#[derive(Clone, Copy)]
+pub enum InputProfile {
+    Legacy,
+    Profile2,
+}
+/// A discarded stale event was handled without execution. Keep the native peer
+/// open so a subsequent owned UP can arrive; every other refusal remains fatal.
+pub fn packet_result(result: Result<(), &'static str>) -> Result<(), &'static str> {
+    match result {
+        Err("stale-input") => Ok(()),
+        other => other,
+    }
+}
+impl Profile2Message {
+    pub fn release(&self) -> bool {
+        matches!(
+            self.message.action,
+            Action::Key { down: false, .. } | Action::Button { down: false, .. }
+        )
+    }
+}
+/// Only the separately negotiated input2 profile may call this decoder.
+/// Resource messages are decoded by their independent capability brokers.
+pub fn parse_profile2(raw: &str) -> Result<Profile2Message, &'static str> {
+    if raw.len() > 16_384 {
+        return Err("too-large");
+    }
+    let object: StrictObject = serde_json::from_str(raw).map_err(|_| "invalid-message")?;
+    let m = &object.0;
+    let get = |k: &str| m.get(k).ok_or("invalid-message");
+    if text(get("p")?)? != "palisade.assist.control" || integer(get("v")?, 2, 2)? != 2 {
+        return Err("incompatible-protocol");
+    }
+    let kind = text(get("kind")?)?;
+    let fields: &[&str] = match kind {
+        "input-move" => &["x", "y", "sourceGen", "t"],
+        "input-button" => &["button", "down", "sourceGen", "t"],
+        "input-wheel" => &["dx", "dy", "sourceGen", "t"],
+        "input-key" => &["code", "down", "repeat", "t"],
+        "input-text" => &["text", "t"],
+        "input-shortcut" => &["name", "t"],
+        _ => return Err("invalid-message"),
+    };
+    if m.len() != 7 + fields.len()
+        || m.keys().any(|k| {
+            !fields.contains(&k.as_str())
+                && !["p", "v", "session", "grant", "gen", "seq", "kind"].contains(&k.as_str())
+        })
+    {
+        return Err("invalid-message");
+    }
+    let session = text(get("session")?)?.to_owned();
+    let grant = text(get("grant")?)?.to_owned();
+    if !crate::grant::token(&session, 8, 128) || !crate::grant::token(&grant, 8, 128) {
+        return Err("invalid-message");
+    }
+    let source = || integer(get("sourceGen")?, 1, 1_000_000).map(|v| v as u32);
+    let down = || get("down")?.as_bool().ok_or("invalid-message");
+    let mut repeat = false;
+    let action = match kind {
+        "input-move" => Action::Move {
+            x: number(get("x")?, 0., 1.)?,
+            y: number(get("y")?, 0., 1.)?,
+            source_gen: source()?,
+        },
+        "input-button" => Action::Button {
+            button: text(get("button")?)?.into(),
+            down: down()?,
+            source_gen: source()?,
+        },
+        "input-wheel" => {
+            let dx = number(get("dx")?, -1200., 1200.)?;
+            let dy = number(get("dy")?, -1200., 1200.)?;
+            if dx.fract() != 0. || dy.fract() != 0. || (dx == 0. && dy == 0.) {
+                return Err("invalid-message");
+            }
+            Action::Wheel {
+                dx: dx as i32,
+                dy: dy as i32,
+                source_gen: source()?,
+            }
+        }
+        "input-key" => {
+            repeat = get("repeat")?.as_bool().ok_or("invalid-message")?;
+            let down = down()?;
+            if !down && repeat {
+                return Err("invalid-message");
+            }
+            if repeat {
+                Action::RepeatKey(text(get("code")?)?.into())
+            } else {
+                Action::Key {
+                    code: text(get("code")?)?.into(),
+                    down,
+                }
+            }
+        }
+        "input-text" => Action::Text(text(get("text")?)?.into()),
+        _ => Action::Shortcut(text(get("name")?)?.into()),
+    };
+    action.validate()?;
+    Ok(Profile2Message {
+        message: Message {
+            session,
+            grant,
+            generation: integer(get("gen")?, 1, 9_007_199_254_740_991)?,
+            sequence: integer(get("seq")?, 0, u32::MAX as u64)? as u32,
+            action,
+        },
+        sender_ms: integer(get("t")?, 0, 9_007_199_254_740_991)?,
+        repeat,
+    })
+}
 pub fn shortcut(name: &str) -> Option<&'static [&'static str]> {
     Some(match name {
         "copy" => &["ControlLeft", "KeyC"],
@@ -289,12 +472,14 @@ pub fn shortcut(name: &str) -> Option<&'static [&'static str]> {
 pub struct Ledger {
     keys: BTreeSet<String>,
     buttons: BTreeSet<String>,
+    unicode: BTreeSet<u16>,
 }
 impl Ledger {
     pub fn is_held(&self, action: &Action) -> bool {
         match action {
             Action::Key { code, .. } => self.keys.contains(code),
             Action::Button { button, .. } => self.buttons.contains(button),
+            Action::Unicode { unit, .. } => self.unicode.contains(unit),
             _ => false,
         }
     }
@@ -306,13 +491,14 @@ impl Ledger {
                 down: false,
                 ..
             } => self.buttons.contains(button),
+            Action::Unicode { unit, down: false } => self.unicode.contains(unit),
             _ => true,
         }
     }
     pub fn plan(&mut self, action: &Action) -> Result<Vec<Action>, &'static str> {
         match action {
             Action::Key { code, down } => {
-                if scan_code(code).is_none() {
+                if scan_code2(code).is_none() {
                     return Err("invalid-message");
                 };
                 let mut next = self.keys.clone();
@@ -324,8 +510,8 @@ impl Ledger {
                 let alt = next.contains("AltLeft") || next.contains("AltRight");
                 let ctrl = next.contains("ControlLeft") || next.contains("ControlRight");
                 let shift = next.contains("ShiftLeft") || next.contains("ShiftRight");
-                if (alt && next.contains("Tab"))
-                    || (ctrl && alt && next.contains("Delete"))
+                if (alt && (next.contains("Tab") || next.contains("Escape")))
+                    || (ctrl && alt && (next.contains("Delete") || next.contains("NumpadDecimal")))
                     || (ctrl && shift && next.contains("Escape"))
                     || next.len() > 16
                 {
@@ -335,7 +521,7 @@ impl Ledger {
                 Ok(vec![action.clone()])
             }
             Action::Button { button, down, .. } => {
-                if !["left", "middle", "right"].contains(&button.as_str()) {
+                if !["left", "middle", "right", "back", "forward"].contains(&button.as_str()) {
                     return Err("invalid-message");
                 };
                 if *down {
@@ -345,9 +531,46 @@ impl Ledger {
                 }
                 Ok(vec![action.clone()])
             }
+            Action::Unicode { unit, down } => {
+                if *down {
+                    if self.modifiers_held() {
+                        return Err("held-input");
+                    }
+                    self.unicode.insert(*unit);
+                } else {
+                    self.unicode.remove(unit);
+                }
+                Ok(vec![action.clone()])
+            }
+            Action::Text(text) => {
+                if !valid_text(text) {
+                    return Err("invalid-message");
+                }
+                if self.modifiers_held() {
+                    return Err("held-input");
+                }
+                Ok(text
+                    .encode_utf16()
+                    .flat_map(|unit| {
+                        [
+                            Action::Unicode { unit, down: true },
+                            Action::Unicode { unit, down: false },
+                        ]
+                    })
+                    .collect())
+            }
+            Action::RepeatKey(code) => {
+                if !self.keys.contains(code) {
+                    return Err("held-input");
+                }
+                Ok(vec![Action::Key {
+                    code: code.clone(),
+                    down: true,
+                }])
+            }
             Action::Shortcut(name) => {
                 let keys = shortcut(name).ok_or("invalid-message")?;
-                if !self.keys.is_empty() || !self.buttons.is_empty() {
+                if self.held() {
                     return Err("held-input");
                 }
                 // Expansion is not a ledger commit. Dispatcher records every individual
@@ -373,6 +596,9 @@ impl Ledger {
     }
     pub fn releases(&mut self) -> Vec<Action> {
         let mut result = Vec::new();
+        for unit in std::mem::take(&mut self.unicode) {
+            result.push(Action::Unicode { unit, down: false });
+        }
         for code in std::mem::take(&mut self.keys) {
             result.push(Action::Key { code, down: false })
         }
@@ -386,13 +612,31 @@ impl Ledger {
         result
     }
     pub fn held(&self) -> bool {
-        !self.keys.is_empty() || !self.buttons.is_empty()
+        !self.keys.is_empty() || !self.buttons.is_empty() || !self.unicode.is_empty()
+    }
+    pub fn modifiers_held(&self) -> bool {
+        self.keys.iter().any(|k| {
+            matches!(
+                k.as_str(),
+                "ControlLeft"
+                    | "ControlRight"
+                    | "ShiftLeft"
+                    | "ShiftRight"
+                    | "AltLeft"
+                    | "AltRight"
+            )
+        })
     }
     pub fn snapshot(&self) -> BTreeMap<String, bool> {
         self.keys
             .iter()
             .chain(self.buttons.iter())
             .map(|v| (v.clone(), true))
+            .chain(
+                self.unicode
+                    .iter()
+                    .map(|unit| (format!("unicode:{unit:04x}"), true)),
+            )
             .collect()
     }
 }

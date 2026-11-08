@@ -35,6 +35,7 @@ app.whenReady().then(async () => {
   const sources = [{ id: 'window:11:0', name: '<script>private-title</script>', thumbnail: { isEmpty: () => true } }];
   phase = "picker";
   for (const select of [false, true]) {
+    phase = `picker ${select ? 'select' : 'cancel'} loading`;
     const abort = new AbortController(), result = chooseSource(sources, { parent: owner, signal: abort.signal });
     let picker;
     for (let i = 0; i < 60; i++) {
@@ -42,10 +43,13 @@ app.whenReady().then(async () => {
       if (picker && !picker.webContents.isLoadingMainFrame() && await picker.webContents.executeJavaScript('document.querySelectorAll("input").length')) break;
       await pause(50);
     }
+    phase = `picker ${select ? 'select' : 'cancel'} assertions`;
     assert.ok(picker); assert.equal(await picker.webContents.executeJavaScript('document.getElementById("share").disabled'), true);
     assert.equal(await picker.webContents.executeJavaScript('document.querySelectorAll("script").length'), 1);
+    phase = `picker ${select ? 'select' : 'cancel'} click`;
     if (select) await picker.webContents.executeJavaScript('document.querySelector("input").click();document.getElementById("share").click()');
     else await picker.webContents.executeJavaScript('document.getElementById("cancel").click()');
+    phase = `picker ${select ? 'select' : 'cancel'} completion`;
     assert.equal(await result, select ? 'window:11:0' : null);
   }
   phase = "capture denial and teardown";

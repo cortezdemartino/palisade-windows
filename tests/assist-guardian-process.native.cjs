@@ -153,6 +153,20 @@ test('executor probe keeps an idle private pipe alive with no-input heartbeats, 
     p.child.stdin.end();assert.equal((await p.exited)[0],125);
   }finally{p.close();}
 });
+test('executor probe carries Profile 2 physical, X-button and UTF-16 steps without OS input', async () => {
+  const p=await executorProbe();try{
+    for(const code of ['F24','NumpadEnter','IntlYen','AltRight']) {
+      for(const down of [true,false]) { p.send({Key:{code,down}});assert.equal((await p.next()).accepted,true); }
+    }
+    for(const button of ['back','forward']) {
+      for(const down of [true,false]) { p.send({Button:{button,down,source_gen:1}});assert.equal((await p.next()).accepted,true); }
+    }
+    for(const unit of [0xd83d,0xde42]) {
+      for(const down of [true,false]) { p.send({Unicode:{unit,down}});assert.equal((await p.next()).accepted,true); }
+    }
+    p.child.stdin.end();assert.equal((await p.exited)[0],125);
+  }finally{p.close();}
+});
 test('executor probe rejects malformed frames, replayed or expired packets and idle parent loss', async () => {
   for(const mode of ['malformed','replay','expired','idle']){
     const p=await executorProbe();try{

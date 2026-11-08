@@ -26,12 +26,17 @@ function check(fn, expected) {
 }
 test("pin exact web commit, Git blobs and fixture SHA256", () => {
   assert.equal(provenance.commit,"ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6");
+  const verified = new Set();
   for(const file of provenance.files) {
-    const bytes = Buffer.from(fs.readFileSync(path.join(root,file.local),"utf8").replace(/\r\n/g,"\n"));
+    const bytes = Buffer.from(fs.readFileSync(path.join(__dirname,"..",file.local),"utf8").replace(/\r\n/g,"\n"));
     assert.equal(createHash("sha1").update("blob "+bytes.length+"\\0".replace("\\0","\0")).update(bytes).digest("hex"),file.gitBlob,file.source);
-    if(Object.hasOwn(provenance.fixtureSha256,file.local))
-      assert.equal(createHash("sha256").update(bytes).digest("hex"),provenance.fixtureSha256[file.local],file.local);
+    const filename = path.basename(file.local);
+    if(Object.hasOwn(provenance.fixtureSha256,filename)) {
+      assert.equal(createHash("sha256").update(bytes).digest("hex"),provenance.fixtureSha256[filename],file.local);
+      verified.add(filename);
+    }
   }
+  assert.deepEqual([...verified].sort(), Object.keys(provenance.fixtureSha256).sort());
 });
 test("web profile 2 accepts exact valid and refuses invalid kinds",async()=>{
   const api = await canonical;

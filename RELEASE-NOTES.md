@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased Assist component checkpoint
+
+- Add strict native Profile 2 keyboard, Unicode, extra mouse buttons and peer-bound stale-input handling.
+- Preserve legacy decoding, permission separation and per-event cleanup ownership.
+- Repair Profile 2 fixture provenance checks. Full Assist remains inactive and unfinished.
+
 Current unpublished development also adds an inactive isolated capture provider with existing-picker reuse, app-owned DTLS/video proof, native socket ownership, monotonic freeze detection and selected-window shutdown tests. Native input suspension preserves independent resource permissions across lease renewal. Shared guardian/child ownership prevents concurrent controllers during surviving cleanup. These components are not connected to production; full Assist remains Blocked. No release or activation is authorized by this checkpoint.
 
 ## 0.3.0 (unpublished)

@@ -248,6 +248,7 @@ pub struct SessionGate {
     input_epoch: u64,
     instance: u64,
     peer_verified: bool,
+    input_age: Option<(crate::input_age::InputAgeGuard, Instant)>,
 }
 pub struct ExecutionPermit {
     instance: u64,
@@ -294,6 +295,7 @@ impl SessionGate {
                 .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_add(1))
                 .expect("endpoint instance exhausted"),
             peer_verified: false,
+            input_age: None,
         }
     }
     fn clock(&mut self, now: u64) -> Result<(), &'static str> {
@@ -549,6 +551,9 @@ impl SessionGate {
             self.stop();
             return Err("peer-mismatch");
         }
+        if self.input_age.is_none() {
+            self.input_age = Some((crate::input_age::InputAgeGuard::new(), Instant::now()));
+        }
         self.peer_verified = true;
         Ok(())
     }
@@ -588,6 +593,9 @@ impl SessionGate {
         instant: Instant,
     ) -> Result<ExecutionPermit, &'static str> {
         message.action.validate()?;
+        if matches!(message.action, crate::input::Action::Unicode { .. }) {
+            return Err("invalid-message");
+        }
         if message.session != self.binding.session {
             return Err("binding-mismatch");
         }
@@ -614,6 +622,65 @@ impl SessionGate {
             until: instant + Duration::from_millis(100),
             action: message.action.clone(),
         })
+    }
+    /// Profile2 authority and sequence checks precede age observation so forged
+    /// traffic cannot poison the peer baseline. Repeated verify_peer never
+    /// resets it. This gate supports one peer association for its whole lifetime.
+    pub fn permit_profile2(
+        &mut self,
+        message: &crate::input::Profile2Message,
+        source_generation: u32,
+        now: u64,
+        instant: Instant,
+    ) -> Result<ExecutionPermit, &'static str> {
+        let permit = self.permit(&message.message, source_generation, now, instant)?;
+        let (age, start) = self.input_age.as_mut().ok_or("peer-unverified")?;
+        let arrival = instant
+            .checked_duration_since(*start)
+            .ok_or("invalid-message")?;
+        let arrival = u64::try_from(arrival.as_millis()).map_err(|_| "invalid-message")?;
+        age.observe(message.sender_ms, arrival, message.release())?;
+        Ok(permit)
+    }
+    /// Exact runtime ingress path, including locally measured queue residence.
+    /// A valid stale message consumes sequence/age state, but dispatches nothing.
+    /// Owned releases remain possible; they still require current authority.
+    pub fn permit_packet(
+        &mut self,
+        raw: &str,
+        profile: crate::input::InputProfile,
+        source_generation: u32,
+        now: u64,
+        timing: (Instant, Instant),
+    ) -> Result<(ExecutionPermit, crate::input::Message, Instant), &'static str> {
+        let (ingress, instant) = timing;
+        let (permit, message) = match crate::input::parse(raw) {
+            Ok(message) => (
+                self.permit(&message, source_generation, now, instant)?,
+                message,
+            ),
+            Err(error) => match profile {
+                crate::input::InputProfile::Legacy => return Err(error),
+                crate::input::InputProfile::Profile2 => {
+                    let m = crate::input::parse_profile2(raw)?;
+                    (
+                        self.permit_profile2(&m, source_generation, now, instant)?,
+                        m.message,
+                    )
+                }
+            },
+        };
+        let release = matches!(
+            message.action,
+            crate::input::Action::Key { down: false, .. }
+                | crate::input::Action::Button { down: false, .. }
+                | crate::input::Action::ReleaseAll
+        );
+        let until = if release { instant } else { ingress } + Duration::from_millis(100);
+        if instant < ingress || instant >= until {
+            return Err("stale-input");
+        }
+        Ok((permit, message, until))
     }
     pub fn validate_permit(
         &mut self,

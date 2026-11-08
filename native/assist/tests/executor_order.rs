@@ -5,6 +5,164 @@ use palisade_assist_guardian::{
     stream::*,
 };
 use serde_json::{Value, json};
+#[test]
+fn runtime_ingress_bounds_queue_without_losing_delayed_releases_or_legacy() {
+    use palisade_assist_guardian::input::InputProfile;
+    let (mut gate, grant, now, _) = fixture();
+    let t = Instant::now();
+    let packet = |seq, stamp, down| {
+        json!({"p":"palisade.assist.control","v":2,"session":grant.grant.session,"grant":grant.grant.grant_id,"gen":grant.grant.generation,"seq":seq,"kind":"input-key","code":"KeyA","down":down,"repeat":false,"t":stamp}).to_string()
+    };
+    assert!(
+        gate.permit_packet(&packet(1, 0, true), InputProfile::Legacy, 1, now, (t, t))
+            .is_err()
+    );
+    assert!(
+        gate.permit_packet(&packet(1, 0, true), InputProfile::Profile2, 1, now, (t, t))
+            .is_ok()
+    );
+    let delayed = t + Duration::from_millis(101);
+    assert!(matches!(
+        gate.permit_packet(
+            &packet(2, 101, true),
+            InputProfile::Profile2,
+            1,
+            now,
+            (t, delayed)
+        ),
+        Err("stale-input")
+    ));
+    assert!(matches!(
+        gate.permit_packet(
+            &packet(2, 101, true),
+            InputProfile::Profile2,
+            1,
+            now,
+            (delayed, delayed)
+        ),
+        Err("replay")
+    ));
+    assert!(
+        gate.permit_packet(
+            &packet(3, 102, false),
+            InputProfile::Profile2,
+            1,
+            now,
+            (t, delayed)
+        )
+        .is_ok()
+    );
+    let legacy=json!({"p":"palisade.assist.control","v":2,"session":grant.grant.session,"grant":grant.grant.grant_id,"gen":grant.grant.generation,"seq":4,"kind":"key","code":"KeyB","down":true}).to_string();
+    assert!(
+        gate.permit_packet(&legacy, InputProfile::Profile2, 1, now, (delayed, delayed))
+            .is_ok()
+    );
+    let internal = palisade_assist_guardian::input::Message {
+        session: grant.grant.session,
+        grant: grant.grant.grant_id,
+        generation: grant.grant.generation,
+        sequence: 5,
+        action: Action::Unicode {
+            unit: 65,
+            down: true,
+        },
+    };
+    assert!(matches!(
+        gate.permit(&internal, 1, now, delayed),
+        Err("invalid-message")
+    ));
+}
+#[test]
+fn unicode_partial_failure_and_stop_keep_write_ahead_fenced_cleanup() {
+    for stop in [false, true] {
+        let (mut gate, grant, now, t) = fixture();
+        let flag = Arc::new(AtomicBool::new(false));
+        let trace = Rc::new(RefCell::new(Trace::default()));
+        if stop {
+            trace.borrow_mut().stop_after_apply = Some((1, flag.clone()));
+        } else {
+            trace.borrow_mut().fail_at = Some(1);
+        }
+        let mut executor = Executor::new(Fake(trace.clone()), flag, true);
+        let m = palisade_assist_guardian::input::Message {
+            session: grant.grant.session.clone(),
+            grant: grant.grant.grant_id.clone(),
+            generation: grant.grant.generation,
+            sequence: 1,
+            action: Action::Text("\u{1f642}".into()),
+        };
+        let permit = gate.permit(&m, 1, now, t).unwrap();
+        assert!(
+            executor
+                .dispatch(permit, &mut gate, &source(), &m.action, || Ok((now, t)))
+                .is_err()
+        );
+        assert!(!executor.held());
+        let log = &trace.borrow().events;
+        let down = log
+            .iter()
+            .position(|s| s.contains("unit: 55357, down: true"))
+            .unwrap();
+        let fence = log.iter().position(|s| s == "fence").unwrap();
+        let up = log
+            .iter()
+            .position(|s| s.contains("unit: 55357, down: false"))
+            .unwrap();
+        assert!(log[..down].iter().any(|s| s == "intent:1"));
+        assert!(down < fence && fence < up);
+        assert!(!log.iter().any(|s| s.contains("unit: 56898, down: true")));
+    }
+}
+#[test]
+fn authorized_peer_age_drops_stale_down_but_delivers_owned_stale_up() {
+    use palisade_assist_guardian::input::parse_profile2;
+    let (mut gate, grant, now, _) = fixture();
+    let t = Instant::now();
+    let trace = Rc::new(RefCell::new(Trace::default()));
+    let mut executor = Executor::new(Fake(trace.clone()), Arc::new(AtomicBool::new(false)), true);
+    let packet = |seq, stamp, down| {
+        parse_profile2(&json!({"p":"palisade.assist.control","v":2,"session":grant.grant.session,"grant":grant.grant.grant_id,"gen":grant.grant.generation,"seq":seq,"kind":"input-key","code":"KeyA","down":down,"repeat":false,"t":stamp}).to_string()).unwrap()
+    };
+    let first = packet(1, 1000, true);
+    let mut forged = packet(0, 9_007_199_254_740_991u64, true);
+    forged.message.session = "wrong_session_01".into();
+    assert!(gate.permit_profile2(&forged, 1, now, t).is_err());
+    let permit = gate.permit_profile2(&first, 1, now, t).unwrap();
+    executor
+        .dispatch(permit, &mut gate, &source(), &first.message.action, || {
+            Ok((now, t))
+        })
+        .unwrap();
+    let delayed = t + Duration::from_millis(401);
+    assert!(matches!(
+        gate.permit_profile2(&packet(2, 1001, true), 1, now, delayed),
+        Err("stale-input")
+    ));
+    assert!(executor.held());
+    let fingerprint = gate.binding().helper_transport.clone();
+    gate.verify_peer(&fingerprint).unwrap();
+    assert!(matches!(
+        gate.permit_profile2(&packet(3, 1002, true), 1, now, delayed),
+        Err("stale-input")
+    ));
+    let release = packet(4, 1003, false);
+    let permit = gate.permit_profile2(&release, 1, now, delayed).unwrap();
+    executor
+        .dispatch(
+            permit,
+            &mut gate,
+            &source(),
+            &release.message.action,
+            || Ok((now, delayed)),
+        )
+        .unwrap();
+    assert!(!executor.held());
+    assert!(matches!(
+        gate.permit_profile2(&release, 1, now, delayed),
+        Err("replay")
+    ));
+    assert_eq!(trace.borrow().applied, 2);
+}
 use std::{
     cell::RefCell,
     rc::Rc,
