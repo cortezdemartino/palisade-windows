@@ -83,5 +83,5 @@ test("no page-provided authority, automatic enablement or unsafe feature adverti
   const live=fs.readFileSync(path.join(__dirname,"../src/assist/live-channel.cjs"),"utf8");
   assert.doesNotMatch(main,/installNativeBridge\(/);
   assert.match(live,/cleanupScope === 'channel-only'/);
-  assert.deepEqual(ext.safety.ops.sort(), ["resource.cancel","resource.sync:off"].sort());
+  assert.deepEqual(ext.safety.ops.sort(), ["resource.cancel","resource.sync(state: off)"].sort());
 });
