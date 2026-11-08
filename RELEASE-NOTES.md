@@ -1,5 +1,9 @@
 # Release notes
 
+## 0.3.1
+
+Desktop update containing reviewed inactive Assist components, stricter native input validation and Quit/update cleanup preparation. Full Assist remains unavailable and disabled. See [the release notes](docs/RELEASE-0.3.1.md) for scope and unverified acceptance gates.
+
 ## Unreleased Assist component checkpoint
 
 - Add strict native Profile 2 keyboard, Unicode, extra mouse buttons and peer-bound stale-input handling.

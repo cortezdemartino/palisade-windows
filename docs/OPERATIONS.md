@@ -18,7 +18,7 @@ npm audit --omit=dev --audit-level=high
 npm run package:win
 ```
 
-Candidate output: `out/Palisade-Setup-0.3.0-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
+Candidate output: `out/Palisade-Setup-0.3.1-x64.exe`. The automated Windows build workflow uploads an installer artifact for testing on each push to `main`. Such CI artifacts are not official releases.
 
 ## Set up release signing
 
@@ -42,8 +42,8 @@ The signing script confirms the private key matches the public key shipped with 
 4. Tag the exact reviewed commit and push the tag:
 
 ```powershell
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 The [release workflow](../.github/workflows/release.yml) installs locked dependencies, runs the tests and production-dependency audit, builds the unsigned NSIS installer, signs all three manifests with the protected Actions secret, verifies the manifests and installer, then transfers the artifacts to a separate publish job. Build and signing use read permissions; only the publish job receives `contents: write`. That job verifies the artifacts again before creating a public GitHub Release. It rejects tags that do not match `package.json`.
@@ -73,6 +73,8 @@ The reproducible upgrade procedure is in [UPGRADE-TEST.md](UPGRADE-TEST.md). The
 The sole earlier test client requires the explicitly authorized manual v0.2.2 bootstrap because its original private key was lost. The old tagged public key does not authenticate the new key. See the signing guide for fingerprints, operator scope and the production publication gates. After future rotation, retain the bootstrap private key as the protected legacy-signing secret while compatibility clients exist.
 
 ## M4G-WINDOWS preparation gate
+
+The owner subsequently authorized publishing the disabled desktop update as v0.3.1. That authorization covers the fresh release/signing workflow and does not activate native Assist, approve personal-desktop input or establish full Assist acceptance. The stopped v0.3.0 tag remains unchanged. Follow [the v0.3.1 notes](RELEASE-0.3.1.md); do not describe this update as full Assist.
 
 The desktop has a compatible v1 description bridge and inactive native/capture components. Owner architecture approval is recorded under project-palisade#33. Full Assist remains blocked by the canonical native adapter, production enrollment, companion authority defects and Windows/cross-client acceptance documented in [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md). Main builds include packaged permission-boundary checks. The attempted 0.3.0 publication was stopped at the owner's request; the earlier request is not authorization to retry a disabled Assist release. The current goal is full Assist release testing. Keep the existing v0.3.0 tag unchanged and choose a fresh version/tag for a future qualified candidate. Native endpoint implementation, test installation, activation and release retain their applicable approval gates. CI artifacts alone are testing evidence, not approved releases. App-owned window capture is tested; monitor/privacy and cross-client E2EE acceptance remain unexecuted.
 
