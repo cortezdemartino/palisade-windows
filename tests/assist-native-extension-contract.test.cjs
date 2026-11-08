@@ -19,7 +19,7 @@ const extension = import(dataUrl(extensionSource.replace(
   firstImport, "const NATIVE_LIMITS = Object.freeze({ messageChars: 32_768 });"
 )));
 const control = import(dataUrl(fs.readFileSync(
-  path.join(root, "assist-control-common.web.ts"), "utf8"
+  path.join(root, "assist-control-profile2.web.ts"), "utf8"
 )));
 const errorCode = (error, code) => error && error.code === code;
 
@@ -48,7 +48,7 @@ test("web reference rejects all malformed native-extension requests, responses a
   for (const r of fixtures.events.invalid) assert.throws(() => api.parseExtEvent(JSON.stringify(r.message)), error => errorCode(error, r.error), r.name);
 });
 
-test("resource data-plane fixtures retain strict v2 control grammar", async () => {
+test("resource data-plane fixtures use the current canonical v2 parser and reject invalid cases", async () => {
   const api = await control;
   for (const m of fixtures.dataPlane.valid) assert.deepEqual(api.parseControlMessage(m, 2), m);
   for (const r of fixtures.dataPlane.invalid) assert.throws(() => api.parseControlMessage(r.message, r.version), error => errorCode(error, r.error), r.name);
