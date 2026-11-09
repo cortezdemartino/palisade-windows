@@ -1,10 +1,52 @@
 # Windows Assist integration
 
-## M4G-WEB-6 release-authority integration
+## Current integration status, November 9
 
-Current Profile 2 contracts are pinned to companion `5b82bc90e4997f35dd18273427c258fe54eefb95`. Native `release-all` now uses the carried mouse or keyboard grant and releases only that native gate/grant owner's input. Ordinary UP events also require ownership; independent fenced teardown still releases all endpoint-owned input. The eight canonical fixture families and 23-case acceptance inventory are pinned, not marked as executed. See [component evidence](evidence/2026-11-08-release-authority.md).
+The canonical companion is frozen at `01ae58565dd29dce692bace6d09834c5efdbff69`.
+Protocol sources and fixtures remain byte-identical to `e45cc8f`; Windows pins
+protocol blob `29bfd8d51d8cf423932379add25b83ae06334d8c`, extension blob
+`005ac6ce6ca4b7c4fc27bcc32aa6d9d5f7ad03e1` and cooperative blob
+`caaadb956475a91c2b7e1776651d7c7a8a88f873`. All nine fixture families are retained.
+The frozen manifest v3 contains all 30 acceptance cases, SHA-256
+`f9ac9d835333e341907ae63f2d2a497ef4944607ea60fc344e81ad64115606b0`.
+[Machine-checked provenance](../tests/fixtures/assist-profile2.provenance.json).
 
-The owner requires cooperative mouse/keyboard use with local host priority. This is **Planned**, not implemented: current native activity monitoring stops input on any local movement. The canonical web contract needs a distinct nonterminal local-yield/readiness transition before this behavior changes. Stop, revocation, security transitions and authority/session loss remain terminal. [Companion request](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+**Full Windows Assist remains unfinished and inactive.** The companion contract
+already supplies the required wire behavior. Remaining Windows implementation
+must not be described as waiting for an invented replacement web protocol.
+
+| Area | Actual status |
+| --- | --- |
+| Frozen protocols, Profile 2, scoped release and cooperative fixtures | Implemented; verified in automated component tests |
+| Private process monitor, parent-loss handling, direct native stop | Implemented; verified on Windows with no-authority processes; both channel scopes remain non-authorizing |
+| Native gate/executor registration, signed authority, per-launch key type and session cancellation | Implemented components; simulation/native component verification, not a connected endpoint |
+| Cooperative yielding, idle/readiness and epoch barrier | Implemented core; verified in simulation; real physical observation, delivery arbitration and live status remain Planned / Not Verified |
+| Capture and certificate-bound transport | Implemented isolated components; real Palisade cross-client encrypted publication remains Not Verified |
+| Persistent launch/session owner, enrollment and positive descendant release receipts | Planned integration; existing component APIs do not provide a complete live runtime |
+| Fresh input acquisition after terminal Stop | Planned integration; same-capability replacement, new consent and fresh input connection remain required |
+| Shipped extension v1/v2/v3 dispatch | Planned; canonical negotiation/validator tests do not establish a functioning handler |
+| Clipboard, images, files, multi-file/drop/resume/sync | Some dormant text/file foundations implemented; complete native protocol, guarded UI and resource integration remain Planned / Not Verified |
+| Physical acceptance, full security review, issuer and working TURN | Not Verified / Blocked on the existing Windows #5 and companion #33/#47/#48 gates |
+
+The native lease parser now understands the frozen service's descriptive
+`streamTrackName`, `approved` and `inputRequest` fields. These are not grants,
+native consent or capture proof. Exact live source/operation/track-name
+corroboration still has to be connected before native activation.
+
+See [the continuation checkpoint](ASSIST-RESUME.md), [release plan](ASSIST-RELEASE-PLAN.md),
+[cooperative implementation](ASSIST-COOPERATIVE-INPUT.md) and the evidence reports.
+Do not deploy, enable Assist, sign or publish a release from component results.
+The older checkpoint notes below are historical and do not supersede this status.
+
+## Historical M4G-WEB-6 release-authority integration
+
+At that checkpoint Profile 2 contracts were pinned to companion `5b82bc90e4997f35dd18273427c258fe54eefb95`. Native `release-all` uses the carried mouse or keyboard grant and releases only that native gate/grant owner's input. Ordinary UP events also require ownership; independent fenced teardown still releases all endpoint-owned input. The eight then-current fixture families and 23-case acceptance inventory were pinned, not marked as executed. See [component evidence](evidence/2026-11-08-release-authority.md).
+
+The owner requires cooperative mouse/keyboard use with local host priority. The
+canonical contract and inactive scheduler have since arrived. The actual native
+activity adapter still stops input on local movement until physical observation
+and safe delivery arbitration are integrated and qualified. Stop, revocation,
+security transitions and authority/session loss remain terminal.
 
 ## November 8 Profile 2 continuation
 

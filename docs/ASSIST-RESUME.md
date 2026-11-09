@@ -1,5 +1,16 @@
 # Assist continuation checkpoint
 
+## Frozen service response continuation
+
+The native lease-view parser now accepts the exact frozen service fields
+`streamTrackName`, `approved` and `inputRequest`, with strict metadata validation
+and unchanged signed authority/consent boundaries. The earlier legacy-shaped
+regression missed this incompatibility. [Evidence and source hashes](evidence/2026-11-09-frozen-service-view.md).
+The main integration guide now has an authoritative current ledger above its old
+checkpoint notes. Continue positive monitor cleanup receipts and the persistent
+launch/session owner; capture corroboration and full runtime/resource integration
+remain unfinished. Neither service facts nor source names grant native authority.
+
 ## Direct monitored cancellation continuation
 
 Session isolation `5d95cdadaad87f4effb99ff0e653b3a903ce93e2` passed full exact-SHA

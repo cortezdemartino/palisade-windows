@@ -19,7 +19,11 @@ Connecting StreamRuntime requires positive executor-generation release receipts 
 
 The current inactive executor keeps per-gate/grant held-input ownership derived from validated native permits, alongside its combined write-ahead cleanup ledger. V2 `release-all` accepts the carried mouse or keyboard grant and releases only its owner's scope; ordinary UP and repeats cannot take another owner's holds. Releases bypass ordinary input rate tokens while retaining current authority and replay checks. Independent terminal fence/release still clears all endpoint-owned input. [Evidence](evidence/2026-11-08-release-authority.md).
 
-Cooperative local host/helper input remains Planned. Current local activity monitoring terminates control; a future negotiated local-yield scheduler must preserve local priority without restoring terminally revoked input. Overlapping physical/injected holds require native ownership tracking and real device acceptance before activation.
+The canonical cooperative scheduler is implemented and tested in simulation.
+Current physical activity adapters still terminate control; live cooperative
+observation and delivery arbitration remain Planned / Not Verified. Overlapping
+physical/injected holds require native ownership tracking and real device acceptance
+before activation. [Scope](ASSIST-COOPERATIVE-INPUT.md).
 
 ## November 8 Profile 2 continuation
 

@@ -1,5 +1,14 @@
 # Validation
 
+## November 9 frozen service parser
+
+The current parser/status candidate passed 143 Rust tests per default/all-feature
+configuration, strict formatting/Clippy, 202 app tests, 26 no-input process groups
+per configuration, hidden-startup visibility, NSIS and packaged native integrity.
+Independent source review cleared the exact frozen response shape and unchanged
+authority boundary. [Evidence and source/artifact hashes](evidence/2026-11-09-frozen-service-view.md).
+No real-service, physical-input or cross-client acceptance result is inferred.
+
 ## November 9 direct native stop
 
 Session isolation `5d95cda` passed full exact-SHA CI42679846356. The direct-witness
