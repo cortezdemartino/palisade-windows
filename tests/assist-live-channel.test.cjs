@@ -35,6 +35,7 @@ function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1
     require(name) {
       if (name === 'node:child_process') return { spawn(_binary, args, options) {
         spawns++; assert.equal(args[0], ownedTree ? '--tree-live-probe' : '--live-probe'); assert.equal(options.shell, false); assert.equal(options.windowsHide, true);
+        assert.equal(options.detached, true, 'native cleanup must survive the libuv parent job');
         if (ownedTree) assert.deepEqual(normal(args.slice(2)), ['1234', 'a'.repeat(64)]);
         assert.equal(life.status().holders, 1, 'ownership must precede spawn');
         if (launchError === 'sync') throw Error('spawn fixture');

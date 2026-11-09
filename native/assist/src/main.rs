@@ -7,6 +7,7 @@ use palisade_assist_guardian::{
 use serde::Deserialize;
 use serde_json::json;
 use std::{
+    io::Write,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -52,7 +53,9 @@ fn wall() -> Result<u64, &'static str> {
 fn main() {
     if let Err(error) = run() {
         // Only fixed internal error codes, never input payloads, identities or keys.
-        eprintln!("guardian: {error}");
+        // The application/monitor may already be gone. A broken diagnostic
+        // pipe must not panic and replace the deliberate fail-closed exit.
+        let _ = writeln!(std::io::stderr().lock(), "guardian: {error}");
         std::process::exit(125)
     }
 }

@@ -1,5 +1,9 @@
 # Validation
 
+## November 9 native parent loss
+
+The first cooperative candidate CI failed one process case. The launch-policy and diagnostic fixes, exact retained-handle tests and independent review are documented in [the investigation](evidence/2026-11-09-native-parent-loss.md). Local native/application/process regressions pass; record the successor exact-SHA CI separately and retain the historical failure.
+
 ## M4G-WEB-7 canonical intake and dormant cooperative scheduler
 
 202 application tests pass. Rust formatting, strict Clippy and 120 native tests in each configuration pass. The native cases use fake delivery and real signed fixture authority, not physical input. Independent review passed 41 Node contract checks and cleared the inactive source slice after mirror-retention, observation-provenance and barrier fixes. See [evidence](evidence/2026-11-08-cooperative-core.md). Full native Assist and all physical WIN-Y acceptance remain Not Verified.

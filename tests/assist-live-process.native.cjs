@@ -6,6 +6,7 @@ const path = require('node:path'), { spawn } = require('node:child_process');
 const { once } = require('node:events'), { randomBytes } = require('node:crypto');
 const { openLiveChannel, PROTOCOL } = require('../src/assist/live-channel.cjs');
 const { createAssistLifecycle } = require('../src/assist/lifecycle.cjs');
+const { watchProcesses } = require('./native-process-watch.cjs');
 const binary = process.env.PALISADE_ASSIST_TEST_BINARY || path.resolve('.assist/Palisade-Assist.exe');
 const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('src/assist/guardian-integrity.json');
 const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: randomBytes(32).toString('base64url') };
@@ -116,34 +117,43 @@ test('owned monitor crash cannot manufacture a successful lifecycle proof', asyn
 });
 
 test('owned parent death revokes the monitor and its coordinator without ordinary dispatch', async () => {
-  const script = `const {openLiveChannel}=require(process.argv[3]);
+  for (const forced of [false, true]) {
+  const script = String.raw`const {openLiveChannel}=require(process.argv[3]);
     const {createAssistLifecycle}=require(process.argv[4]);
     openLiveChannel({binary:process.argv[1],manifestFile:process.argv[2],lifecycle:createAssistLifecycle(),probe:true,ownedTree:true})
       .then(async channel=>{
         const holder=await channel.probeStopHolder();
-        process.stdout.write(JSON.stringify([channel.pid,holder.coordinator,holder.pid]),()=>process.exit(0));
+        process.stdin.once('data',()=>process.exit(0));
+        process.stdout.write(JSON.stringify([channel.pid,holder.coordinator,holder.pid])+'\n');
       })
-      .catch(()=>process.exit(2));`;
+      .catch(error=>process.stderr.write(String(error.stack||error),()=>process.exit(2)));`;
   const parent = spawn(process.execPath, ['-e', script, binary, manifestFile,
     require.resolve('../src/assist/live-channel.cjs'), require.resolve('../src/assist/lifecycle.cjs')],
-    { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
-  let text = ''; parent.stdout.on('data', chunk => { text += chunk; }); parent.stderr.resume();
-  const timer = setTimeout(() => parent.kill(), 5000);
-  try { assert.equal((await once(parent, 'exit'))[0], 0); } finally { clearTimeout(timer); }
-  const pids = JSON.parse(text);
-  assert.equal(new Set(pids).size, 3);
-  assert.ok(pids.every(pid => Number.isInteger(pid) && pid > 0));
-  const remaining = new Set(pids);
-  const deadline = Date.now() + 4000;
-  while (Date.now() < deadline) {
-    for (const pid of remaining) {
-      try { process.kill(pid, 0); }
-      catch (error) { if (error.code === 'ESRCH') remaining.delete(pid); else throw error; }
-    }
-    if (!remaining.size) return;
-    await new Promise(resolve => setTimeout(resolve, 20));
+    { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  let diagnostic = '';
+  parent.stderr.on('data', bytes => { diagnostic = (diagnostic + bytes).slice(-4096); });
+  parent.stdin.on('error', () => {});
+  const lines = require('node:readline').createInterface({ input: parent.stdout });
+  const exited = once(parent, 'exit');
+  const timer = setTimeout(() => parent.kill(), 10_000);
+  let observer;
+  try {
+    const [text] = await Promise.race([once(lines, 'line'), exited.then(([code]) => {
+      throw Error('Fixture parent ended before process registration: ' + code + ' ' + diagnostic);
+    })]);
+    const pids = JSON.parse(text);
+    assert.equal(new Set(pids).size, 3);
+    assert.ok(pids.every(pid => Number.isInteger(pid) && pid > 0));
+    observer = await watchProcesses(binary, pids.map((pid, index) => ({ pid, role: ['monitor', 'coordinator', 'holder'][index] })));
+    if (forced) parent.kill(); // Only this disposable no-authority Node fixture.
+    else parent.stdin.end('exit\n');
+    const [code, signal] = await exited;
+    if (!forced) { assert.equal(code, 0); assert.equal(signal, null); }
+    const result = await observer.finish(4000);
+    assert.ok(result.every(item => item.exited), 'Original process survived parent death: ' + JSON.stringify(result));
+    assert.deepEqual(result.map(item => item.code), [125, 125, 0], 'Parent-loss cleanup must execute, not be killed by the parent job: ' + JSON.stringify(result));
+  } finally { clearTimeout(timer); observer?.close(); lines.close(); parent.kill(); }
   }
-  assert.fail('owned process tree survived parent death: ' + [...remaining].join(','));
 });
 
 test('actual urgent shutdown interrupts eight stalled ordinary requests and is joined by app cleanup', async () => {

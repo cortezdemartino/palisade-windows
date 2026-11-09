@@ -126,7 +126,10 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     if (revoked || holder.signal.aborted || signal?.aborted) throw unavailable();
     if (ownedTree && (!manifest || !Number.isSafeInteger(manifest.size) || !/^[a-f0-9]{64}$/.test(manifest.sha256))) throw unavailable();
     child = spawn(binary, ['--' + mode, String(process.pid), ...(ownedTree ? [String(manifest.size), manifest.sha256] : [])], {
-      windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
+      // Skip libuv's kill-on-parent-exit job. The retained native monitor must
+      // survive an application crash long enough to fence and join cleanup.
+      // Keep its pipes and lifecycle reference; never unref this child.
+      detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
     });
     child.once('spawn', () => { launched = true; });
     child.once('exit', () => { if (!revoked) poison(); });

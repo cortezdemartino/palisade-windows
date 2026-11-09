@@ -24,7 +24,8 @@ async function verifyGuardian(binary, manifestFile) {
 async function openGuardian({ binary, manifestFile, probe = false }) {
   await verifyGuardian(binary, manifestFile);
   const child = spawn(binary, [probe ? '--probe' : '--guardian', String(process.pid)], {
-    windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
+    // Native parent-loss cleanup must run instead of libuv killing this holder.
+    detached: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
   });
   let buffered = Buffer.alloc(0), sequence = 0, pending = null, ended = false;
   let heartbeat, reason = '';

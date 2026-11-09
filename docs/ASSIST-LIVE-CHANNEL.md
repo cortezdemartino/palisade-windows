@@ -58,3 +58,14 @@ The lifecycle holder resolves only after a matching terminal cleanup reply **and
 `npm run check` includes main-side channel/lifecycle tests. `npm run test:assist-native` checks Rust framing/ingress plus the existing native suite. `npm run test:assist-process` repeats both diagnostic and live process suites against the default release helper and an all-features debug helper. Tests cover repeated adjacent handshake/shutdown, eight stalled requests, independent pulses, malformed/partial/replayed frames, saturated queues/output, real parent death and an unproven probe crash. Only known non-authorizing fixtures may be reaped by a failed test harness.
 
 These are real Windows process/pipe tests and fake-main unit tests, not real-input, native consent, cross-client encryption, installed-upgrade or performance acceptance. See [test evidence](TEST-RESULTS.md).
+
+
+## Parent-loss launch policy
+
+The direct native holder must use a referenced detached Node launch with hidden
+windows and private pipes. It must not enter libuv's additional kill-on-parent-exit
+job or be unreferenced as a background task. Detachment does not bypass external
+Windows job restrictions. The native monitor remains responsible for parent loss,
+independent revocation and retained descendant cleanup. See [investigation and
+exact-process evidence](evidence/2026-11-09-native-parent-loss.md). A successful
+process wait still cannot replace positive input/resource cleanup receipts.

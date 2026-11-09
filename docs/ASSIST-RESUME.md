@@ -1,5 +1,11 @@
 # Assist continuation checkpoint
 
+## November 9 parent-loss correction
+
+The cooperative scheduler checkpoint is pushed as `ab94c6fda59d37e94c47ae18cbd21d4f519c6372`. Its first exact-SHA CI failed the parent-loss process case. Investigation found libuv kill-on-parent-exit launch policy and broken-stderr panic defects. The new launchers keep native cleanup alive with referenced detached processes; the enhanced test retains all three original process handles and tests clean/forced fixture-parent death with the original four-second deadline. See [evidence](evidence/2026-11-09-native-parent-loss.md). Do not count the failed run as a CI pass.
+
+Companion main has advanced read-only to `01ae58565dd29dce692bace6d09834c5efdbff69` (contract freeze, docs/53). All consumed protocol sources and fixtures remain byte-identical to the pinned `e45cc8f` contract. Its manifest now adds acceptance evidence/metadata, without changing the wire. Do not invent a temporary protocol or ask the web implementation to recreate these contracts.
+
 ## M4G-WINDOWS-FINAL execution
 
 Started from `d5787528d895202b3b9d41bfd9ce10a3212c4e57`. The direct process-ownership milestone is committed as `6c203cc1ca1ab9a0aa50297be73f37079fc7f7e6` and its exact-SHA Windows CI [42563399929](https://github.com/cortezdemartino/palisade-windows/actions/runs/42563399929) passed, including packaging and packaged checks. Companion main has advanced to `e45cc8f20b3060e8231ecafc29c2417ee6f42040`; the canonical cooperative contract has arrived and was independently verified read-only before updating Windows pins.
