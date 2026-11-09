@@ -1,7 +1,7 @@
 //! Independently authenticated polling. No renderer cookies, tokens or supplied URLs.
 use crate::{
     stream::{SessionGate, SignedStreamGrant, SignedStreamLease},
-    windows::{https, identity::Identity},
+    windows::{https, identity::EndpointIdentity},
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -109,7 +109,7 @@ fn apply_response(
 }
 impl LeasePoller {
     pub fn start(
-        identity: Arc<Identity>,
+        identity: Arc<EndpointIdentity>,
         gate: Arc<Mutex<SessionGate>>,
         on_loss: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {

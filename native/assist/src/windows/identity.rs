@@ -21,6 +21,10 @@ use zeroize::{Zeroize, Zeroizing};
 
 const ENTROPY: &[u8] = b"Palisade Assist endpoint identity v1";
 pub struct Identity(SigningKey);
+/// Operational endpoint signer. Create once per native authority launch and
+/// retain that exact instance for enrollment, ACK, lease and transport purposes.
+/// It is never loaded from the installation's persistent DPAPI identity.
+pub struct EndpointIdentity(SigningKey, String);
 impl Identity {
     pub fn load_current_user() -> Result<Self, &'static str> {
         Self::load(&storage()?.join("endpoint-v1.dpapi"))
@@ -28,16 +32,31 @@ impl Identity {
     pub fn public_key(&self) -> String {
         URL_SAFE_NO_PAD.encode(self.0.verifying_key().as_bytes())
     }
+    #[cfg(test)]
+    pub(crate) fn fixture(path: &Path) -> Result<Self, &'static str> {
+        Self::load(path)
+    }
+}
+impl EndpointIdentity {
+    pub fn for_launch(installation: &Identity) -> Result<Self, &'static str> {
+        let seed = random_seed()?;
+        Ok(Self(
+            SigningKey::from_bytes(&seed),
+            installation.public_key(),
+        ))
+    }
+    pub fn public_key(&self) -> String {
+        URL_SAFE_NO_PAD.encode(self.0.verifying_key().as_bytes())
+    }
+    pub(crate) fn installation_reference(&self) -> &str {
+        &self.1
+    }
     pub(crate) fn prove_enrollment(
         &self,
         record: &super::enrollment::Enrollment,
         challenge: &str,
     ) -> Result<String, &'static str> {
         Ok(URL_SAFE_NO_PAD.encode(self.0.sign(&record.statement(self, challenge)?).to_bytes()))
-    }
-    #[cfg(test)]
-    pub(crate) fn fixture(path: &Path) -> Result<Self, &'static str> {
-        Self::load(path)
     }
     pub(crate) fn acknowledge(
         &self,
@@ -49,6 +68,23 @@ impl Identity {
                 .to_bytes(),
         ))
     }
+}
+fn random_seed() -> Result<Zeroizing<[u8; 32]>, &'static str> {
+    let mut seed = Zeroizing::new([0u8; 32]);
+    // SAFETY: valid fixed mutable buffer and the Windows system RNG. Failure
+    // has no persisted-key fallback and cannot advertise an operational key.
+    if unsafe {
+        BCryptGenRandom(
+            ptr::null_mut(),
+            seed.as_mut_ptr(),
+            32,
+            BCRYPT_USE_SYSTEM_PREFERRED_RNG,
+        )
+    } < 0
+    {
+        return Err("identity-random");
+    }
+    Ok(seed)
 }
 pub(crate) fn storage() -> Result<PathBuf, &'static str> {
     let mut raw = ptr::null_mut();
@@ -105,19 +141,7 @@ impl Identity {
                 Ok(Self(SigningKey::from_bytes(seed)))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                let mut seed = Zeroizing::new([0u8; 32]);
-                // SAFETY: valid 32-byte mutable buffer, OS system random provider.
-                if unsafe {
-                    BCryptGenRandom(
-                        ptr::null_mut(),
-                        seed.as_mut_ptr(),
-                        32,
-                        BCRYPT_USE_SYSTEM_PREFERRED_RNG,
-                    )
-                } < 0
-                {
-                    return Err("identity-random");
-                }
+                let seed = random_seed()?;
                 let identity = Self(SigningKey::from_bytes(&seed));
                 let protected = protect(seed.as_slice())?;
                 // Exclusive creation: never overwrite, reset or replace an existing identity.
@@ -136,6 +160,8 @@ impl Identity {
             Err(_) => Err("identity-read"),
         }
     }
+}
+impl EndpointIdentity {
     pub fn sign_lease_request(
         &self,
         endpoint: &str,
@@ -244,5 +270,55 @@ mod tests {
         assert_eq!(fs::read(&path).unwrap(), vec![1; 200]);
         fs::remove_file(&path).unwrap();
         fs::remove_dir(&dir).unwrap();
+    }
+    #[test]
+    fn operational_launch_keys_are_fresh_without_replacing_the_dpapi_installation() {
+        let dir = std::env::temp_dir().join(format!(
+            "palisade-operational-key-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        fs::create_dir(&dir).unwrap();
+        let path = dir.join("installation.dpapi");
+        let installation = Identity::load(&path).unwrap();
+        let original = fs::read(&path).unwrap();
+        let first = EndpointIdentity::for_launch(&installation).unwrap();
+        let next = EndpointIdentity::for_launch(&installation).unwrap();
+        assert_ne!(first.public_key(), next.public_key());
+        assert_ne!(first.public_key(), installation.public_key());
+        assert_ne!(next.public_key(), installation.public_key());
+        assert_eq!(first.installation_reference(), installation.public_key());
+        assert_eq!(next.installation_reference(), installation.public_key());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(
+            Identity::load(&path).unwrap().public_key(),
+            installation.public_key()
+        );
+        fs::remove_file(&path).unwrap();
+        fs::remove_dir(&dir).unwrap();
+    }
+    #[test]
+    fn old_endpoint_public_key_refuses_a_new_launch_lease_authentication() {
+        // A validated installation object is required by the production API;
+        // the existing persistence test separately verifies its DPAPI loader.
+        let installation = Identity(SigningKey::from_bytes(&random_seed().unwrap()));
+        let old = EndpointIdentity::for_launch(&installation).unwrap();
+        let current = EndpointIdentity::for_launch(&installation).unwrap();
+        let endpoint = "endpoint_restart_fixture";
+        let session = "sassist_restart_fixture";
+        let at = 1_800_000_300_000;
+        let bytes = crate::statements::lease(endpoint, session, at).unwrap();
+        let signature = current.sign_lease_request(endpoint, session, at).unwrap();
+        let signature = Signature::from_bytes(&decode::<64>(&signature).unwrap());
+        let previous = VerifyingKey::from_bytes(&decode::<32>(&old.public_key()).unwrap()).unwrap();
+        let published =
+            VerifyingKey::from_bytes(&decode::<32>(&current.public_key()).unwrap()).unwrap();
+        assert!(previous.verify_strict(&bytes, &signature).is_err());
+        published.verify_strict(&bytes, &signature).unwrap();
+        // A page cannot present a lease to a new gate: the native poller must
+        // authenticate with this same operational key before native admission.
     }
 }

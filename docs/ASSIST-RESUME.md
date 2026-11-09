@@ -1,5 +1,9 @@
 # Assist continuation checkpoint
 
+## Operational endpoint signer continuation
+
+Local executor registration at `3fc0e1406b2528d09ad16c5d93086bf6ab5c06ed` passed exact-SHA CI [42625418856](https://github.com/cortezdemartino/palisade-windows/actions/runs/42625418856). A separate operational endpoint key type now protects the native API from accidentally reusing the preserved DPAPI installation signer after restart. See [evidence and remaining owner/tombstone work](evidence/2026-11-09-operational-endpoint-key.md). The frozen manifest v3 is now pinned from `01ae585`, with all 30 acceptance cases and unchanged protocol/fixture bytes. The real authority owner must still retain one key per launch, perform fresh canonical enrollment and prevent in-launch session resets. Live native runtime, fresh acquisition and resource integration remain unfinished.
+
 ## Local executor registration continuation
 
 The parent-loss correction at `5046a0d0d95ddae6da2f31bae580c4542a84d863` passed exact-SHA Windows CI [42620269751](https://github.com/cortezdemartino/palisade-windows/actions/runs/42620269751). The next dormant slice binds local execution permits and terminal cleanup to one exact gate/executor reservation, with one-shot cleanup requirements and receipts. See [evidence and next integration constraints](evidence/2026-11-09-executor-registration.md). It does not yet implement same-capability fresh-grant admission, new peer acquisition or crash-surviving monitor receipts. Do not reset terminal atomics or report full Assist ready.

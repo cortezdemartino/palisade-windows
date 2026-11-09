@@ -7,11 +7,11 @@ Existing local-activity termination and production feature switches remain uncha
 
 ## Canonical contract
 
-The read-only companion revision is `e45cc8f20b3060e8231ecafc29c2417ee6f42040`.
+The protocol sources originate at `e45cc8f20b3060e8231ecafc29c2417ee6f42040` and are unchanged in the read-only frozen revision `01ae58565dd29dce692bace6d09834c5efdbff69`.
 Windows pins the exact control protocol, cooperative reference, extension validator,
 yield fixture and interoperability manifest. All earlier v1/v2/Profile 2/release
 fixtures remain unchanged. The manifest preserves the earlier 23 acceptance cases
-and adds WIN-Y01 through WIN-Y04.
+and adds WIN-Y01 through WIN-Y04. The frozen manifest v3 has 30 total cases, also including native peer loss (WIN-L06), endpoint crash (WIN-L07) and active-session updates (WIN-U01).
 
 Extension v3 and endpoint enrollment must declare `localYield` only after the actual
 native path qualifies. Every peer must additionally opt in with `input-barrier`

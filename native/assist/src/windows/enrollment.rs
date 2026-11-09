@@ -1,6 +1,6 @@
 //! A locally confirmed enrollment tuple, never deserialized or inferred from a
 //! grant/page. It is not proof of service registration or session permission.
-use super::{identity::Identity, issuer::TrustedIssuer};
+use super::{identity::EndpointIdentity, issuer::TrustedIssuer};
 use crate::{
     grant::{mxid, token},
     stream::{Binding, SignedStreamGrant},
@@ -30,13 +30,13 @@ pub struct PublishedSource<'a> {
 }
 pub struct EnrolledIdentity<'a> {
     pub issuer: &'a TrustedIssuer,
-    pub identity: Arc<Identity>,
+    pub identity: Arc<EndpointIdentity>,
     pub enrollment: &'a Enrollment,
 }
 impl Enrollment {
     fn prepare(
         issuer: &TrustedIssuer,
-        identity: &Identity,
+        identity: &EndpointIdentity,
         offer: &Offer<'_>,
     ) -> Result<Self, &'static str> {
         if !mxid(offer.account)
@@ -65,7 +65,7 @@ impl Enrollment {
     }
     pub fn request(
         issuer: &TrustedIssuer,
-        identity: &Identity,
+        identity: &EndpointIdentity,
         offer: &Offer<'_>,
         cancel: Arc<AtomicBool>,
     ) -> Result<(Self, String), &'static str> {
@@ -74,12 +74,13 @@ impl Enrollment {
         }
         let record = Self::prepare(issuer, identity, offer)?;
         let text = format!(
-            "Enroll this Palisade installation for Assist?\r\n\r\nOrigin: {}\r\nAccount: {}\r\nDevice: {}\r\nEndpoint: {}\r\nIssuer SHA-256: {}\r\nInstallation public key: {}\r\n\r\nConfirm the account and device you are using. This records only this installation's identity; it grants no remote access. Every session capability still requires separate local approval. Restarting or re-enrolling requires a new confirmation.",
+            "Enroll this Palisade installation for Assist?\r\n\r\nOrigin: {}\r\nAccount: {}\r\nDevice: {}\r\nEndpoint: {}\r\nIssuer SHA-256: {}\r\nInstallation reference: {}\r\nCurrent endpoint public key: {}\r\n\r\nConfirm the account and device you are using. This confirms the current endpoint for this installation; it grants no remote access. Every session capability still requires separate local approval. Restarting or re-enrolling requires fresh enrollment and confirmation.",
             crate::issuer::ORIGIN,
             record.account,
             record.device,
             record.endpoint,
             record.issuer,
+            identity.installation_reference(),
             record.public_key
         );
         let signature = record.prove_after(
@@ -97,7 +98,7 @@ impl Enrollment {
     }
     fn prove_after(
         &self,
-        identity: &Identity,
+        identity: &EndpointIdentity,
         challenge: &str,
         cancel: &AtomicBool,
         confirm: impl FnOnce() -> Result<bool, &'static str>,
@@ -149,7 +150,7 @@ impl Enrollment {
     }
     pub(crate) fn statement(
         &self,
-        identity: &Identity,
+        identity: &EndpointIdentity,
         challenge: &str,
     ) -> Result<Vec<u8>, &'static str> {
         if self.revoked.load(Ordering::SeqCst) || identity.public_key() != self.public_key {
@@ -166,7 +167,7 @@ impl Enrollment {
     pub(crate) fn verify_context(
         &self,
         issuer: &TrustedIssuer,
-        identity: &Identity,
+        identity: &EndpointIdentity,
     ) -> Result<(), &'static str> {
         if self.revoked.load(Ordering::SeqCst)
             || self.issuer != issuer.fingerprint()
@@ -179,7 +180,7 @@ impl Enrollment {
     pub(crate) fn verify_binding(
         &self,
         issuer: &TrustedIssuer,
-        identity: &Identity,
+        identity: &EndpointIdentity,
         binding: &Binding,
     ) -> Result<(), &'static str> {
         self.verify_context(issuer, identity)?;
@@ -196,7 +197,7 @@ impl Enrollment {
     pub fn native_binding(
         &self,
         issuer: &TrustedIssuer,
-        identity: &Identity,
+        identity: &EndpointIdentity,
         session: &str,
         source: PublishedSource<'_>,
         signed: &SignedStreamGrant,
@@ -234,21 +235,21 @@ mod tests {
     use ed25519_dalek::{Signature, VerifyingKey};
     struct Fixture {
         issuer: TrustedIssuer,
-        identity: Identity,
-        other: Identity,
+        identity: EndpointIdentity,
+        other: EndpointIdentity,
         signed: SignedStreamGrant,
         path: std::path::PathBuf,
     }
     impl Fixture {
         fn new() -> Self {
-            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let f: serde_json::Value = serde_json::from_str(include_str!(
                 "../../../../tests/fixtures/assist-native-v1.json"
             ))
             .unwrap();
             let candidate = Candidate::parse(&serde_json::to_vec(&serde_json::json!({"protocol":"palisade.assist.control","version":1,"publicKey":f["issuerPublicKey"],"fingerprint":f["issuerFingerprint"]})).unwrap()).unwrap();
+            static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
             let path = std::env::temp_dir().join(format!(
-                "palisade-enrollment-fixture-{}-{}-{}",
+                "palisade-enrollment-launch-{}-{}-{}",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::SeqCst),
                 std::time::SystemTime::now()
@@ -257,10 +258,13 @@ mod tests {
                     .as_nanos()
             ));
             std::fs::create_dir(&path).unwrap();
+            let installation =
+                super::super::identity::Identity::fixture(&path.join("installation.dpapi"))
+                    .unwrap();
             Self {
                 issuer: TrustedIssuer::fixture(candidate),
-                identity: Identity::fixture(&path.join("one.dpapi")).unwrap(),
-                other: Identity::fixture(&path.join("two.dpapi")).unwrap(),
+                identity: EndpointIdentity::for_launch(&installation).unwrap(),
+                other: EndpointIdentity::for_launch(&installation).unwrap(),
                 signed: serde_json::from_value(f["nativeGrant"].clone()).unwrap(),
                 path,
             }
@@ -295,10 +299,8 @@ mod tests {
     }
     impl Drop for Fixture {
         fn drop(&mut self) {
-            for name in ["one.dpapi", "two.dpapi"] {
-                std::fs::remove_file(self.path.join(name)).unwrap();
-            }
-            std::fs::remove_dir(&self.path).unwrap();
+            let _ = std::fs::remove_file(self.path.join("installation.dpapi"));
+            let _ = std::fs::remove_dir(&self.path);
         }
     }
     #[test]

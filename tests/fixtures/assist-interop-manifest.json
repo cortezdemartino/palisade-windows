@@ -1,6 +1,11 @@
 {
   "manifest": "palisade.assist.interop",
-  "manifestVersion": 1,
+  "manifestVersion": 3,
+  "frozen": {
+    "doc": "docs/53-ASSIST-CONTRACT-FREEZE.md",
+    "rule": "After the freeze only corrective changes; any wire change is a new negotiated version with fixtures, docs and a Windows notice.",
+    "windowsInspected": "6c203cc1ca1ab9a0aa50297be73f37079fc7f7e6"
+  },
   "status": "web/backend candidate; gates off; native Windows cases not executed (see acceptance[].native)",
   "authority": "Only service-issued Ed25519 grants and endpoint leases authorize; capabilities, features, presence and messages never do.",
   "sources": {
@@ -836,7 +841,43 @@
       ],
       "reject": ["Any hash difference blocks the remaining cases."],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "The pinned fixtures and sources copied at the hashes in manifest.fixtures and manifest.sources."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [
+        "palisade.assist.control v1",
+        "palisade.assist.control v2",
+        "palisade.assist.control v2 + profile 2",
+        "palisade.assist.native v1",
+        "palisade.assist.native.ext v1",
+        "palisade.assist.native.ext v2",
+        "palisade.assist.control v2 release authority",
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-P02",
@@ -857,7 +898,38 @@
         "A v2 request inside a v1 session: invalid-message / unsupported-version."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "The pinned fixtures and sources copied at the hashes in manifest.fixtures and manifest.sources."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.native.ext v1",
+        "palisade.assist.native.ext v2",
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Windows has no extension handler in the shipped bridge."
     },
     {
       "id": "WIN-C01",
@@ -878,7 +950,34 @@
         "A renderer click, a keyboard shortcut from the remote side or a page message never counts as consent."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "A second application window available as an alternative source."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.native v1"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-C02",
@@ -896,7 +995,34 @@
       ],
       "reject": ["Input carrying a previous sourceGen: stale-generation."],
       "web": "browser-real",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "A second application window available as an alternative source."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "passed",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.native v1"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-I01",
@@ -918,7 +1044,34 @@
         "Decreasing t: replay."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.control v2 + profile 2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-I02",
@@ -940,7 +1093,34 @@
         "Text above textInputChars: too-large."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.control v2 + profile 2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-I05",
@@ -962,7 +1142,34 @@
         "Endpoint teardown still releases everything at revocation, suspension and peer loss."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.control v2 release authority"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-Y01",
@@ -985,7 +1192,36 @@
         "Nothing the helper sends can resume input; old or replayed input-state changes nothing."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Windows has no localYield, extension v3, epochs or barrier (local input is terminal)."
     },
     {
       "id": "WIN-Y02",
@@ -1005,7 +1241,36 @@
         "If ownership is uncertain the endpoint stays yielded until neutral; it never guesses."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Windows has no host-hold hand-over or yield gate."
     },
     {
       "id": "WIN-Y03",
@@ -1023,7 +1288,36 @@
         "A barrier or input after any of these: revoked. No yield or readiness ever restores ended authority, extends the deadline, broadens a capability or changes the controller."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Windows has no yield state to end."
     },
     {
       "id": "WIN-Y04",
@@ -1043,7 +1337,37 @@
         "A version 3 answer to a [2, 1] offer: invalid-message. A late opt-in: stale-epoch."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "The pinned fixtures and sources copied at the hashes in manifest.fixtures and manifest.sources."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3",
+        "palisade.assist.native.ext v2"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Windows has no extension handler (v1/v2/v3) in the shipped bridge."
     },
     {
       "id": "WIN-I03",
@@ -1061,16 +1385,43 @@
       ],
       "reject": ["Coordinates outside 0..1: invalid-message."],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.control v2 + profile 2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-I04",
       "area": "input",
-      "title": "Protected desktop isolation",
+      "title": "Protected desktop isolation: UAC, lock, sleep and consent UI",
       "capabilities": ["control_mouse", "control_keyboard"],
       "fixtures": [],
       "steps": [
-        "While controlled, trigger UAC, lock the workstation and open the native consent UI."
+        "While controlled, trigger UAC, lock the workstation, put it to sleep and resume, and open the native consent UI."
       ],
       "pass": [
         "The endpoint suspends input (lifecycle suspended); the web revokes input grants on the service.",
@@ -1080,7 +1431,34 @@
         "No input reaches the secure desktop; resuming needs a fresh acquisition (WIN-L02)."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Physical keyboard and mouse attached to the Windows device; the US and German layouts installed."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-K01",
@@ -1100,7 +1478,37 @@
         "Non-PNG, oversized (imageBytes/imagePixels/imageSide) or mismatched hash: invalid-message / too-large / integrity-failure."
       ],
       "web": "browser-real",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Text and a PNG image available on each side’s clipboard."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "passed",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + profile 2",
+        "palisade.assist.native.ext v2"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Extension v2 resource dispatch is not connected in the shipped app."
     },
     {
       "id": "WIN-K02",
@@ -1117,7 +1525,37 @@
       ],
       "reject": ["Sync without the direction grant: grant-invalid."],
       "web": "browser-real",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Text and a PNG image available on each side’s clipboard."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "passed",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + profile 2",
+        "palisade.assist.native.ext v2"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Extension v2 resource.sync is not implemented."
     },
     {
       "id": "WIN-F01",
@@ -1138,7 +1576,38 @@
         "Above fileBytes: too-large; hash mismatch: integrity-failure."
       ],
       "web": "browser-real",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Test files of 1 KiB, 50 MiB and 1 GiB, and a destination folder chosen by the tester."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "passed",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2",
+        "palisade.assist.control v2 + profile 2",
+        "palisade.assist.native.ext v2"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Extension v2 multi-file dispatch is not connected in the shipped app."
     },
     {
       "id": "WIN-F02",
@@ -1157,7 +1626,37 @@
         "Resume never restores input authority."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Test files of 1 KiB, 50 MiB and 1 GiB, and a destination folder chosen by the tester."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "blocked"
+      },
+      "versions": [
+        "palisade.assist.control v2 + profile 2",
+        "palisade.assist.native.ext v2"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "Extension v2 resource.resume is not implemented."
     },
     {
       "id": "WIN-F03",
@@ -1174,7 +1673,34 @@
       ],
       "reject": ["Above the receive quota: refused before data is accepted."],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Test files of 1 KiB, 50 MiB and 1 GiB, and a destination folder chosen by the tester."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.native.ext v2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-A01",
@@ -1191,7 +1717,34 @@
       ],
       "reject": ["Annotations without the grant are not rendered."],
       "web": "browser-real",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "A voice channel with a third participant (viewer) for group-stream cases."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "passed",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-L01",
@@ -1208,7 +1761,34 @@
       ],
       "reject": ["No input is applied after stop, including queued events."],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.native v1"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-L02",
@@ -1229,7 +1809,34 @@
         "A resource transfer never restores input."
       ],
       "web": "browser-mock-endpoint",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "passed",
+        "windowsHardware": "blocked"
+      },
+      "versions": ["palisade.assist.control v2 + profile 2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "SessionGate fresh-grant admission after local revocation is not implemented."
     },
     {
       "id": "WIN-L03",
@@ -1246,7 +1853,37 @@
       ],
       "reject": ["Any message after expiry: expired."],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [
+        "palisade.assist.control v2",
+        "palisade.assist.native.ext v2"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-L04",
@@ -1260,7 +1897,34 @@
       ],
       "reject": ["Two concurrent input peers are never active."],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-L05",
@@ -1276,7 +1940,180 @@
       ],
       "reject": ["No orphaned capture or input process remains."],
       "web": "not-applicable",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "not-applicable",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.native.ext v2"],
+      "result": "not-executed",
+      "evidenceRef": "none on the web side (native-only case)",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
+    },
+    {
+      "id": "WIN-L06",
+      "area": "lifecycle",
+      "title": "Native peer loss, Reconnect and fresh authorization",
+      "capabilities": ["control_mouse", "clipboard_to_host"],
+      "fixtures": ["control-v2", "control-v2-profile2", "control-v2-yield"],
+      "steps": [
+        "During control with a clipboard grant, block the network between the machines for 30 s, then restore it.",
+        "The helper selects Reconnect; then Take control.",
+        "Repeat, but let the 20 s lease lapse during the outage."
+      ],
+      "pass": [
+        "On loss the endpoint ends input authority (no input arrives after it) and the helper sees Remote control ended / Connection lost.",
+        "Reconnect uses the same certificate; input needs a new acquisition (ask again, approval, fresh native consent, new grant, new peer, new opt-in barrier).",
+        "The voice/video session continues throughout; the clipboard permission is unaffected unless it was revoked."
+      ],
+      "reject": [
+        "Nothing reconnects by itself; input from the old peer: refused; a lapsed lease: no authority until a fresh lease."
+      ],
+      "web": "unit",
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [
+        "palisade.assist.control v2",
+        "palisade.assist.control v2 + profile 2",
+        "palisade.assist.control v2 + localYield; palisade.assist.native.ext v3"
+      ],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
+    },
+    {
+      "id": "WIN-L07",
+      "area": "lifecycle",
+      "title": "Endpoint crash during an active session",
+      "capabilities": ["control_mouse", "control_keyboard", "file_to_host"],
+      "fixtures": ["native-ext-v2"],
+      "steps": [
+        "While the helper holds a key and a file transfer is in progress, terminate the endpoint process (Task Manager → End task).",
+        "Start Palisade for Windows again."
+      ],
+      "pass": [
+        "No key or button stays pressed on Windows; staged partial files are removed; no capture continues.",
+        "On restart the endpoint does not resume any earlier session; the web shows the session ended or control ended."
+      ],
+      "reject": [
+        "No earlier grant, consent or peer is accepted after the restart."
+      ],
+      "web": "not-applicable",
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "not-applicable",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.native.ext v2"],
+      "result": "not-executed",
+      "evidenceRef": "none on the web side (native-only case)",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
+    },
+    {
+      "id": "WIN-U01",
+      "area": "lifecycle",
+      "title": "Installer or update with an active Assist session",
+      "capabilities": ["control_mouse"],
+      "fixtures": [],
+      "steps": [
+        "With an active controlled session, start an update of Palisade for Windows (and separately, an uninstall)."
+      ],
+      "pass": [
+        "The update or uninstall ends Assist first: input authority ends, capture stops, cleanup completes and is reported before the process exits.",
+        "After updating, nothing from the earlier session resumes; a new session needs a new request and consent."
+      ],
+      "reject": [
+        "The installer never runs while injected input is still held."
+      ],
+      "web": "not-applicable",
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Task Manager or Process Explorer to observe Palisade processes and descendants."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "not-applicable",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [],
+      "result": "not-executed",
+      "evidenceRef": "none on the web side (native-only case)",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-T01",
@@ -1294,7 +2131,34 @@
         "Mismatched fingerprint or statement: transport-mismatch / binding-mismatch; channel closed."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Network tools to block direct UDP between the two machines; the TURN relay from #48 when available."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.control v2 + profile 2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-T02",
@@ -1311,7 +2175,34 @@
       ],
       "reject": ["Host/srflx candidates under relay-only."],
       "web": "browser-real",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Network tools to block direct UDP between the two machines; the TURN relay from #48 when available."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "passed",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": [],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     },
     {
       "id": "WIN-T03",
@@ -1327,7 +2218,34 @@
         "Other issuer: issuer-mismatch / grant-invalid; TOFU is not allowed."
       ],
       "web": "unit",
-      "native": "not-executed"
+      "native": "not-executed",
+      "prerequisites": [
+        "Disposable Windows 11 x64 device or VM with no personal data (palisade-windows#5).",
+        "The Windows build under test and the web candidate commit, both recorded.",
+        "A test admin service with PALISADE_ASSIST, PALISADE_ASSIST_CONTROL and PALISADE_ASSIST_STREAMS enabled and a TEST issuer key pinned by the build (never the production key, #47).",
+        "A helper browser (Chromium) on a second machine or VM signed in to a separate test account.",
+        "Network tools to block direct UDP between the two machines; the TURN relay from #48 when available."
+      ],
+      "evidence": [
+        "Device, Windows build, endpoint commit and web commit.",
+        "Result per pass and reject item: observed / not observed.",
+        "A log excerpt or screenshot for each item, with no secrets, keystroke contents or personal data."
+      ],
+      "failWhen": [
+        "Any pass item is not observed.",
+        "Any reject item is not refused as stated.",
+        "The case is run with a mock endpoint or simulated local input instead of the real endpoint and physical devices (record it Blocked instead)."
+      ],
+      "status": {
+        "unitFixtures": "passed",
+        "browserRealServices": "not-applicable",
+        "browserMockEndpoint": "not-applicable",
+        "windowsHardware": "not-executed"
+      },
+      "versions": ["palisade.assist.control v2"],
+      "result": "not-executed",
+      "evidenceRef": "docs/evidence/m4g-web-9-contract-freeze.md",
+      "blocker": "No run on a disposable Windows device yet (palisade-windows#5); test issuer key (#47)."
     }
   ]
 }

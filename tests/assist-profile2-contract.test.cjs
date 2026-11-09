@@ -25,7 +25,7 @@ function check(fn, expected) {
   catch(e) { if (e.code === expected) return; throw e; }
 }
 test("pin exact web commit, Git blobs and fixture SHA256", () => {
-  assert.equal(provenance.commit,"e45cc8f20b3060e8231ecafc29c2417ee6f42040");
+  assert.equal(provenance.commit,"01ae58565dd29dce692bace6d09834c5efdbff69");
   const verified = new Set();
   for(const file of provenance.files) {
     const bytes = Buffer.from(fs.readFileSync(path.join(__dirname,"..",file.local),"utf8").replace(/\r\n/g,"\n"));
@@ -75,8 +75,11 @@ test("interop manifest agrees with every pinned fixture and preserves the accept
   }
   assert.equal(manifest.sources["apps/web/src/assist/control/protocol.ts"].gitBlob,
     provenance.files.find(f => f.source === "apps/web/src/assist/control/protocol.ts").gitBlob);
-  assert.equal(manifest.acceptance.length, 27);
-  for (const id of ["WIN-Y01", "WIN-Y02", "WIN-Y03", "WIN-Y04"])
+  assert.equal(manifest.manifestVersion, 3);
+  assert.equal(manifest.frozen.doc, "docs/53-ASSIST-CONTRACT-FREEZE.md");
+  assert.equal(manifest.acceptance.length, 30);
+  assert.equal(new Set(manifest.acceptance.map(item => item.id)).size, 30);
+  for (const id of ["WIN-Y01", "WIN-Y02", "WIN-Y03", "WIN-Y04", "WIN-L06", "WIN-L07", "WIN-U01"])
     assert.ok(manifest.acceptance.some(item => item.id === id), id);
 });
 test("web profile 2 accepts exact valid and refuses invalid kinds",async()=>{

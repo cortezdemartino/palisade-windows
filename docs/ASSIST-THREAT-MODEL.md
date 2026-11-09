@@ -60,3 +60,17 @@ overlap protection. See Microsoft's [keyboard hook contract](https://learn.micro
 [mouse hook contract](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelmouseproc)
 and [SendInput contract](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput).
 Real-device timeout/removal, multiple-device and handover tests remain mandatory before advertisement.
+
+
+## Operational endpoint key lifetime
+
+Reusing a DPAPI endpoint signer could let a new native process confirm an old endpoint
+tuple and authenticate an old still-valid lease after fresh local consent. The native
+API now requires a separate memory-only EndpointIdentity for every implemented endpoint
+signature. It is created from fresh Windows RNG material while preserving the validated
+installation identity separately. An old service endpoint public key refuses the new
+signer's lease authentication. [Evidence and remaining launch enforcement](evidence/2026-11-09-operational-endpoint-key.md).
+
+The coordinator must own one signer per authority launch, never accept cached/page
+leases, retain in-launch tombstones and use the same signer for future ICE/transport
+statements. Key-type separation alone is not live restart or complete runtime acceptance.

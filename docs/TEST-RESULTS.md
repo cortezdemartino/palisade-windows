@@ -1,5 +1,9 @@
 # Validation
 
+## November 9 operational endpoint keys and frozen manifest
+
+129 Rust tests per configuration, formatting/strict Clippy, 202 application tests, 25 no-input process groups per configuration, NSIS and packaged native integrity pass. The frozen manifest v3 is pinned with all 30 acceptance cases; protocol sources and earlier fixtures remain unchanged. The key-type boundary and preservation tests do not qualify native launch/restart or physical Assist. See [evidence and review limits](evidence/2026-11-09-operational-endpoint-key.md).
+
 ## November 9 registered-executor cleanup
 
 202 application tests and 127 native tests per configuration pass, including seven new exact-executor/receipt negative groups. Formatting, strict Clippy, 25 no-input process groups per configuration, NSIS and packaged integrity/desktop/capture/peer checks pass. The local cleanup token is not a crash-surviving monitor proof or a completed fresh-acquisition flow. See [scope and evidence](evidence/2026-11-09-executor-registration.md).
