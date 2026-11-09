@@ -1,5 +1,16 @@
 # Assist continuation checkpoint
 
+## Independent grant admission continuation
+
+Current-view admission now uses the immutable constructor generation floor rather
+than iteration-dependent highest generation. Resource-only binding uses canonical
+null endpoint semantics while preserving local enrollment identity. A sticky
+terminal-input latch refuses unseen input capabilities after Stop; it has no reset.
+[Evidence](evidence/2026-11-09-independent-grant-admission.md). This is not fresh
+reacquisition. Continue positive monitor-owned executor receipts, then the sealed
+launch bootstrap and persistent session owner; do not widen private IPC authority
+from process-exit proof or descriptive service facts.
+
 ## Frozen service response continuation
 
 The native lease-view parser now accepts the exact frozen service fields

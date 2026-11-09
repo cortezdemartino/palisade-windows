@@ -219,9 +219,9 @@ impl Enrollment {
             helper_transport: grant.helper_transport.clone(),
         };
         self.verify_binding(issuer, identity, &binding)?;
-        if grant.endpoint.as_deref() != Some(self.endpoint.as_str()) {
-            return Err("binding-mismatch");
-        }
+        // The canonical verifier requires this endpoint for native input and
+        // requires null for independent resource grants. Binding expectations
+        // still come from this locally confirmed enrollment, not the grant.
         crate::stream::verify_grant(signed, &issuer.key(), &binding, now, None, 0)?;
         Ok(binding)
     }
@@ -380,6 +380,45 @@ mod tests {
                 )
                 .is_err()
         );
+    }
+    #[test]
+    fn resource_only_binding_uses_local_endpoint_without_inventing_an_input_grant() {
+        let f = Fixture::new();
+        let record = f.record();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let resource: SignedStreamGrant =
+            serde_json::from_value(fixture["grants"]["valid"][0]["signed"].clone()).unwrap();
+        assert_eq!(resource.grant.capability, "clipboard_to_host");
+        assert!(resource.grant.endpoint.is_none());
+        let bind = |signed: &SignedStreamGrant, identity: &EndpointIdentity| {
+            record.native_binding(
+                &f.issuer,
+                identity,
+                &resource.grant.session,
+                PublishedSource {
+                    room: &resource.grant.room,
+                    stream: &resource.grant.stream,
+                },
+                signed,
+                resource.grant.issued_at,
+            )
+        };
+        let binding = bind(&resource, &f.identity).unwrap();
+        assert_eq!(binding.endpoint, f.offer().endpoint);
+        assert_eq!(binding.publisher_account, f.offer().account);
+        assert!(bind(&resource, &f.other).is_err());
+        let mut forged = resource.clone();
+        forged.grant.publisher_device = "OTHER".into();
+        assert!(bind(&forged, &f.identity).is_err());
+        forged = resource.clone();
+        forged.signature.clear();
+        assert!(bind(&forged, &f.identity).is_err());
+        let mut input = f.signed.clone();
+        input.grant.endpoint = None;
+        assert!(bind(&input, &f.identity).is_err());
     }
     #[test]
     fn malformed_or_display_spoofing_offers_cannot_prepare_a_signer() {

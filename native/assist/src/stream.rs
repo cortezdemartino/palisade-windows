@@ -232,7 +232,9 @@ pub struct SessionGate {
     binding: Binding,
     approved_at: Option<u64>,
     deadline: Option<u64>,
+    minimum_generation: u64,
     highest_grant: u64,
+    new_input_blocked: bool,
     grants: BTreeMap<String, StreamGrant>,
     consent: BTreeSet<String>,
     active_seen: BTreeSet<String>,
@@ -288,7 +290,9 @@ impl SessionGate {
             binding,
             approved_at: None,
             deadline: None,
+            minimum_generation,
             highest_grant: minimum_generation,
+            new_input_blocked: false,
             grants: BTreeMap::new(),
             consent: BTreeSet::new(),
             active_seen: BTreeSet::new(),
@@ -335,7 +339,10 @@ impl SessionGate {
             if self.grants.contains_key(&signed.grant.grant_id) {
                 0
             } else {
-                self.highest_grant
+                // Capabilities in one current service view may have been
+                // issued at different times. The initial trusted floor is
+                // independent of iteration order and the reporting high-water.
+                self.minimum_generation
             },
         )?;
         let g = &signed.grant;
@@ -349,6 +356,12 @@ impl SessionGate {
                 return Err("binding-mismatch");
             }
             return Ok(());
+        }
+        // A previously unseen input capability is not a way around terminal
+        // Stop. Fresh acquisition needs its own cleanup/consent/peer workflow;
+        // this initial-view compatibility fix deliberately does not supply it.
+        if is_input(&g.capability) && self.new_input_blocked {
+            return Err("revoked");
         }
         if self.grants.len() >= 8 || self.grants.values().any(|v| v.capability == g.capability) {
             return Err("not-granted");
@@ -607,6 +620,7 @@ impl SessionGate {
             .get(id)
             .is_some_and(|grant| is_input(&grant.capability))
         {
+            self.new_input_blocked = true;
             self.input_epoch = self
                 .input_epoch
                 .checked_add(1)
@@ -619,6 +633,7 @@ impl SessionGate {
     /// Terminal for the current input grants. A fresh lease or old consent cannot
     /// restore them. Independently granted clipboard/files keep their own checks.
     pub fn suspend_input(&mut self) {
+        self.new_input_blocked = true;
         let ids: Vec<_> = self
             .grants
             .values()
@@ -630,6 +645,7 @@ impl SessionGate {
         }
     }
     pub fn stop(&mut self) {
+        self.new_input_blocked = true;
         self.epoch = self.epoch.checked_add(1).expect("endpoint epoch exhausted");
         self.input_epoch = self
             .input_epoch

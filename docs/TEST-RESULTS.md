@@ -1,5 +1,13 @@
 # Validation
 
+## November 9 independent grant admission
+
+The initial-view/resource-binding candidate passed 147 Rust tests per configuration,
+strict formatting/Clippy, 202 app tests, 26 no-input process groups per configuration,
+hidden-startup visibility, NSIS and packaged native integrity. Independent source
+review cleared the corrected admission boundary. [Evidence and hashes](evidence/2026-11-09-independent-grant-admission.md).
+Fresh reacquisition and full live Assist remain unfinished.
+
 ## November 9 frozen service parser
 
 The current parser/status candidate passed 143 Rust tests per default/all-feature

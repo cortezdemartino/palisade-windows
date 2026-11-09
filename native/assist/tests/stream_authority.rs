@@ -33,6 +33,119 @@ fn sign_lease(lease: StreamLease, key: &SigningKey) -> SignedStreamLease {
     SignedStreamLease { lease, signature }
 }
 #[test]
+fn independent_current_grant_generations_are_not_order_dependent() {
+    let f = fixtures();
+    let now = f["now"].as_u64().unwrap();
+    let instant = Instant::now();
+    let key = SigningKey::from_bytes(&[61; 32]);
+    let mut mouse: SignedStreamGrant =
+        serde_json::from_value(f["grants"]["valid"][1]["signed"].clone()).unwrap();
+    mouse.grant.generation = 9;
+    let mouse = sign_grant(mouse.grant, &key);
+    let mut resource = mouse.grant.clone();
+    resource.capability = "clipboard_to_host".into();
+    resource.endpoint = None;
+    resource.generation = 2;
+    resource.grant_id = "sgrant_resource_mixed_01".into();
+    resource.nonce = "resource_mixed_nonce_01".into();
+    let resource = sign_grant(resource, &key);
+    for order in [[&mouse, &resource], [&resource, &mouse]] {
+        let mut gate =
+            SessionGate::new(key.verifying_key().to_bytes(), binding(&f), now, 2, instant);
+        for grant in order {
+            gate.admit(grant, now).unwrap();
+        }
+        assert_eq!(gate.highest_generation(), 9);
+        assert_eq!(gate.deadline(), Some(mouse.grant.session_deadline));
+        gate.verify_peer(&binding(&f).helper_transport).unwrap();
+        gate.consent(&mouse.grant.grant_id, now).unwrap();
+        gate.consent(&resource.grant.grant_id, now).unwrap();
+        assert!(
+            gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, instant)
+                .is_err()
+        );
+        let mut lease: SignedStreamLease =
+            serde_json::from_value(f["leases"]["valid"][0]["signed"].clone()).unwrap();
+        lease.lease.generation = 9;
+        lease.lease.grants = vec![
+            mouse.grant.grant_id.clone(),
+            resource.grant.grant_id.clone(),
+        ];
+        lease.lease.grants.sort();
+        gate.refresh(&sign_lease(lease.lease, &key), now, instant, instant)
+            .unwrap();
+        gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, instant)
+            .unwrap();
+        gate.suspend_input();
+        assert!(gate.admit(&mouse, now).is_err());
+        assert!(gate.consent(&mouse.grant.grant_id, now).is_err());
+        gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, instant)
+            .unwrap();
+    }
+}
+#[test]
+fn initial_generation_floor_and_same_capability_replacement_remain_enforced() {
+    let f = fixtures();
+    let now = f["now"].as_u64().unwrap();
+    let instant = Instant::now();
+    let key = SigningKey::from_bytes(&[61; 32]);
+    let mut grant: SignedStreamGrant =
+        serde_json::from_value(f["grants"]["valid"][1]["signed"].clone()).unwrap();
+    grant.grant.generation = 9;
+    let grant = sign_grant(grant.grant, &key);
+    let mut gate = SessionGate::new(key.verifying_key().to_bytes(), binding(&f), now, 4, instant);
+    gate.admit(&grant, now).unwrap();
+    let mut older = grant.grant.clone();
+    older.capability = "clipboard_to_host".into();
+    older.endpoint = None;
+    older.grant_id = "sgrant_resource_mixed_01".into();
+    older.nonce = "resource_mixed_nonce_01".into();
+    older.generation = 3;
+    assert!(gate.admit(&sign_grant(older.clone(), &key), now).is_err());
+    older.generation = 4;
+    gate.admit(&sign_grant(older, &key), now).unwrap();
+    let mut replacement = grant.grant.clone();
+    replacement.grant_id = "sgrant_replacement_01".into();
+    replacement.nonce = "replacement_nonce_01".into();
+    replacement.generation = 10;
+    let replacement = sign_grant(replacement, &key);
+    assert!(gate.admit(&replacement, now).is_err());
+    gate.suspend_input();
+    assert!(gate.admit(&replacement, now).is_err());
+    gate.stop();
+    assert!(gate.admit(&grant, now).is_err());
+}
+#[test]
+fn terminal_input_stop_cannot_be_bypassed_by_a_previously_unseen_capability() {
+    let f = fixtures();
+    let now = f["now"].as_u64().unwrap();
+    let instant = Instant::now();
+    let key = SigningKey::from_bytes(&[61; 32]);
+    let mouse: SignedStreamGrant =
+        serde_json::from_value(f["grants"]["valid"][1]["signed"].clone()).unwrap();
+    let mouse = sign_grant(mouse.grant, &key);
+    for with_input in [true, false] {
+        let mut gate =
+            SessionGate::new(key.verifying_key().to_bytes(), binding(&f), now, 1, instant);
+        if with_input {
+            gate.admit(&mouse, now).unwrap();
+        }
+        gate.suspend_input();
+        let mut keyboard = mouse.grant.clone();
+        keyboard.capability = "control_keyboard".into();
+        keyboard.grant_id = "sgrant_unseen_keyboard_01".into();
+        keyboard.nonce = "unseen_keyboard_nonce_01".into();
+        keyboard.generation = 10;
+        assert!(gate.admit(&sign_grant(keyboard, &key), now).is_err());
+        let mut resource = mouse.grant.clone();
+        resource.capability = "clipboard_to_host".into();
+        resource.endpoint = None;
+        resource.grant_id = "sgrant_unseen_resource_01".into();
+        resource.nonce = "unseen_resource_nonce_01".into();
+        gate.admit(&sign_grant(resource, &key), now).unwrap();
+    }
+}
+#[test]
 fn unchanged_companion_positive_and_negative_grants_and_leases() {
     let f = fixtures();
     let key = decode::<32>(f["issuerPublicKey"].as_str().unwrap()).unwrap();
