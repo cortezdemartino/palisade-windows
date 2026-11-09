@@ -27,7 +27,7 @@ pub enum Decision {
 }
 struct Context {
     cancel: Arc<AtomicBool>,
-    session_stop: Option<Arc<AtomicBool>>,
+    session_stop: Option<crate::cancellation::SessionStop>,
     input_stop: Option<Arc<AtomicBool>>,
     result: Arc<Mutex<Option<bool>>>,
     until: Instant,
@@ -36,10 +36,7 @@ struct Context {
 impl Context {
     fn cancelled(&self) -> bool {
         self.cancel.load(Ordering::SeqCst)
-            || self
-                .session_stop
-                .as_ref()
-                .is_some_and(|s| s.load(Ordering::SeqCst))
+            || self.session_stop.as_ref().is_some_and(|s| s.is_stopped())
             || self
                 .input_stop
                 .as_ref()
@@ -102,10 +99,11 @@ impl Prompt {
         gate: Arc<Mutex<SessionGate>>,
         grant_id: &str,
         current_source: Option<Arc<Mutex<Source>>>,
-        session_stop: Arc<AtomicBool>,
+        session_stop: impl Into<crate::cancellation::SessionStop>,
         input_stop: Arc<AtomicBool>,
     ) -> Result<Self, &'static str> {
-        if session_stop.load(Ordering::SeqCst) {
+        let session_stop = session_stop.into();
+        if session_stop.is_stopped() {
             return Err("revoked");
         }
         let grant = {
@@ -266,6 +264,7 @@ pub(crate) fn confirm_file(
     transfer: &str,
     metadata: &super::files::Metadata,
     cancel: Arc<AtomicBool>,
+    session_stop: crate::cancellation::SessionStop,
 ) -> Result<bool, &'static str> {
     metadata.validate()?;
     if grant.capability != "file_to_host"
@@ -277,7 +276,7 @@ pub(crate) fn confirm_file(
     }
     let context = Context {
         cancel,
-        session_stop: None,
+        session_stop: Some(session_stop),
         input_stop: None,
         result: Arc::new(Mutex::new(None)),
         until: Instant::now() + Duration::from_secs(60),
@@ -463,15 +462,32 @@ unsafe extern "system" fn procedure(
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn context(session_stop: Arc<AtomicBool>, input_stop: Option<Arc<AtomicBool>>) -> Context {
+    fn context(
+        session_stop: impl Into<crate::cancellation::SessionStop>,
+        input_stop: Option<Arc<AtomicBool>>,
+    ) -> Context {
         Context {
             cancel: Arc::new(AtomicBool::new(false)),
-            session_stop: Some(session_stop),
+            session_stop: Some(session_stop.into()),
             input_stop,
             result: Arc::new(Mutex::new(None)),
             until: Instant::now() + Duration::from_secs(1),
             alive: Cell::new(false),
         }
+    }
+    #[test]
+    fn sibling_session_end_keeps_other_ui_live_but_launch_stop_cancels_it() {
+        let launch = Arc::new(AtomicBool::new(false));
+        let first = crate::cancellation::SessionStop::child(launch.clone());
+        let sibling = crate::cancellation::SessionStop::child(launch.clone());
+        let first_ui = context(first.clone(), None);
+        let sibling_ui = context(sibling, None);
+        first.revoke();
+        assert!(first_ui.cancelled());
+        assert!(!sibling_ui.cancelled());
+        launch.store(true, Ordering::SeqCst);
+        assert!(sibling_ui.cancelled());
+        assert!(!unsafe { show(&sibling_ui, "unused fixture", "unused fixture") });
     }
     #[test]
     fn session_and_input_revocation_cancel_only_the_appropriate_pending_ui() {

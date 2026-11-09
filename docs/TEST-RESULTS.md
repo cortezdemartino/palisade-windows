@@ -1,5 +1,15 @@
 # Validation
 
+## November 9 session cancellation
+
+The observer correction `11f6508` passed full exact-SHA Windows CI42677575263.
+The next dormant session-isolation candidate passed 137 Rust tests per default
+and all-feature configuration, formatting/strict Clippy, 202 application tests,
+25 real no-input process groups per configuration, hidden-startup visibility,
+x64 NSIS packaging and packaged native integrity/cleanup probe. Independent review
+cleared its corrected source boundary. [Scope, artifact hashes and limits](evidence/2026-11-09-session-cancellation.md).
+Real physical input, group-session interoperability and full Assist remain unverified.
+
 ## November 9 operational endpoint keys and frozen manifest
 
 129 Rust tests per configuration, formatting/strict Clippy, 202 application tests, 25 no-input process groups per configuration, NSIS and packaged native integrity pass. The frozen manifest v3 is pinned with all 30 acceptance cases; protocol sources and earlier fixtures remain unchanged. The key-type boundary and preservation tests do not qualify native launch/restart or physical Assist. See [evidence and review limits](evidence/2026-11-09-operational-endpoint-key.md).

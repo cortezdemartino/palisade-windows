@@ -173,11 +173,15 @@ impl NativeStop {
             }),
         }
     }
-    pub(crate) fn session_flag(&self) -> Result<Arc<AtomicBool>, &'static str> {
+    pub(crate) fn session_flag(&self) -> Result<crate::cancellation::SessionStop, &'static str> {
         if self.probe || self.stop.load(Ordering::SeqCst) {
             return Err("native-stop-unavailable");
         }
-        Ok(self.stop.clone())
+        let session = crate::cancellation::SessionStop::child(self.stop.clone());
+        if session.is_stopped() {
+            return Err("native-stop-unavailable");
+        }
+        Ok(session)
     }
     #[cfg(test)]
     fn post(&self, message: u32) {
@@ -299,12 +303,18 @@ mod tests {
         for message in [WM_CLOSE, WM_WTSSESSION_CHANGE, WM_POWERBROADCAST, WM_HOTKEY] {
             let stop = Arc::new(AtomicBool::new(false));
             let surface = NativeStop::start(stop.clone(), true).unwrap();
+            let first = crate::cancellation::SessionStop::child(stop.clone());
+            let sibling = crate::cancellation::SessionStop::child(stop.clone());
+            first.revoke();
+            assert!(!sibling.is_stopped());
+            assert!(!stop.load(Ordering::SeqCst));
             surface.post(message);
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
             while !stop.load(Ordering::SeqCst) && std::time::Instant::now() < deadline {
                 thread::sleep(std::time::Duration::from_millis(10));
             }
             assert!(stop.load(Ordering::SeqCst));
+            assert!(sibling.is_stopped());
             drop(surface);
         }
     }

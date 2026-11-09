@@ -1,5 +1,15 @@
 # Assist continuation checkpoint
 
+## Per-session cancellation continuation
+
+The observer correction `11f650890192f7ec79035c98424adbbe2e01e3ad` passed exact-SHA
+CI [42677575263](https://github.com/cortezdemartino/palisade-windows/actions/runs/42677575263).
+Native runtime sessions now have independent terminal cancellation under one global
+emergency stop. Gate admissions and file dialogs read both scopes directly; OS
+security failures still stop the launch. [Evidence and remaining integration](evidence/2026-11-09-session-cancellation.md).
+Continue the launch-owned signer/session registry and positive descendant cleanup.
+This does not complete or activate Assist.
+
 ## Cold observer startup correction
 
 The endpoint-key checkpoint `e4e5332` failed exact-SHA CI 42676519053 in the

@@ -296,6 +296,7 @@ impl FileStore {
     pub fn select_send(
         &mut self,
         operation: Arc<AtomicBool>,
+        authority: crate::cancellation::SessionStop,
         mut authorize: impl FnMut() -> Result<(), &'static str>,
     ) -> Result<(String, Metadata), &'static str> {
         if !cfg!(feature = "native-resources") {
@@ -306,6 +307,7 @@ impl FileStore {
         let cancellation = Cancellation {
             session: self.cancel.clone(),
             operation,
+            authority,
         };
         let mut check = || {
             cancellation.live()?;
@@ -321,6 +323,7 @@ impl FileStore {
         &mut self,
         metadata: Metadata,
         operation: Arc<AtomicBool>,
+        authority: crate::cancellation::SessionStop,
         mut authorize: impl FnMut() -> Result<(), &'static str>,
     ) -> Result<String, &'static str> {
         if !cfg!(feature = "native-resources") {
@@ -332,6 +335,7 @@ impl FileStore {
         let cancellation = Cancellation {
             session: self.cancel.clone(),
             operation,
+            authority,
         };
         let mut check = || {
             cancellation.live()?;
@@ -690,10 +694,14 @@ fn private_file(path: &Path) -> Result<File, &'static str> {
 struct Cancellation {
     session: Arc<AtomicBool>,
     operation: Arc<AtomicBool>,
+    authority: crate::cancellation::SessionStop,
 }
 impl Cancellation {
     fn live(&self) -> Result<(), &'static str> {
-        if self.session.load(Ordering::SeqCst) || self.operation.load(Ordering::SeqCst) {
+        if self.authority.is_stopped()
+            || self.session.load(Ordering::SeqCst)
+            || self.operation.load(Ordering::SeqCst)
+        {
             Err("transfer-cancelled")
         } else {
             Ok(())
@@ -782,6 +790,20 @@ fn dialog(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn file_dialog_cancellation_observes_launch_without_operation_watcher() {
+        let launch = Arc::new(AtomicBool::new(false));
+        let cancellation = Cancellation {
+            session: Arc::new(AtomicBool::new(false)),
+            operation: Arc::new(AtomicBool::new(false)),
+            authority: launch.clone().into(),
+        };
+        assert!(cancellation.live().is_ok());
+        launch.store(true, Ordering::SeqCst);
+        assert_eq!(cancellation.live(), Err("transfer-cancelled"));
+        assert!(!cancellation.operation.load(Ordering::SeqCst));
+        assert!(!cancellation.session.load(Ordering::SeqCst));
+    }
     struct Fixture(PathBuf);
     impl Fixture {
         fn new() -> Self {

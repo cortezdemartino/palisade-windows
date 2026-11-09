@@ -133,13 +133,16 @@ impl Enrollment {
             session.store(true, Ordering::SeqCst);
         }
     }
-    pub(crate) fn bind_session(&self, stop: &Arc<AtomicBool>) -> Result<(), &'static str> {
+    pub(crate) fn bind_session(
+        &self,
+        stop: &crate::cancellation::SessionStop,
+    ) -> Result<(), &'static str> {
         let mut sessions = self.sessions.lock().map_err(|_| "enrollment-failed")?;
-        if self.revoked.load(Ordering::SeqCst) || stop.load(Ordering::SeqCst) {
+        if self.revoked.load(Ordering::SeqCst) || stop.is_stopped() {
             return Err("enrollment-revoked");
         }
         sessions.retain(|weak| weak.strong_count() > 0);
-        let weak = Arc::downgrade(stop);
+        let weak = stop.downgrade();
         if !sessions.iter().any(|saved| saved.ptr_eq(&weak)) {
             if sessions.len() >= 16 {
                 return Err("enrollment-busy");
@@ -476,16 +479,16 @@ mod tests {
         let f = Fixture::new();
         let old = f.record();
         let fresh = f.record();
-        let old_stop = Arc::new(AtomicBool::new(false));
-        let other_old = Arc::new(AtomicBool::new(false));
-        let new_stop = Arc::new(AtomicBool::new(false));
+        let old_stop = crate::cancellation::SessionStop::child(Arc::new(AtomicBool::new(false)));
+        let other_old = crate::cancellation::SessionStop::child(Arc::new(AtomicBool::new(false)));
+        let new_stop = crate::cancellation::SessionStop::child(Arc::new(AtomicBool::new(false)));
         old.bind_session(&old_stop).unwrap();
         old.bind_session(&other_old).unwrap();
         fresh.bind_session(&new_stop).unwrap();
         old.revoke();
-        assert!(old_stop.load(Ordering::SeqCst));
-        assert!(other_old.load(Ordering::SeqCst));
-        assert!(!new_stop.load(Ordering::SeqCst));
+        assert!(old_stop.is_stopped());
+        assert!(other_old.is_stopped());
+        assert!(!new_stop.is_stopped());
         assert!(old.bind_session(&new_stop).is_err());
         assert!(
             f.identity
@@ -497,14 +500,14 @@ mod tests {
                 .is_err()
         );
         drop(fresh);
-        assert!(new_stop.load(Ordering::SeqCst));
+        assert!(new_stop.is_stopped());
     }
     #[test]
     fn concurrent_session_registration_cannot_escape_enrollment_revocation() {
         let f = Fixture::new();
         let record = Arc::new(f.record());
         let barrier = Arc::new(std::sync::Barrier::new(2));
-        let stop = Arc::new(AtomicBool::new(false));
+        let stop = crate::cancellation::SessionStop::child(Arc::new(AtomicBool::new(false)));
         let (held, ready, flag) = (record.clone(), barrier.clone(), stop.clone());
         let worker = std::thread::spawn(move || {
             ready.wait();
@@ -514,11 +517,13 @@ mod tests {
         record.revoke();
         let registered = worker.join().unwrap();
         if registered.is_ok() {
-            assert!(stop.load(Ordering::SeqCst));
+            assert!(stop.is_stopped());
         }
         assert!(
             record
-                .bind_session(&Arc::new(AtomicBool::new(false)))
+                .bind_session(&crate::cancellation::SessionStop::child(Arc::new(
+                    AtomicBool::new(false)
+                )))
                 .is_err()
         );
     }

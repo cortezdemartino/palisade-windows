@@ -171,7 +171,7 @@ pub struct Executor<B: Backend> {
     // Packet-driven releases use only the native permit's exact owner.
     owners: BTreeMap<(u64, String), Ledger>,
     stop: Arc<AtomicBool>,
-    session_stop: Option<Arc<AtomicBool>>,
+    session_stop: Option<crate::cancellation::SessionStop>,
     enabled: bool,
     last_source: Option<Source>,
     epoch: Option<u64>,
@@ -228,8 +228,8 @@ impl<B: Backend> Executor<B> {
         executor.registered_instance = Some(reservation.instance);
         executor
     }
-    pub fn with_session_stop(mut self, stop: Arc<AtomicBool>) -> Self {
-        self.session_stop = Some(stop);
+    pub fn with_session_stop(mut self, stop: impl Into<crate::cancellation::SessionStop>) -> Self {
+        self.session_stop = Some(stop.into());
         self
     }
     fn stopped(&self) -> bool {
@@ -237,7 +237,7 @@ impl<B: Backend> Executor<B> {
             || self
                 .session_stop
                 .as_ref()
-                .is_some_and(|stop| stop.load(Ordering::SeqCst))
+                .is_some_and(|stop| stop.is_stopped())
     }
     pub fn dispatch(
         &mut self,

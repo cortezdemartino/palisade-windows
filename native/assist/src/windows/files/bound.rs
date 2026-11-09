@@ -36,7 +36,7 @@ impl Direction {
 #[derive(Clone)]
 struct Authority {
     gate: Arc<Mutex<SessionGate>>,
-    stop: Arc<AtomicBool>,
+    stop: crate::cancellation::SessionStop,
     #[cfg(test)]
     clock: Option<Arc<AtomicU64>>,
     #[cfg(test)]
@@ -44,7 +44,7 @@ struct Authority {
 }
 impl Authority {
     fn grant(&self, id: &str, capability: &str) -> Result<StreamGrant, &'static str> {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.is_stopped() {
             return Err("revoked");
         }
         let mut gate = self.gate.lock().map_err(|_| "endpoint-failed")?;
@@ -53,7 +53,7 @@ impl Authority {
         #[cfg(not(test))]
         let fixture: Option<&Arc<AtomicU64>> = None;
         if fixture.is_none() && ordinary_desktop().is_err() {
-            self.stop.store(true, Ordering::SeqCst);
+            self.stop.revoke_launch();
             gate.stop();
             return Err("protected-desktop");
         }
@@ -64,7 +64,7 @@ impl Authority {
             None => lease::now()?,
         };
         let grant = gate.authorize(id, capability, now, Instant::now())?.clone();
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.is_stopped() {
             return Err("revoked");
         }
         Ok(grant)
@@ -252,7 +252,7 @@ impl Drop for SelectionGuard<'_> {
 impl SessionFiles {
     pub(crate) fn publisher(
         gate: Arc<Mutex<SessionGate>>,
-        stop: Arc<AtomicBool>,
+        stop: crate::cancellation::SessionStop,
     ) -> Result<Self, &'static str> {
         if !cfg!(feature = "native-resources") {
             return Err("native-resources-disabled");
@@ -284,7 +284,7 @@ impl SessionFiles {
             .name("palisade-file-authority".into())
             .spawn(move || {
                 loop {
-                    if watched.authority.stop.load(Ordering::SeqCst) {
+                    if watched.authority.stop.is_stopped() {
                         watched.closed.store(true, Ordering::SeqCst);
                     }
                     let active = watched.sweep();
@@ -407,14 +407,23 @@ impl SessionFiles {
                 .clone()
                 .ok_or("invalid-file-offer")?;
             #[cfg(not(test))]
-            let confirmed =
-                consent::confirm_file(&op.grant, &op.transfer, &metadata, op.cancel.clone())?;
+            let confirmed = consent::confirm_file(
+                &op.grant,
+                &op.transfer,
+                &metadata,
+                op.cancel.clone(),
+                self.state.authority.stop.clone(),
+            )?;
             #[cfg(test)]
             let confirmed = match self.state.authority.file_confirmation {
                 Some(decision) => decision,
-                None => {
-                    consent::confirm_file(&op.grant, &op.transfer, &metadata, op.cancel.clone())?
-                }
+                None => consent::confirm_file(
+                    &op.grant,
+                    &op.transfer,
+                    &metadata,
+                    op.cancel.clone(),
+                    self.state.authority.stop.clone(),
+                )?,
             };
             if !confirmed {
                 return Err("file-offer-denied");
@@ -451,7 +460,11 @@ impl SessionFiles {
     }
     pub fn select(&self, request: &FileRequest) -> Result<FileSelection, &'static str> {
         self.select_with(request, |store, op| match op.direction {
-            Direction::Send => store.select_send(op.cancel.clone(), || self.state.check(op)),
+            Direction::Send => {
+                store.select_send(op.cancel.clone(), self.state.authority.stop.clone(), || {
+                    self.state.check(op)
+                })
+            }
             Direction::Receive => {
                 let metadata = op
                     .metadata
@@ -459,8 +472,12 @@ impl SessionFiles {
                     .map_err(|_| "resource-failed")?
                     .clone()
                     .ok_or("invalid-file-offer")?;
-                let token = store
-                    .select_receive(metadata.clone(), op.cancel.clone(), || self.state.check(op))?;
+                let token = store.select_receive(
+                    metadata.clone(),
+                    op.cancel.clone(),
+                    self.state.authority.stop.clone(),
+                    || self.state.check(op),
+                )?;
                 Ok((token, metadata))
             }
         })

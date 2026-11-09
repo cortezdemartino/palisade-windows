@@ -12,7 +12,7 @@ const BYTES: &[u8] = b"approved temporary fixture bytes";
 struct Fixture {
     files: Arc<SessionFiles>,
     gate: Arc<Mutex<SessionGate>>,
-    stop: Arc<AtomicBool>,
+    stop: crate::cancellation::SessionStop,
     clock: Arc<AtomicU64>,
     root: PathBuf,
 }
@@ -39,6 +39,9 @@ impl Fixture {
         Self::with_consent(true, true)
     }
     fn with_consent(consent: bool, file_confirmation: bool) -> Self {
+        Self::with_launch(consent, file_confirmation, Arc::new(AtomicBool::new(false)))
+    }
+    fn with_launch(consent: bool, file_confirmation: bool, launch: Arc<AtomicBool>) -> Self {
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../../../../tests/fixtures/assist-control-v2.json"
         ))
@@ -107,7 +110,7 @@ impl Fixture {
         gate.refresh(&lease, now, instant, instant).unwrap();
         let gate = Arc::new(Mutex::new(gate));
         let clock = Arc::new(AtomicU64::new(now));
-        let stop = Arc::new(AtomicBool::new(false));
+        let stop = crate::cancellation::SessionStop::child(launch);
         // These seams are test-only. They simulate time/platform and a separate
         // native file decision; no test touches the personal clipboard/input/UI.
         let files = Arc::new(
@@ -433,7 +436,7 @@ fn grant_and_idle_expiration_and_session_end_cancel_without_new_work() {
         .files
         .request_receive(RECEIVE, "transfer_session_end", metadata())
         .unwrap();
-    fixture.stop.store(true, Ordering::SeqCst);
+    fixture.stop.revoke();
     wait_until(|| pending.operation.cancel.load(Ordering::SeqCst));
     assert!(
         fixture
@@ -676,4 +679,40 @@ fn opposite_direction_quota_race_cannot_overcommit_the_session() {
         .sum::<usize>();
     assert_eq!(accepted, 1);
     assert_eq!(quota.load(Ordering::SeqCst), super::super::SESSION_LIMIT);
+}
+
+#[test]
+fn session_stop_preserves_sibling_files_and_global_stop_refuses_before_gate_lock() {
+    let launch = Arc::new(AtomicBool::new(false));
+    let first = Fixture::with_launch(true, true, launch.clone());
+    let sibling = Fixture::with_launch(true, true, launch.clone());
+    first.stop.revoke();
+    assert!(
+        first
+            .files
+            .state
+            .authority
+            .grant(RECEIVE, "file_to_host")
+            .is_err()
+    );
+    assert!(
+        sibling
+            .files
+            .state
+            .authority
+            .grant(RECEIVE, "file_to_host")
+            .is_ok()
+    );
+    assert!(!launch.load(Ordering::SeqCst));
+    let _blocked = sibling.gate.lock().unwrap();
+    launch.store(true, Ordering::SeqCst);
+    // Must refuse before acquiring the already-held gate: no watcher or UI tick.
+    assert!(
+        sibling
+            .files
+            .state
+            .authority
+            .grant(RECEIVE, "file_to_host")
+            .is_err()
+    );
 }

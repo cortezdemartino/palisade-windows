@@ -1,5 +1,11 @@
 # Complete Windows Assist delivery plan
 
+Session cancellation is now isolated under the launch emergency stop, including
+direct file-dialog checks and refusal of gate results completed after Stop.
+[Evidence](evidence/2026-11-09-session-cancellation.md). The observer correction
+`11f6508` passed exact-SHA CI42677575263. Continue the launch-owned signer/session
+registry and positive descendant cleanup; this is not full runtime acceptance.
+
 Current local registration work: exact executor reservations and one-shot terminal cleanup authorization now connect the existing gate/executor and dormant runtime. [Evidence and remaining acquisition requirements](evidence/2026-11-09-executor-registration.md). The parent-loss correction `5046a0d` passed exact-SHA CI42620269751. Complete monitor-owned positive receipts, pending replacement cohorts and fresh native input connections next; this local proof cannot widen the private channel scope.
 
 M4G-WINDOWS-FINAL continuation: the direct monitor/job ownership component now has an explicit non-authorizing private version2 and actual process fault tests. [Evidence](evidence/2026-11-08-process-monitor.md). Its `channel-and-process-exit` scope cannot satisfy native held-input cleanup. W2 still requires positive generation-bound release receipts and the real persistent runtime/dispatch path; continue those before sensitive feature activation. Companion main is now `e45cc8f20b3060e8231ecafc29c2417ee6f42040`, with the canonical cooperative contract. The inactive [scheduler and executor integration](ASSIST-COOPERATIVE-INPUT.md) is verified in simulation; native observation, delivery arbitration, UI and complete live runtime remain open. All prior fixtures and acceptance cases are preserved, with WIN-Y01 through WIN-Y04 added.

@@ -1,5 +1,14 @@
 # Native Assist components
 
+## Session isolation
+
+Each runtime uses its own terminal cancellation token under the launch emergency
+stop. Ending a child session does not revoke its siblings. Native OS security loss
+and global Stop still invalidate all children, which read both scopes directly.
+Pending capability/file UI and resource authorization use the same exact token.
+[Implementation and verification](evidence/2026-11-09-session-cancellation.md).
+The persistent launch owner and actual cross-client runtime remain unfinished.
+
 ## Native process ownership milestone
 
 The new direct application-owned monitor launches its fixed coordinator with atomic Windows job assignment and restricted inherited handles. It retains non-killing job accounting and a terminal read-only child stop event. Early errors/unwinds and coordinator death signal stop before waiting for descendants. Explicit private version2 remains non-authorizing and negotiates only channel/process-exit proof. Existing private version1 stays channel-only. [Details and verification](evidence/2026-11-08-process-monitor.md).

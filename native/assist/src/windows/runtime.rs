@@ -41,7 +41,7 @@ pub use crate::input::InputProfile;
 /// either method touches only atomics, never registry/UI/network/join locks.
 #[derive(Clone)]
 pub struct RuntimeRevoker {
-    stop: Arc<AtomicBool>,
+    stop: crate::cancellation::SessionStop,
     input_stop: Arc<AtomicBool>,
     ready: Arc<AtomicBool>,
     lease_cancel: Arc<AtomicBool>,
@@ -53,7 +53,7 @@ impl RuntimeRevoker {
         self.ready.store(false, Ordering::SeqCst);
     }
     pub fn revoke(&self) {
-        self.stop.store(true, Ordering::SeqCst);
+        self.stop.revoke();
         self.suspend_input();
         self.lease_cancel.store(true, Ordering::SeqCst);
         if let Some(files) = &self.files {
@@ -64,7 +64,7 @@ impl RuntimeRevoker {
 pub struct StreamRuntime {
     gate: Arc<Mutex<SessionGate>>,
     source: Option<Arc<Mutex<Source>>>,
-    stop: Arc<AtomicBool>,
+    stop: crate::cancellation::SessionStop,
     input_stop: Arc<AtomicBool>,
     identity: Arc<EndpointIdentity>,
     prompts: BTreeMap<String, Prompt>,
@@ -76,11 +76,32 @@ pub struct StreamRuntime {
     lease_cancel: Arc<AtomicBool>,
     cleanup_failed: bool,
 }
+fn with_live_gate<T>(
+    gate: &Mutex<SessionGate>,
+    stop: &crate::cancellation::SessionStop,
+    operation: impl FnOnce(&mut SessionGate) -> Result<T, &'static str>,
+) -> Result<T, &'static str> {
+    if stop.is_stopped() {
+        return Err("revoked");
+    }
+    let mut gate = gate.lock().map_err(|_| "endpoint-failed")?;
+    // A busy gate must not turn an operation queued before Stop into new work.
+    if stop.is_stopped() {
+        gate.stop();
+        return Err("revoked");
+    }
+    let result = operation(&mut gate);
+    if stop.is_stopped() {
+        gate.stop();
+        return Err("revoked");
+    }
+    result
+}
 fn release_registered_input(
     gate: &Arc<Mutex<SessionGate>>,
     executor: &mut Executor<ProcessInput>,
     source: &Source,
-    stop: &AtomicBool,
+    stop: &crate::cancellation::SessionStop,
 ) -> Result<(), &'static str> {
     let requirement = gate
         .lock()
@@ -101,7 +122,7 @@ fn release_registered_input(
             }
             Err(_) => {
                 if ordinary_desktop().is_err() {
-                    stop.store(true, Ordering::SeqCst);
+                    stop.revoke_launch();
                 }
                 thread::sleep(Duration::from_millis(100));
             }
@@ -147,7 +168,7 @@ impl StreamRuntime {
         enrollment.verify_binding(issuer, &identity, &binding)?;
         let stop = stop_surface.session_flag()?;
         enrollment.bind_session(&stop)?;
-        if stop.load(Ordering::SeqCst) || grants.is_empty() || grants.len() > 8 {
+        if stop.is_stopped() || grants.is_empty() || grants.len() > 8 {
             return Err("invalid-session");
         }
         ordinary_desktop()?;
@@ -183,7 +204,7 @@ impl StreamRuntime {
         let poller = LeasePoller::start(
             identity.clone(),
             gate.clone(),
-            Arc::new(move || lost.store(true, Ordering::SeqCst)),
+            Arc::new(move || lost.revoke()),
         );
         let lease_cancel = poller.cancel_flag();
         let (work, receive) = mpsc::sync_channel(1);
@@ -210,17 +231,20 @@ impl StreamRuntime {
                             .tick(now, Instant::now())
                     })
                     .is_err();
-                if invalid || ordinary_desktop().is_err() {
-                    worker_stop.store(true, Ordering::SeqCst);
+                if invalid {
+                    worker_stop.revoke();
                 }
-                if worker_stop.load(Ordering::SeqCst) {
+                if ordinary_desktop().is_err() {
+                    worker_stop.revoke_launch();
+                }
+                if worker_stop.is_stopped() {
                     break;
                 }
                 if let Some(ref source) = worker_source {
                     let source = match source.lock() {
                         Ok(s) => s.clone(),
                         Err(_) => {
-                            worker_stop.store(true, Ordering::SeqCst);
+                            worker_stop.revoke();
                             break;
                         }
                     };
@@ -287,7 +311,7 @@ impl StreamRuntime {
                                     && gate.input_active(lease::now()?, Instant::now())
                             };
                             if !current
-                                || worker_stop.load(Ordering::SeqCst)
+                                || worker_stop.is_stopped()
                                 || worker_input_stop.load(Ordering::SeqCst)
                             {
                                 return Err("revoked");
@@ -340,7 +364,7 @@ impl StreamRuntime {
                             )
                             .is_err()
                             {
-                                worker_stop.store(true, Ordering::SeqCst);
+                                worker_stop.revoke();
                                 return Err("input-cleanup-unproven");
                             }
                         }
@@ -377,7 +401,7 @@ impl StreamRuntime {
                         &source,
                         &message.action,
                         || {
-                            if worker_stop.load(Ordering::SeqCst)
+                            if worker_stop.is_stopped()
                                 || worker_input_stop.load(Ordering::SeqCst)
                                 || Instant::now() >= queued_until
                             {
@@ -395,7 +419,7 @@ impl StreamRuntime {
                 }
                 let _ = packet.2.send(crate::input::packet_result(result));
             }
-            worker_stop.store(true, Ordering::SeqCst);
+            worker_stop.revoke();
             worker_ready.store(false, Ordering::SeqCst);
             let mut failed = false;
             worker_gate
@@ -442,10 +466,7 @@ impl StreamRuntime {
         })
     }
     pub fn request_consent(&mut self, id: &str) -> Result<(), &'static str> {
-        if self.stop.load(Ordering::SeqCst)
-            || self.prompts.contains_key(id)
-            || self.prompts.len() >= 8
-        {
+        if self.stop.is_stopped() || self.prompts.contains_key(id) || self.prompts.len() >= 8 {
             return Err("consent-unavailable");
         }
         self.prompts.insert(
@@ -461,7 +482,7 @@ impl StreamRuntime {
         Ok(())
     }
     pub fn consent_result(&mut self, id: &str) -> Result<Acknowledgement, &'static str> {
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.is_stopped() {
             return Err("revoked");
         }
         let prompt = self.prompts.get_mut(id).ok_or("consent-required")?;
@@ -485,9 +506,7 @@ impl StreamRuntime {
                     grant.capability.as_str(),
                     "control_mouse" | "control_keyboard"
                 );
-                if self.stop.load(Ordering::SeqCst)
-                    || (input && self.input_stop.load(Ordering::SeqCst))
-                {
+                if self.stop.is_stopped() || (input && self.input_stop.load(Ordering::SeqCst)) {
                     return Err("revoked");
                 }
                 let current = self
@@ -507,9 +526,7 @@ impl StreamRuntime {
                     },
                     state: "consented",
                 };
-                if self.stop.load(Ordering::SeqCst)
-                    || (input && self.input_stop.load(Ordering::SeqCst))
-                {
+                if self.stop.is_stopped() || (input && self.input_stop.load(Ordering::SeqCst)) {
                     return Err("revoked");
                 }
                 acknowledgement
@@ -523,19 +540,13 @@ impl StreamRuntime {
     /// Called exclusively with the DTLS fingerprint observed by the app-owned
     /// gateway, not an SDP string or boolean supplied by the hosted page.
     pub fn observed_peer(&self, fingerprint: &str) -> Result<(), &'static str> {
-        if self.stop.load(Ordering::SeqCst) {
-            return Err("revoked");
-        }
-        self.gate
-            .lock()
-            .map_err(|_| "endpoint-failed")?
-            .verify_peer(fingerprint)
+        with_live_gate(&self.gate, &self.stop, |gate| gate.verify_peer(fingerprint))
     }
     pub fn packet(&self, packet: String) -> Result<(), &'static str> {
         if packet.len() > 16_384 {
             return Err("too-large");
         }
-        if self.stop.load(Ordering::SeqCst) {
+        if self.stop.is_stopped() {
             return Err("revoked");
         }
         if self.input_stop.load(Ordering::SeqCst) || !self.ready.load(Ordering::SeqCst) {
@@ -550,18 +561,20 @@ impl StreamRuntime {
             .map_err(|_| "endpoint-timeout")?
     }
     pub fn authorize(&self, id: &str, capability: &str) -> Result<(), &'static str> {
-        if self.stop.load(Ordering::SeqCst) || ordinary_desktop().is_err() {
-            self.stop.store(true, Ordering::SeqCst);
+        if self.stop.is_stopped() {
             return Err("revoked");
         }
-        self.gate
-            .lock()
-            .map_err(|_| "endpoint-failed")?
-            .authorize(id, capability, lease::now()?, Instant::now())
-            .map(|_| ())
+        if ordinary_desktop().is_err() {
+            self.stop.revoke_launch();
+            return Err("revoked");
+        }
+        with_live_gate(&self.gate, &self.stop, |gate| {
+            gate.authorize(id, capability, lease::now()?, Instant::now())
+                .map(|_| ())
+        })
     }
     pub fn ended(&self) -> bool {
-        self.stop.load(Ordering::SeqCst)
+        self.stop.is_stopped()
     }
     pub fn files(&self) -> Result<Arc<SessionFiles>, &'static str> {
         if self.ended() {
@@ -659,10 +672,69 @@ impl Drop for StreamRuntime {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn fixture_gate() -> SessionGate {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let mut binding = fixture["expect"].clone();
+        binding.as_object_mut().unwrap().remove("sessionDeadline");
+        binding.as_object_mut().unwrap().remove("now");
+        binding["endpoint"] = fixture["grants"]["valid"][1]["signed"]["grant"]["endpoint"].clone();
+        SessionGate::new(
+            [42; 32],
+            serde_json::from_value(binding).unwrap(),
+            1,
+            0,
+            Instant::now(),
+        )
+    }
+    #[test]
+    fn launch_stop_while_authorization_holds_gate_rejects_success() {
+        let launch = Arc::new(AtomicBool::new(false));
+        let stop: crate::cancellation::SessionStop = launch.clone().into();
+        let gate = Arc::new(Mutex::new(fixture_gate()));
+        let (entered, inside) = mpsc::sync_channel(0);
+        let (release, released) = mpsc::sync_channel(0);
+        let worker_gate = gate.clone();
+        let worker = thread::spawn(move || {
+            with_live_gate(&worker_gate, &stop, |_| {
+                entered.send(()).unwrap();
+                released.recv().unwrap();
+                Ok(())
+            })
+        });
+        inside.recv_timeout(Duration::from_secs(2)).unwrap();
+        launch.store(true, Ordering::SeqCst);
+        release.send(()).unwrap();
+        assert_eq!(worker.join().unwrap(), Err("revoked"));
+        assert!(gate.lock().unwrap().ended());
+    }
+    #[test]
+    fn sibling_runtime_end_never_sets_global_emergency_stop() {
+        let launch = Arc::new(AtomicBool::new(false));
+        let revoker = |stop| RuntimeRevoker {
+            stop,
+            input_stop: Arc::new(AtomicBool::new(false)),
+            ready: Arc::new(AtomicBool::new(true)),
+            lease_cancel: Arc::new(AtomicBool::new(false)),
+            files: None,
+        };
+        let first = revoker(crate::cancellation::SessionStop::child(launch.clone()));
+        let sibling = revoker(crate::cancellation::SessionStop::child(launch.clone()));
+        first.revoke();
+        assert!(first.stop.is_stopped());
+        assert!(!sibling.stop.is_stopped());
+        assert!(!sibling.input_stop.load(Ordering::SeqCst));
+        assert!(!sibling.lease_cancel.load(Ordering::SeqCst));
+        assert!(!launch.load(Ordering::SeqCst));
+        launch.store(true, Ordering::SeqCst);
+        assert!(sibling.stop.is_stopped());
+    }
     #[test]
     fn input_only_revocation_preserves_resource_and_poller_flags() {
         let revoker = RuntimeRevoker {
-            stop: Arc::new(AtomicBool::new(false)),
+            stop: Arc::new(AtomicBool::new(false)).into(),
             input_stop: Arc::new(AtomicBool::new(false)),
             ready: Arc::new(AtomicBool::new(true)),
             lease_cancel: Arc::new(AtomicBool::new(false)),
@@ -671,10 +743,10 @@ mod tests {
         revoker.suspend_input();
         assert!(revoker.input_stop.load(Ordering::SeqCst));
         assert!(!revoker.ready.load(Ordering::SeqCst));
-        assert!(!revoker.stop.load(Ordering::SeqCst));
+        assert!(!revoker.stop.is_stopped());
         assert!(!revoker.lease_cancel.load(Ordering::SeqCst));
         revoker.revoke();
-        assert!(revoker.stop.load(Ordering::SeqCst));
+        assert!(revoker.stop.is_stopped());
         assert!(revoker.lease_cancel.load(Ordering::SeqCst));
     }
 }
