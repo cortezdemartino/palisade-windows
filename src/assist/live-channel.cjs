@@ -12,8 +12,8 @@ const exact = (v, fields) => v && typeof v === 'object' && !Array.isArray(v) &&
 const unavailable = () => Object.assign(Error('Assist native channel unavailable'), { code: 'assist-native-unavailable' });
 const incomplete = () => Object.assign(Error('Assist native cleanup unproven'), { code: 'assist-cleanup-incomplete' });
 
-async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false, signal } = {}) {
-  if (!lifecycle || typeof lifecycle.hold !== 'function' || typeof probe !== 'boolean' ||
+async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false, ownedTree = false, signal } = {}) {
+  if (!lifecycle || typeof lifecycle.hold !== 'function' || typeof probe !== 'boolean' || typeof ownedTree !== 'boolean' ||
       (signal && (typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function'))) throw unavailable();
   let child = null, launched = false, spawning = true, revoked = false, failed = false,
     closed = false, writeBlocked = false, terminal = false, sequence = 0, heartbeat;
@@ -22,6 +22,9 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
   void exited.catch(() => {});
   const abort = new AbortController(), pending = new Map(), challenge = randomBytes(32).toString('base64url');
   let buffered = Buffer.alloc(0);
+  const version = ownedTree ? 2 : 1;
+  const scope = ownedTree ? 'channel-and-process-exit' : 'channel-only';
+  const mode = ownedTree ? (probe ? 'tree-live-probe' : 'tree-live') : (probe ? 'live-probe' : 'live');
   const holder = lifecycle.hold({ revoke, wait: () => exited });
   const externalAbort = () => revoke();
   signal?.addEventListener('abort', externalAbort, { once: true });
@@ -78,13 +81,15 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
   }
   function validate(entry, result) {
     if (entry.type === 'hello') return exact(result, ['type', 'protocol', 'version', 'challenge', 'mode', 'nativeInput', 'cleanupScope']) &&
-      result.type === 'hello' && result.protocol === PROTOCOL && result.version === 1 && result.challenge === challenge &&
-      result.mode === (probe ? 'live-probe' : 'live') && result.nativeInput === false && result.cleanupScope === 'channel-only';
+      result.type === 'hello' && result.protocol === PROTOCOL && result.version === version && result.challenge === challenge &&
+      result.mode === mode && result.nativeInput === false && result.cleanupScope === scope;
     if (entry.type === 'status') return exact(result, ['type', 'state', 'authority']) && result.type === 'status' &&
       ['inactive', 'revoked'].includes(result.state) && result.authority === 'none';
     if (entry.type === 'shutdown') return exact(result, ['type', 'challenge', 'scope']) && result.type === 'cleanup-complete' &&
-      result.challenge === challenge && result.scope === 'channel-only';
-    return ['pulse', 'probe-wait'].includes(entry.type) && exact(result, ['type']) && result.type === entry.type;
+      result.challenge === challenge && result.scope === scope;
+    if (entry.type === 'probe-stop-holder' && ownedTree && probe) return exact(result, ['type', 'pid', 'coordinator']) && result.type === entry.type &&
+      Number.isInteger(result.pid) && result.pid > 0 && Number.isInteger(result.coordinator) && result.coordinator > 0 && result.pid !== result.coordinator;
+    return ['pulse', 'probe-wait', ...(ownedTree && probe ? ['probe-descendant'] : [])].includes(entry.type) && exact(result, ['type']) && result.type === entry.type;
   }
   function accept(bytes) {
     let message;
@@ -117,9 +122,10 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     }
   }
   try {
-    await verifyGuardian(binary, manifestFile);
+    const manifest = await verifyGuardian(binary, manifestFile);
     if (revoked || holder.signal.aborted || signal?.aborted) throw unavailable();
-    child = spawn(binary, [probe ? '--live-probe' : '--live', String(process.pid)], {
+    if (ownedTree && (!manifest || !Number.isSafeInteger(manifest.size) || !/^[a-f0-9]{64}$/.test(manifest.sha256))) throw unavailable();
+    child = spawn(binary, ['--' + mode, String(process.pid), ...(ownedTree ? [String(manifest.size), manifest.sha256] : [])], {
       windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], shell: false,
     });
     child.once('spawn', () => { launched = true; });
@@ -141,7 +147,7 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       else rejectExit(incomplete());
     });
     spawning = false;
-    await send({ type: 'hello', protocol: PROTOCOL, version: 1, challenge });
+    await send({ type: 'hello', protocol: PROTOCOL, version, challenge });
     if (revoked || closed) throw unavailable();
     heartbeat = setInterval(() => {
       if (revoked || closed || [...pending.values()].some(v => v.type === 'pulse')) return;
@@ -152,6 +158,9 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       close: () => holder.finish('channel-close'), wait: () => exited, signal: abort.signal, pid: child.pid };
     if (probe) api.probeWait = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 10_000
       ? send({ type: 'probe-wait', milliseconds }, 12_000) : Promise.reject(unavailable());
+    if (probe && ownedTree) api.probeDescendant = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 2000
+      ? send({ type: 'probe-descendant', milliseconds }) : Promise.reject(unavailable());
+    if (probe && ownedTree) api.probeStopHolder = () => send({ type: 'probe-stop-holder' });
     return Object.freeze(api);
   } catch (error) {
     revoke();

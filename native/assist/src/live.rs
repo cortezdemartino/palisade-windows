@@ -39,13 +39,13 @@ impl Signals {
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Request {
     pub sequence: u32,
     pub command: Command,
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
     Hello {
@@ -60,12 +60,17 @@ pub enum Command {
     ProbeWait {
         milliseconds: u16,
     },
+    ProbeDescendant {
+        milliseconds: u16,
+    },
+    ProbeStopHolder {},
 }
 pub struct Ingress {
     next: u32,
     challenge: Option<String>,
     probe: bool,
     closed: bool,
+    version: u32,
 }
 impl Ingress {
     pub fn new(probe: bool) -> Self {
@@ -74,6 +79,13 @@ impl Ingress {
             challenge: None,
             probe,
             closed: false,
+            version: 1,
+        }
+    }
+    pub(crate) fn owned(probe: bool) -> Self {
+        Self {
+            version: 2,
+            ..Self::new(probe)
         }
     }
     pub fn accept(&mut self, bytes: &[u8], signals: &Signals) -> Result<Request, &'static str> {
@@ -92,7 +104,7 @@ impl Ingress {
                     version,
                     challenge,
                 } if self.challenge.is_none() => {
-                    if protocol != PROTOCOL || *version != 1 {
+                    if protocol != PROTOCOL || *version != self.version {
                         return Err("incompatible-protocol");
                     }
                     crate::grant::decode::<32>(challenge)?;
@@ -107,6 +119,17 @@ impl Ingress {
                 Command::ProbeWait { milliseconds }
                     if !self.probe || *milliseconds == 0 || *milliseconds > 10_000 =>
                 {
+                    return Err("operation-unavailable");
+                }
+                Command::ProbeDescendant { milliseconds }
+                    if !self.probe
+                        || self.version != 2
+                        || *milliseconds == 0
+                        || *milliseconds > 2000 =>
+                {
+                    return Err("operation-unavailable");
+                }
+                Command::ProbeStopHolder {} if !self.probe || self.version != 2 => {
                     return Err("operation-unavailable");
                 }
                 _ => (),
@@ -142,6 +165,11 @@ pub enum Reply {
         authority: &'static str,
     },
     ProbeWait,
+    ProbeDescendant,
+    ProbeStopHolder {
+        pid: u32,
+        coordinator: u32,
+    },
     CleanupComplete {
         challenge: String,
         scope: &'static str,

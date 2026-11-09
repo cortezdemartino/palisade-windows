@@ -13,8 +13,8 @@ function frame(command, sequence = 0) {
   const bytes = Buffer.from(typeof command === 'string' ? command : JSON.stringify({ sequence, command }));
   const prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length); return Buffer.concat([prefix, bytes]);
 }
-function raw({ mode = '--live-probe', pid = process.pid, drain = true } = {}) {
-  const child = spawn(binary, [mode, String(pid)], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], shell: false });
+function raw({ mode = '--live-probe', pid = process.pid, drain = true, extra = [] } = {}) {
+  const child = spawn(binary, [mode, String(pid), ...extra], { windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'], shell: false });
   child.stdin.on('error', () => {});
   if (drain) child.stdout.resume();
   const exit = once(child, 'exit');
@@ -39,6 +39,111 @@ test('actual live channel closes only after typed cleanup proof and process exit
     assert.equal(life.status().holders, 1);
     await channel.close(); assert.equal(life.status().holders, 0); assert.equal(channel.signal.aborted, true);
   }
+});
+
+test('actual owned monitor waits for a delayed descendant after coordinator exit', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true });
+  assert.deepEqual(await channel.status(), { type: 'status', state: 'inactive', authority: 'none' });
+  await channel.probeDescendant(400);
+  const start = performance.now();
+  await channel.close();
+  assert.ok(performance.now() - start >= 350, 'coordinator exit must not complete a retained descendant');
+  assert.equal(life.status().holders, 0);
+});
+
+test('actual owned monitor keeps shutdown independent of eight stalled requests', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true });
+  const requests = Promise.allSettled(Array.from({ length: 8 }, () => channel.probeWait(10000)));
+  await assert.rejects(channel.status());
+  const start = performance.now();
+  await life.quiesce('update');
+  assert.ok(performance.now() - start < 2000);
+  assert.ok((await requests).every(r => r.status === 'rejected'));
+  assert.equal(life.status().holders, 0);
+});
+
+test('actual owned monitor signals a stop-only descendant on coordinator crash and retains unproven cleanup', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true });
+  const holder = await channel.probeStopHolder();
+  // Both identifiers originate in the verified no-authority probe. No personal
+  // process or active native executor is terminated by this test.
+  process.kill(holder.coordinator);
+  await assert.rejects(channel.wait(), { code: 'assist-cleanup-incomplete' });
+  const deadline = Date.now() + 2000;
+  let exited = false;
+  while (Date.now() < deadline) {
+    try { process.kill(holder.pid, 0); }
+    catch (error) { if (error.code === 'ESRCH') { exited = true; break; } throw error; }
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
+  assert.equal(exited, true, 'survivor needs the stop event before monitor waits for job zero');
+  await assert.rejects(life.quiesce());
+  assert.equal(life.status().holders, 1);
+});
+
+test('owned actual pipes refuse tampered images, malformed and replayed frames without authority', async () => {
+  const manifest = JSON.parse(require('node:fs').readFileSync(manifestFile, 'utf8'));
+  const options = { mode: '--tree-live-probe', extra: [String(manifest.size), manifest.sha256] };
+  const greeting = { ...hello, version: 2 };
+  await refused(null, { ...options, pid: process.pid + 1 });
+  await refused(null, { ...options, extra: [String(manifest.size), '0'.repeat(64)] });
+  await refused(null, { ...options, end: true });
+  await refused(Buffer.from([10, 0, 0, 0, 123]), { ...options, end: true });
+  await refused(frame('{"sequence":0,"sequence":0,"command":{"type":"shutdown"}}'), options);
+  await refused(Buffer.concat([frame(greeting), frame({ type: 'pulse' }, 0)]), options);
+  await refused(Buffer.concat([frame(greeting), frame({ type: 'input', approved: true }, 1)]), options);
+});
+
+test('owned watchdog handles a silent parent and output pressure independently', async () => {
+  const manifest = JSON.parse(require('node:fs').readFileSync(manifestFile, 'utf8'));
+  const options = { mode: '--tree-live-probe', extra: [String(manifest.size), manifest.sha256] };
+  await refused(Buffer.from([10]), options);
+  const wire = [frame({ ...hello, version: 2 })];
+  for (let i = 1; i <= 8000; i++) wire.push(frame({ type: 'pulse' }, i));
+  await refused(Buffer.concat(wire), { ...options, drain: false });
+});
+
+test('owned monitor crash cannot manufacture a successful lifecycle proof', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true });
+  process.kill(channel.pid); // Verified non-authorizing monitor fixture only.
+  await assert.rejects(channel.wait(), { code: 'assist-cleanup-incomplete' });
+  await assert.rejects(life.quiesce());
+  assert.equal(life.status().holders, 1);
+});
+
+test('owned parent death revokes the monitor and its coordinator without ordinary dispatch', async () => {
+  const script = `const {openLiveChannel}=require(process.argv[3]);
+    const {createAssistLifecycle}=require(process.argv[4]);
+    openLiveChannel({binary:process.argv[1],manifestFile:process.argv[2],lifecycle:createAssistLifecycle(),probe:true,ownedTree:true})
+      .then(async channel=>{
+        const holder=await channel.probeStopHolder();
+        process.stdout.write(JSON.stringify([channel.pid,holder.coordinator,holder.pid]),()=>process.exit(0));
+      })
+      .catch(()=>process.exit(2));`;
+  const parent = spawn(process.execPath, ['-e', script, binary, manifestFile,
+    require.resolve('../src/assist/live-channel.cjs'), require.resolve('../src/assist/lifecycle.cjs')],
+    { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+  let text = ''; parent.stdout.on('data', chunk => { text += chunk; }); parent.stderr.resume();
+  const timer = setTimeout(() => parent.kill(), 5000);
+  try { assert.equal((await once(parent, 'exit'))[0], 0); } finally { clearTimeout(timer); }
+  const pids = JSON.parse(text);
+  assert.equal(new Set(pids).size, 3);
+  assert.ok(pids.every(pid => Number.isInteger(pid) && pid > 0));
+  const remaining = new Set(pids);
+  const deadline = Date.now() + 4000;
+  while (Date.now() < deadline) {
+    for (const pid of remaining) {
+      try { process.kill(pid, 0); }
+      catch (error) { if (error.code === 'ESRCH') remaining.delete(pid); else throw error; }
+    }
+    if (!remaining.size) return;
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+  assert.fail('owned process tree survived parent death: ' + [...remaining].join(','));
 });
 
 test('actual urgent shutdown interrupts eight stalled ordinary requests and is joined by app cleanup', async () => {

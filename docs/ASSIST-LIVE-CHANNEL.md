@@ -1,5 +1,15 @@
 # Private native Assist channel
 
+## Owned process monitor, private version 2
+
+An explicit trusted-main `ownedTree: true` option now launches the verified same-image monitor with private protocol version2. Version1 below is unchanged. The monitor atomically places its fixed coordinator in a private Windows Job Object at creation, restricts inherited handles, and retains exact process/job handles through descendant exit. It has no kill-on-close, breakaway or terminating limits. The coordinator receives only query access to the job and read access to a terminal stop event.
+
+Stop is signaled before any descendant wait on coordinator death, and a pre-launch scope guard signals it on early error or unwind even when other threads retain handles. An independent reader/watchdog still handles ordinary saturation, EOF and parent loss. Responses are strictly correlated and validated; a terminal reply is held until the coordinator exits normally, admission is closed, all job processes exit and the child output has drained without a protocol fault.
+
+This negotiates `nativeInput: false` and `cleanupScope: channel-and-process-exit`. It establishes process exit only. Positive generation-bound input release receipts and actual runtime attachment remain required before any broader proof or native authority. Coordinator/monitor faults retain failed application lifecycle ownership even if the job later becomes empty. Production still does not import or start these modules.
+
+Probe-only descendant/stop-holder commands exercise real job lifetime and stop ordering without input, identity, clipboard or resource access. They are refused by version1 and by normal mode. [Evidence and failed attempts](evidence/2026-11-08-process-monitor.md).
+
 Status: **Implemented, inactive, channel-only**, October 28, 2026. This is the first W2 component in [the full delivery plan](ASSIST-RELEASE-PLAN.md). It does not complete W2, start a native session or enable remote control. The production application does not import it.
 
 ## Boundary and launch

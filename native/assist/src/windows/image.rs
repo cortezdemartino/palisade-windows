@@ -19,7 +19,7 @@ pub struct ImageManifest {
     pub sha256: String,
     pub size: u64,
 }
-pub(crate) struct VerifiedImage {
+pub struct VerifiedImage {
     path: PathBuf,
     _file: File,
     _parents: ParentGuard,

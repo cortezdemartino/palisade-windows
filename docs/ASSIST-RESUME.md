@@ -1,5 +1,13 @@
 # Assist continuation checkpoint
 
+## M4G-WINDOWS-FINAL execution
+
+Started from `d5787528d895202b3b9d41bfd9ce10a3212c4e57`. Companion main was refreshed read-only and remains `5b82bc90e4997f35dd18273427c258fe54eefb95`; no cooperative-input handoff has arrived. All required Windows and companion architecture/protocol/risk documents were inspected before edits. Keep implementing independent Windows work without inventing a cooperative wire contract.
+
+The first ownership milestone adds actual atomic non-killing job assignment, strict handle inheritance and a direct application-owned monitor. Private version2 negotiates only `channel-and-process-exit`, with native input false; version1 remains unchanged. A pre-launch scope guard and coordinator-death handling signal stop before descendant waits. Real no-input process tests cover delayed survivors, stop-event-only survivors, saturation, bad frames/images, EOF, parent death, blocked output and monitor crash. [Evidence](evidence/2026-11-08-process-monitor.md).
+
+Next: register positive executor-generation cleanup receipts and direct authenticated receipt ownership before input admission, then attach the real persistent enrollment/session runtime, sensitive native UI guard, source/transport signing and extension resources. Process accounting is not input cleanup proof. Keep unknown cleanup failed, no killing/bypass, no production activation or release. The earlier all-feature test fail-fast is documented and not claimed fixed. Complete available implementation beyond this component milestone; it does not finish the assignment.
+
 ## M4G-WEB-6 integration after desktop v0.3.3
 
 Desktop v0.3.3 is published at `5ebca7f4f52f62e0460da47f768323d19a1c4e60`; exact CI/release and six public assets passed signature/hash/discovery verification. The following handoff is now being integrated. Native release authority is a component checkpoint only; see [evidence](evidence/2026-11-08-release-authority.md). Existing v1 sources and the seven earlier fixtures remain unchanged. The owner additionally requires cooperative host/helper input with local priority. Current local-activity hard stop remains unchanged until a canonical nonterminal local-yield contract and native integration are implemented; use the updated [Claude prompt](ASSIST-COMPANION-HANDOFF-PROMPT.md).

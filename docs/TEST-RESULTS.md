@@ -1,5 +1,9 @@
 # Validation
 
+## M4G-WINDOWS-FINAL process ownership
+
+Current ownership milestone:187 application tests and106 native tests per configuration passed, with25 real no-input process groups per configuration and the hidden-control fixture. The updated parent-death case separately confirms monitor, coordinator and stop-holder exit in both configurations. Independent review cleared the inactive source boundary and passed17 Node contract/channel checks. Earlier failures, the unresolved/nonreproduced fail-fast, package results and remaining native-runtime work are recorded in [the evidence](evidence/2026-11-08-process-monitor.md). This is not full Assist or physical-input acceptance.
+
 ## M4G-WEB-6 native release authority, November 8, 2026
 
 The current checkpoint consumes the exact companion `5b82bc90e4997f35dd18273427c258fe54eefb95` protocol/release fixture/interop manifest and fixes carried-grant release ownership in the native gate/executor. All186 application tests and all100 native tests in each configuration pass. The native tests use fake input sinks. The 23 canonical Windows acceptance cases remain unexecuted; cooperative local host/helper input remains Planned. [Scope and detailed evidence](evidence/2026-11-08-release-authority.md).

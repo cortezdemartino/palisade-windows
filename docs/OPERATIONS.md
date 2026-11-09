@@ -1,5 +1,9 @@
 # Build and release operations
 
+## Assist process ownership checks
+
+`npm run test:assist-process` exercises both the existing private channel and the explicit owned-process monitor against the default release helper and the all-features debug helper. These fixtures have no input, enrollment or clipboard authority. The owned monitor negotiates `channel-and-process-exit`; it does not prove held-input release and cannot be used to enable Assist. A crash or invalid proof retains failed quit/update ownership. Diagnose the failed holder; do not force-complete it or kill a real cleanup process to install an update. [Current evidence, failed attempts and runtime prerequisites](evidence/2026-11-08-process-monitor.md).
+
 ## Requirements
 
 - Windows x64 build runner (GitHub Actions uses `windows-latest`)

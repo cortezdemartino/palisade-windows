@@ -65,6 +65,41 @@ fn run() -> Result<(), &'static str> {
 fn run() -> Result<(), &'static str> {
     use palisade_assist_guardian::windows::{lifecycle::NativeStop, parent::Parent};
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.len() == 2 && args[0] == "--tree-stop-probe" {
+        return palisade_assist_guardian::windows::process_monitor::stop_probe(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+        );
+    }
+    if args.len() == 4 && ["--tree-live", "--tree-live-probe"].contains(&args[0].as_str()) {
+        return palisade_assist_guardian::windows::process_monitor::run(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[0] == "--tree-live-probe",
+            palisade_assist_guardian::windows::image::ImageManifest {
+                filename: "Palisade-Assist.exe".into(),
+                protocol: "palisade.assist.guardian".into(),
+                version: 1,
+                size: args[2].parse().map_err(|_| "helper-integrity")?,
+                sha256: args[3].clone(),
+            },
+        );
+    }
+    if args.len() == 5
+        && args[0] == "--tree-coordinator"
+        && ["probe", "normal"].contains(&args[4].as_str())
+    {
+        return palisade_assist_guardian::windows::process_monitor::coordinator(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[4] == "probe",
+            args[2].parse().map_err(|_| "tree-handles")?,
+            args[3].parse().map_err(|_| "tree-handles")?,
+        );
+    }
+    if args.len() == 3 && args[0] == "--tree-release-probe" {
+        return palisade_assist_guardian::windows::process_monitor::release_probe(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[2].parse().map_err(|_| "invalid-probe")?,
+        );
+    }
     if args.len() == 2 && args[0] == "--cleanup-probe" {
         return palisade_assist_guardian::windows::live::cleanup_probe(
             args[1].parse().map_err(|_| "invalid-parent")?,

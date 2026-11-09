@@ -1,5 +1,11 @@
 # Native Assist components
 
+## Native process ownership milestone
+
+The new direct application-owned monitor launches its fixed coordinator with atomic Windows job assignment and restricted inherited handles. It retains non-killing job accounting and a terminal read-only child stop event. Early errors/unwinds and coordinator death signal stop before waiting for descendants. Explicit private version2 remains non-authorizing and negotiates only channel/process-exit proof. Existing private version1 stays channel-only. [Details and verification](evidence/2026-11-08-process-monitor.md).
+
+Connecting StreamRuntime requires positive executor-generation release receipts as well as actual process exit. The monitor cannot infer held-input release from a clean channel, job zero, or exit125 after a guardian crash. The next implementation must register every cleanup holder before input admission and retain unresolved generations after either owner fails.
+
 ## M4G-WEB-6 release ownership
 
 The current inactive executor keeps per-gate/grant held-input ownership derived from validated native permits, alongside its combined write-ahead cleanup ledger. V2 `release-all` accepts the carried mouse or keyboard grant and releases only its owner's scope; ordinary UP and repeats cannot take another owner's holds. Releases bypass ordinary input rate tokens while retaining current authority and replay checks. Independent terminal fence/release still clears all endpoint-owned input. [Evidence](evidence/2026-11-08-release-authority.md).

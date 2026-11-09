@@ -64,7 +64,27 @@ fn emit(
         })
 }
 pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
-    let parent = Parent::validate(parent_pid, probe)?;
+    run_inner(parent_pid, probe, None)
+}
+pub(crate) fn run_owned(
+    parent_pid: u32,
+    probe: bool,
+    tree: super::process_tree::InheritedTree,
+) -> Result<(), &'static str> {
+    run_inner(parent_pid, probe, Some(tree))
+}
+fn run_inner(
+    parent_pid: u32,
+    probe: bool,
+    tree: Option<super::process_tree::InheritedTree>,
+) -> Result<(), &'static str> {
+    let owned = tree.is_some();
+    let stop_reader = tree.as_ref().map(|tree| tree.stop_reader()).transpose()?;
+    let parent = if owned {
+        Parent::validate_executor(parent_pid, probe)?
+    } else {
+        Parent::validate(parent_pid, probe)?
+    };
     let signals = Arc::new(Signals::default());
     let finished = Arc::new(AtomicBool::new(false));
     let guard = Arc::new(Mutex::new(Watchdog::new(
@@ -99,6 +119,12 @@ pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
     let watcher = thread::spawn(move || {
         while !watch_finished.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(25));
+            if tree
+                .as_ref()
+                .is_some_and(|tree| tree.revoked().unwrap_or(true))
+            {
+                watch_signals.revoke();
+            }
             if super::lease::now()
                 .and_then(|wall| {
                     watch_guard
@@ -119,7 +145,11 @@ pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
     let read_output = output.clone();
     thread::spawn(move || {
         let mut input = std::io::stdin().lock();
-        let mut ingress = Ingress::new(probe);
+        let mut ingress = if owned {
+            Ingress::owned(probe)
+        } else {
+            Ingress::new(probe)
+        };
         let outcome = (|| {
             loop {
                 let bytes = read_bounded(&mut input, MAX_FRAME)
@@ -137,9 +167,15 @@ pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
                             request.sequence,
                             Reply::Hello {
                                 protocol: PROTOCOL,
-                                version: 1,
+                                version: if owned { 2 } else { 1 },
                                 challenge: challenge.clone(),
-                                mode: if probe { "live-probe" } else { "live" },
+                                mode: if owned {
+                                    "tree-coordinator"
+                                } else if probe {
+                                    "live-probe"
+                                } else {
+                                    "live"
+                                },
                                 native_input: false,
                                 cleanup_scope: "channel-only",
                             },
@@ -203,6 +239,64 @@ pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
                     if !signals.revoked() {
                         emit(&output, request.sequence, Reply::ProbeWait, &signals)?;
                     }
+                }
+                Command::ProbeDescendant { milliseconds } if probe && owned => {
+                    let mut child = std::process::Command::new(
+                        std::env::current_exe().map_err(|_| "helper-image")?,
+                    )
+                    .args([
+                        "--tree-release-probe",
+                        &std::process::id().to_string(),
+                        &milliseconds.to_string(),
+                    ])
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::null())
+                    .spawn()
+                    .map_err(|_| "tree-probe-launch")?;
+                    let ready =
+                        crate::framing::read_frame(child.stdout.as_mut().ok_or("tree-probe-pipe")?)
+                            .map_err(|_| "tree-probe-pipe")?
+                            .ok_or("tree-probe-pipe")?;
+                    if ready != b"tree-release-probe-ready" {
+                        return Err("tree-probe-pipe");
+                    }
+                    thread::spawn(move || child.wait());
+                    emit(&output, request.sequence, Reply::ProbeDescendant, &signals)?;
+                }
+                Command::ProbeStopHolder {} if probe && owned => {
+                    let event = stop_reader
+                        .as_ref()
+                        .ok_or("tree-stop-reader")?
+                        .try_clone()
+                        .map_err(|_| "tree-stop-reader")?;
+                    let mut child = std::process::Command::new(
+                        std::env::current_exe().map_err(|_| "helper-image")?,
+                    )
+                    .args(["--tree-stop-probe", &std::process::id().to_string()])
+                    .stdin(std::process::Stdio::piped())
+                    .stdout(std::process::Stdio::piped())
+                    .stderr(std::process::Stdio::from(std::fs::File::from(event)))
+                    .spawn()
+                    .map_err(|_| "tree-probe-launch")?;
+                    let ready =
+                        crate::framing::read_frame(child.stdout.as_mut().ok_or("tree-probe-pipe")?)
+                            .map_err(|_| "tree-probe-pipe")?
+                            .ok_or("tree-probe-pipe")?;
+                    if ready != b"tree-stop-probe-ready" {
+                        return Err("tree-probe-pipe");
+                    }
+                    let pid = child.id();
+                    thread::spawn(move || child.wait());
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::ProbeStopHolder {
+                            pid,
+                            coordinator: std::process::id(),
+                        },
+                        &signals,
+                    )?;
                 }
                 _ => return Err("invalid-dispatch"),
             }

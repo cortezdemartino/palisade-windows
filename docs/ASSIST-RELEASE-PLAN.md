@@ -1,5 +1,7 @@
 # Complete Windows Assist delivery plan
 
+M4G-WINDOWS-FINAL continuation: the direct monitor/job ownership component now has an explicit non-authorizing private version2 and actual process fault tests. [Evidence](evidence/2026-11-08-process-monitor.md). Its `channel-and-process-exit` scope cannot satisfy native held-input cleanup. W2 still requires positive generation-bound release receipts and the real persistent runtime/dispatch path; continue those before sensitive feature activation. Companion main remains `5b82bc9` with no cooperative-input contract at this checkpoint.
+
 ## November 8 Profile 2 continuation
 
 M4G-WEB-6 is now pinned read-only at `5b82bc90e4997f35dd18273427c258fe54eefb95` for the current Profile 2 contract, including scoped release authority and the 23-case interop inventory. The native gate/executor release checkpoint is documented in [its evidence](evidence/2026-11-08-release-authority.md). This does not complete live coordination, fresh-grant admission or device acceptance.
