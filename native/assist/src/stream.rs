@@ -714,6 +714,93 @@ impl SessionGate {
         }
         Ok((permit, message, until))
     }
+    /// Semantic input authority for the native scheduler. This cannot be made
+    /// by renderer metadata and does not depend on a routine lease's new bytes.
+    pub fn input_authority(
+        &mut self,
+        source: &crate::executor::Source,
+        now: u64,
+        instant: Instant,
+    ) -> Result<crate::cooperative::InputAuthority, &'static str> {
+        source.point(0., 0.)?;
+        self.tick(now, instant)?;
+        if !self.input_active(now, instant) {
+            return Err("not-granted");
+        }
+        let grants = self
+            .grants
+            .values()
+            .filter(|g| is_input(&g.capability))
+            .map(|g| {
+                (
+                    g.grant_id.clone(),
+                    g.generation,
+                    self.consent.contains(&g.grant_id),
+                    self.lease
+                        .as_ref()
+                        .is_some_and(|l| l.grants.contains(&g.grant_id)),
+                )
+            })
+            .collect();
+        Ok(crate::cooperative::InputAuthority {
+            instance: self.instance,
+            input_epoch: self.input_epoch,
+            session: self.binding.session.clone(),
+            source: source.clone(),
+            grants,
+        })
+    }
+    /// A cooperative barrier uses an already-negotiated data plane and either
+    /// active input grant. It never becomes an executable input Action.
+    pub fn verify_barrier(
+        &mut self,
+        message: &crate::cooperative::Barrier,
+        now: u64,
+        timing: (Instant, Instant),
+    ) -> Result<crate::cooperative::VerifiedBarrier, &'static str> {
+        let (ingress, instant) = timing;
+        message.validate()?;
+        if message.session != self.binding.session {
+            return Err("binding-mismatch");
+        }
+        let capability = self
+            .grants
+            .get(&message.grant)
+            .filter(|g| is_input(&g.capability))
+            .map(|g| g.capability.clone())
+            .ok_or("not-granted")?;
+        if self
+            .authorize(&message.grant, &capability, now, instant)?
+            .generation
+            != message.r#gen
+        {
+            return Err("stale-generation");
+        }
+        self.check_sequence(&message.grant, message.seq, instant, false)?;
+        let (age, start) = self.input_age.as_mut().ok_or("peer-unverified")?;
+        let arrival = instant
+            .checked_duration_since(*start)
+            .ok_or("invalid-message")?;
+        age.observe(
+            message.t,
+            u64::try_from(arrival.as_millis()).map_err(|_| "invalid-message")?,
+            true,
+        )?;
+        // Like an owned release, a barrier gets a fresh dispatch window after
+        // current authorization/age checks. Preserve true ingress separately:
+        // the scheduler must still reject anything received before readiness.
+        if instant < ingress {
+            return Err("invalid-message");
+        }
+        Ok(crate::cooperative::VerifiedBarrier {
+            instance: self.instance,
+            input_epoch: self.input_epoch,
+            session: self.binding.session.clone(),
+            epoch: message.epoch,
+            ingress,
+            until: instant + Duration::from_millis(100),
+        })
+    }
     pub fn validate_permit(
         &mut self,
         permit: &ExecutionPermit,

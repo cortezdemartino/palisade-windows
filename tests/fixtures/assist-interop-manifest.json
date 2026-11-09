@@ -5,7 +5,10 @@
   "authority": "Only service-issued Ed25519 grants and endpoint leases authorize; capabilities, features, presence and messages never do.",
   "sources": {
     "apps/web/src/assist/control/protocol.ts": {
-      "gitBlob": "9d499137d469280c8798e72bed4ef88b56a318c3"
+      "gitBlob": "29bfd8d51d8cf423932379add25b83ae06334d8c"
+    },
+    "apps/web/src/assist/control/cooperative.ts": {
+      "gitBlob": "caaadb956475a91c2b7e1776651d7c7a8a88f873"
     },
     "apps/web/src/assist/control/streamProtocol.ts": {
       "gitBlob": "f7c3f00dc206c91ab9214042b79113b91e4819c5"
@@ -14,7 +17,7 @@
       "gitBlob": "62f29f433dbc20de881108b635a97eee3bde6827"
     },
     "apps/web/src/assist/native/extension.ts": {
-      "gitBlob": "0619f0d6c98dee247caf27619d117a7154b1c74b"
+      "gitBlob": "005ac6ce6ca4b7c4fc27bcc32aa6d9d5f7ad03e1"
     },
     "apps/web/src/platform/desktopAssistBridge.ts": {
       "gitBlob": "258c87f84aae1c0a8b91fa7ea16f5127e0ee840d"
@@ -70,6 +73,16 @@
         "binding-mismatch": 1,
         "not-granted": 2,
         "revoked": 1
+      }
+    },
+    "control-v2-yield": {
+      "path": "docs/assist-control/v2-yield/fixtures.json",
+      "sha256": "5e678a011977aa063bba30200234ae9bb0fd971196daf198143e208155b74e89",
+      "gitBlob": "51b44aca9a9b7612c6d5216575d583026f6d90d5",
+      "rejections": {
+        "invalid-message": 17,
+        "unsupported": 2,
+        "unsupported-version": 2
       }
     },
     "native-v1": {
@@ -160,9 +173,9 @@
     },
     "nativeExtension": {
       "protocol": "palisade.assist.native.ext",
-      "versions": [1, 2],
+      "versions": [1, 2, 3],
       "doc": "docs/50-ASSIST-NATIVE-RESOURCES.md, docs/51-ASSIST-FEATURE-COMPLETION.md §3",
-      "negotiation": "ext.hello is always a version 1 envelope offering [2, 1]; the endpoint answers one version; every later request and event uses it; no answer or an unknown version means the extension is unavailable (never assumed).",
+      "negotiation": "ext.hello is always a version 1 envelope offering [3, 2, 1]; the endpoint answers one offered version (never higher than offered); every later request and event uses it; no answer or an unknown version means the extension is unavailable (never assumed). Version 3 = version 2 operations + feature localYield + event input.yield.",
       "operations": {
         "1": [
           "ext.hello",
@@ -180,11 +193,23 @@
           "resource.drop-surface",
           "resource.resume",
           "resource.sync"
+        ],
+        "3": [
+          "ext.hello",
+          "resource.send-text",
+          "resource.offer-file",
+          "resource.cancel",
+          "resource.send-image",
+          "resource.offer-files",
+          "resource.drop-surface",
+          "resource.resume",
+          "resource.sync"
         ]
       },
       "events": {
         "1": ["resource.status", "cleanup"],
-        "2": ["resource.status", "cleanup", "sync.status"]
+        "2": ["resource.status", "cleanup", "sync.status"],
+        "3": ["resource.status", "cleanup", "sync.status", "input.yield"]
       },
       "safetyOperations": ["resource.cancel"],
       "featuresV2": [
@@ -197,6 +222,18 @@
         "files",
         "input2",
         "multiFile"
+      ],
+      "featuresV3": [
+        "cleanupEvents",
+        "clipboardImage",
+        "clipboardSync",
+        "clipboardText",
+        "dropSurface",
+        "fileResume",
+        "files",
+        "input2",
+        "multiFile",
+        "localYield"
       ],
       "errors": [
         "unsupported-version",
@@ -213,7 +250,7 @@
         "stopped",
         "internal"
       ],
-      "fixtures": ["native-ext-v1", "native-ext-v2"]
+      "fixtures": ["native-ext-v1", "native-ext-v2", "control-v2-yield"]
     },
     "control": {
       "protocol": "palisade.assist.control",
@@ -437,6 +474,24 @@
             "guest": "transfer-reply",
             "host": "transfer-reply"
           }
+        },
+        "input-state": {
+          "versions": [2],
+          "feature": "localYield",
+          "input": true,
+          "authorizedBy": {
+            "guest": null,
+            "host": null
+          }
+        },
+        "input-barrier": {
+          "versions": [2],
+          "feature": "localYield",
+          "input": true,
+          "authorizedBy": {
+            "guest": null,
+            "host": null
+          }
         }
       },
       "errors": [
@@ -456,7 +511,9 @@
         "integrity-failure",
         "unsupported",
         "stale-input",
-        "held-input"
+        "held-input",
+        "yielded",
+        "stale-epoch"
       ],
       "limits": {
         "messageChars": 16384,
@@ -636,12 +693,26 @@
           "control_keyboard": "keys"
         }
       },
+      "cooperativeInput": {
+        "version": 1,
+        "doc": "docs/51 §4.6",
+        "features": ["localYield"],
+        "reasons": ["local-input", "local-held", "neutralizing"],
+        "defaults": {
+          "idleMs": 2000,
+          "maxEpoch": 2147483647
+        },
+        "negotiation": "endpoint declares localYield (enrollment features; extension v3 hello); the helper opts in per peer with input-barrier {epoch: 0} before any input; a peer whose first input has no opt-in keeps the old rule (local input ends remote input)",
+        "authority": "input-state (endpoint → helper) and input-barrier (helper → endpoint) ride on either active input grant of the peer; neither is authority: only the endpoint decides yielding and readiness",
+        "terminal": "Stop, revocation, lock, protected desktop, sensitive native UI, source/peer/lease loss, expiry, replacement, stream end and any authority change while yielded end input authority exactly as before"
+      },
       "fixtures": [
         "control-v1",
         "control-v2",
         "control-v2-schema",
         "control-v2-profile2",
-        "control-v2-release"
+        "control-v2-release",
+        "control-v2-yield"
       ]
     },
     "streamGrants": {
@@ -752,7 +823,9 @@
         "control-v2-profile2",
         "native-v1",
         "native-ext-v1",
-        "native-ext-v2"
+        "native-ext-v2",
+        "control-v2-release",
+        "control-v2-yield"
       ],
       "steps": [
         "Copy each fixture and pinned source; compare SHA-256 and git blob with manifest.fixtures/sources (LF line endings).",
@@ -770,13 +843,13 @@
       "area": "protocol",
       "title": "Extension negotiation and fallback",
       "capabilities": [],
-      "fixtures": ["native-ext-v1", "native-ext-v2"],
+      "fixtures": ["native-ext-v1", "native-ext-v2", "control-v2-yield"],
       "steps": [
-        "Web sends ext.hello (v1 envelope) offering [2, 1].",
+        "Web sends ext.hello (v1 envelope) offering [3, 2, 1].",
         "Repeat with an endpoint configured for v1 only, and with no extension."
       ],
       "pass": [
-        "v2 endpoint answers version 2 and declares only implemented features; later messages use v: 2.",
+        "v2 endpoint answers version 2 and declares only implemented features; later messages use v: 2. A v3 endpoint answers 3 only when offered (v2 operations + localYield + input.yield).",
         "v1-only endpoint answers 1; the web hides every v2 action.",
         "No answer: the web shows native resources as unavailable."
       ],
@@ -887,6 +960,87 @@
         "release-all for another session: binding-mismatch; under a revoked grant: revoked; under a resource grant: not-granted.",
         "The keyboard grant never authorizes mouse input (no workaround).",
         "Endpoint teardown still releases everything at revocation, suspension and peer loss."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-Y01",
+      "area": "input",
+      "title": "Cooperative local input: the host uses their own mouse and keyboard during a session",
+      "capabilities": ["control_mouse", "control_keyboard"],
+      "fixtures": ["control-v2-yield"],
+      "steps": [
+        "Negotiate extension v3 (localYield) and declare localYield at enrollment; the helper opts in with input-barrier {epoch: 0} before its first input.",
+        "While the helper drags (left held) and holds Shift, the host moves their own mouse, then types on their own keyboard.",
+        "The host stops; wait 2 s; the helper moves and clicks again."
+      ],
+      "pass": [
+        "Local input works at once; remote input pauses (input-state yielded, the same epoch while the host keeps moving); the session, grants and consent stay unchanged.",
+        "The endpoint releases only what the helper pressed (left, Shift); nothing is pressed again by itself after resuming.",
+        "Ready only after 2 s without local events, no local key/button held, the endpoint’s own cleanup complete and unchanged authority; input flows again only after the helper’s barrier for that epoch."
+      ],
+      "reject": [
+        "Helper input while yielded: yielded. Input sent before the barrier: stale-epoch. A barrier for an old epoch: stale-epoch.",
+        "Nothing the helper sends can resume input; old or replayed input-state changes nothing."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-Y02",
+      "area": "input",
+      "title": "Overlapping and held local input, ownership uncertainty",
+      "capabilities": ["control_mouse", "control_keyboard"],
+      "fixtures": ["control-v2-yield"],
+      "steps": [
+        "The helper holds Ctrl; the host presses and holds their own Ctrl, then a mouse button, for 10 s; then lets go.",
+        "Repeat with the host holding a key the helper never pressed."
+      ],
+      "pass": [
+        "Yielded for as long as the host holds anything (reason local-held), then 2 s more.",
+        "The endpoint never injects an up for an input the host is holding (handed over); the host’s hold is never released by Assist."
+      ],
+      "reject": [
+        "If ownership is uncertain the endpoint stays yielded until neutral; it never guesses."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-Y03",
+      "area": "lifecycle",
+      "title": "Terminal transitions during a yield stay terminal",
+      "capabilities": ["control_mouse", "control_keyboard"],
+      "fixtures": ["control-v2-yield"],
+      "steps": [
+        "During a yield: the host presses Stop remote control now; separately, revoke on the service; lock the computer; open UAC; change the shared source; stop the stream; let the deadline pass."
+      ],
+      "pass": [
+        "Each ends input authority exactly as without cooperative input (lifecycle suspended/stopped, service revocation); a new session needs ask again, approval and fresh consent."
+      ],
+      "reject": [
+        "A barrier or input after any of these: revoked. No yield or readiness ever restores ended authority, extends the deadline, broadens a capability or changes the controller."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-Y04",
+      "area": "protocol",
+      "title": "Cooperative input negotiation and legacy peers",
+      "capabilities": ["control_mouse"],
+      "fixtures": ["control-v2-yield", "native-ext-v2"],
+      "steps": [
+        "Endpoint answers ext.hello [3, 2, 1] with version 3 (localYield); then a page offering only [2, 1].",
+        "A helper peer whose first input has no opt-in."
+      ],
+      "pass": [
+        "Version 3 only when offered; version 2 pages keep version 2 unchanged.",
+        "A legacy peer keeps the old rule: local input ends remote input (terminal); it is never yielded silently."
+      ],
+      "reject": [
+        "A version 3 answer to a [2, 1] offer: invalid-message. A late opt-in: stale-epoch."
       ],
       "web": "unit",
       "native": "not-executed"

@@ -1,5 +1,9 @@
 # Validation
 
+## M4G-WEB-7 canonical intake and dormant cooperative scheduler
+
+202 application tests pass. Rust formatting, strict Clippy and 120 native tests in each configuration pass. The native cases use fake delivery and real signed fixture authority, not physical input. Independent review passed 41 Node contract checks and cleared the inactive source slice after mirror-retention, observation-provenance and barrier fixes. See [evidence](evidence/2026-11-08-cooperative-core.md). Full native Assist and all physical WIN-Y acceptance remain Not Verified.
+
 ## M4G-WINDOWS-FINAL process ownership
 
 Current ownership milestone:187 application tests and106 native tests per configuration passed, with25 real no-input process groups per configuration and the hidden-control fixture. The updated parent-death case separately confirms monitor, coordinator and stop-holder exit in both configurations. Independent review cleared the inactive source boundary and passed17 Node contract/channel checks. Earlier failures, the unresolved/nonreproduced fail-fast, package results and remaining native-runtime work are recorded in [the evidence](evidence/2026-11-08-process-monitor.md). This is not full Assist or physical-input acceptance.

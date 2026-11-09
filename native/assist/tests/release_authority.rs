@@ -2,7 +2,8 @@
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signer, SigningKey};
 use palisade_assist_guardian::{
-    executor::{Backend, Executor, Source},
+    cooperative::{Barrier, LocalEvent, LocalYield, State},
+    executor::{Backend, Executor, Source, YieldDisposition},
     input::{Action, InputProfile, Ledger},
     stream::{Binding, SessionGate, SignedStreamGrant, SignedStreamLease},
 };
@@ -19,21 +20,42 @@ struct Trace {
     applied: Vec<Action>,
     fail_release: bool,
     fenced: usize,
+    quiesced: usize,
+    cooperative: bool,
+    fail_yield: bool,
+    pause_on_down: Option<Arc<palisade_assist_guardian::cooperative::InputFence>>,
+    pending_observation: Option<palisade_assist_guardian::cooperative::LocalObservation>,
+    fail_empty_intents: usize,
+    intent_calls: usize,
 }
 struct Fake(Rc<RefCell<Trace>>);
 impl Backend for Fake {
+    fn cooperative_ready(&self) -> bool {
+        self.0.borrow().cooperative
+    }
     fn prepare(&mut self) -> Result<(), &'static str> {
         Ok(())
     }
     fn validate(&mut self, _: &Source, _: &Action, _: &Ledger) -> Result<(), &'static str> {
         Ok(())
     }
-    fn intent(&mut self, _: &Ledger) -> Result<(), &'static str> {
+    fn intent(&mut self, ledger: &Ledger) -> Result<(), &'static str> {
+        let mut trace = self.0.borrow_mut();
+        trace.intent_calls += 1;
+        if !ledger.held() && trace.fail_empty_intents > 0 {
+            trace.fail_empty_intents -= 1;
+            return Err("mirror-unconfirmed");
+        }
         Ok(())
     }
     fn apply(&mut self, _: &Source, action: &Action) -> Result<(), &'static str> {
         let mut trace = self.0.borrow_mut();
         trace.applied.push(action.clone());
+        if matches!(action, Action::Key { down: true, .. }) {
+            if let Some(fence) = trace.pause_on_down.take() {
+                trace.pending_observation = Some(fence.observation(LocalEvent::Activity).unwrap());
+            }
+        }
         if trace.fail_release && matches!(action, Action::Button { down: false, .. }) {
             trace.fail_release = false;
             return Err("partial-write");
@@ -46,6 +68,29 @@ impl Backend for Fake {
     }
     fn cleanup_allowed(&mut self) -> Result<(), &'static str> {
         Ok(())
+    }
+    fn quiesce_for_yield(&mut self) -> Result<(), &'static str> {
+        let mut trace = self.0.borrow_mut();
+        if !trace.cooperative {
+            return Err("cooperative-unavailable");
+        }
+        trace.quiesced += 1;
+        Ok(())
+    }
+    fn yield_release(
+        &mut self,
+        source: &Source,
+        action: &Action,
+        local: &palisade_assist_guardian::cooperative::LocalHolds,
+    ) -> Result<YieldDisposition, &'static str> {
+        if self.0.borrow().fail_yield {
+            return Err("delivery-uncertain");
+        }
+        if local.owns(action) {
+            return Ok(YieldDisposition::HandedOver);
+        }
+        self.apply(source, action)?;
+        Ok(YieldDisposition::Released)
     }
     fn finish(&mut self) {}
 }
@@ -365,5 +410,381 @@ fn failed_scoped_release_fences_and_cleans_every_owner() {
             Instant::now()
         )
         .is_err()
+    );
+}
+
+fn barrier_packet(grant: &str, seq: u32, epoch: u32, sender: u64) -> Barrier {
+    Barrier::parse(
+        &json!({"p":"palisade.assist.control","v":2,"session":fixtures()["session"],
+        "grant":grant,"gen":4,"seq":seq,"kind":"input-barrier","epoch":epoch,"t":sender})
+        .to_string(),
+        true,
+    )
+    .unwrap()
+}
+
+#[test]
+fn cooperative_barriers_use_signed_input_authority_replay_and_release_like_age_checks() {
+    for capability in ["control_mouse", "control_keyboard"] {
+        let id = if capability == "control_mouse" {
+            "sgrant_release_mouse_0001"
+        } else {
+            "sgrant_release_keyboard_01"
+        };
+        let (mut gate, now) = setup(&[capability]);
+        let t = Instant::now();
+        let authority = gate.input_authority(&source(), now, t).unwrap();
+        let mut scheduler = LocalYield::new(authority.clone());
+        let packet = barrier_packet(id, 1, 0, 0);
+        let verified = gate.verify_barrier(&packet, now, (t, t)).unwrap();
+        scheduler.barrier(verified, 0, t, &authority).unwrap();
+        assert_eq!(scheduler.state(), State::Active);
+        assert!(matches!(
+            gate.verify_barrier(&packet, now, (t, t)),
+            Err("replay")
+        ));
+        scheduler
+            .observe(LocalEvent::Activity, 1, &authority, false)
+            .unwrap();
+        let later = t + std::time::Duration::from_secs(3);
+        let current = gate.input_authority(&source(), now + 3_000, later).unwrap();
+        scheduler.tick_at(3_000, later, &current, true).unwrap();
+        // Sender timestamp repeats zero; queue arrival is fresh. A barrier is
+        // release-like for age, never stale merely because the host was busy.
+        let next = barrier_packet(id, 2, 1, 0);
+        let verified = gate
+            .verify_barrier(&next, now + 3_000, (later, later))
+            .unwrap();
+        scheduler.barrier(verified, 3_000, later, &current).unwrap();
+        assert_eq!(scheduler.state(), State::Active);
+        gate.revoke(id);
+        assert!(
+            gate.verify_barrier(&barrier_packet(id, 3, 1, 0), now + 3_000, (later, later))
+                .is_err()
+        );
+        assert!(gate.input_authority(&source(), now + 3_000, later).is_err());
+    }
+    let (mut resources, now) = setup(&["clipboard_to_host"]);
+    let t = Instant::now();
+    assert!(resources.input_authority(&source(), now, t).is_err());
+    assert!(matches!(
+        resources.verify_barrier(
+            &barrier_packet("sgrant_release_clipboard1", 1, 0, 0),
+            now,
+            (t, t)
+        ),
+        Err("not-granted")
+    ));
+}
+
+#[test]
+fn yield_settles_existing_grant_ledgers_without_releasing_host_holds_or_revoking_grants() {
+    let (mut gate, now) = setup(&["control_mouse", "control_keyboard"]);
+    let trace = Rc::new(RefCell::new(Trace {
+        cooperative: true,
+        ..Trace::default()
+    }));
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut executor = Executor::new(Fake(trace.clone()), stop.clone(), true);
+    let t = Instant::now();
+    let authority = gate.input_authority(&source(), now, t).unwrap();
+    let mut scheduler = LocalYield::new(authority.clone());
+    let verified = gate
+        .verify_barrier(
+            &barrier_packet("sgrant_release_mouse_0001", 0, 0, 0),
+            now,
+            (t, t),
+        )
+        .unwrap();
+    scheduler.barrier(verified, 0, t, &authority).unwrap();
+    let fixture = fixtures();
+    for step in &fixture["scenarios"][1]["steps"].as_array().unwrap()[..2] {
+        dispatch(&mut gate, &mut executor, &step["message"], now).unwrap();
+    }
+    scheduler
+        .observe(
+            LocalEvent::Key {
+                code: "ShiftLeft".into(),
+                down: true,
+            },
+            1,
+            &authority,
+            false,
+        )
+        .unwrap();
+    scheduler
+        .observe(
+            LocalEvent::Button {
+                button: "right".into(),
+                down: true,
+            },
+            2,
+            &authority,
+            false,
+        )
+        .unwrap();
+    let before = trace.borrow().applied.len();
+    let completed = executor
+        .yield_owned(&source(), scheduler.local_holds())
+        .unwrap();
+    assert_eq!(completed.len(), 2);
+    assert!(
+        completed
+            .iter()
+            .all(|(_, disposition)| *disposition == YieldDisposition::HandedOver)
+    );
+    assert_eq!(trace.borrow().applied.len(), before);
+    assert_eq!(trace.borrow().fenced, 0);
+    assert_eq!(trace.borrow().quiesced, 1);
+    assert!(!stop.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(executor.yield_cleanup_complete());
+    assert!(
+        gate.authorize("sgrant_release_mouse_0001", "control_mouse", now, t)
+            .is_ok()
+    );
+    assert!(
+        gate.authorize("sgrant_release_keyboard_01", "control_keyboard", now, t)
+            .is_ok()
+    );
+    // Neither delayed helper release nor later terminal mirror cleanup may
+    // synthesize an UP for the physical person's handed-over holds.
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &release("sgrant_release_mouse_0001", 5),
+        now,
+    )
+    .unwrap();
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &release("sgrant_release_keyboard_01", 4),
+        now,
+    )
+    .unwrap();
+    executor.release_owned(&source()).unwrap();
+    assert_eq!(trace.borrow().applied.len(), before);
+}
+
+#[test]
+fn uncertain_yield_delivery_retains_ledger_and_blocks_cleanup_completion() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let trace = Rc::new(RefCell::new(Trace {
+        cooperative: true,
+        fail_yield: true,
+        ..Trace::default()
+    }));
+    let mut executor = Executor::new(Fake(trace.clone()), Arc::new(AtomicBool::new(false)), true);
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &fixtures()["scenarios"][0]["steps"][0]["message"],
+        now,
+    )
+    .unwrap();
+    let t = Instant::now();
+    let authority = gate.input_authority(&source(), now, t).unwrap();
+    let scheduler = LocalYield::new(authority);
+    assert!(matches!(
+        executor.yield_owned(&source(), scheduler.local_holds()),
+        Err("delivery-uncertain")
+    ));
+    assert!(executor.held());
+    assert!(!executor.yield_cleanup_complete());
+    trace.borrow_mut().fail_yield = false;
+    executor
+        .yield_owned(&source(), scheduler.local_holds())
+        .unwrap();
+    assert!(executor.yield_cleanup_complete());
+    assert_eq!(trace.borrow().fenced, 0);
+}
+
+#[test]
+fn local_fence_interrupts_an_expanded_shortcut_without_revoking_or_repressing() {
+    let (mut gate, now) = setup(&["control_keyboard"]);
+    let t = Instant::now();
+    let authority = gate.input_authority(&source(), now, t).unwrap();
+    let mut scheduler = LocalYield::new(authority.clone());
+    let verified = gate
+        .verify_barrier(
+            &barrier_packet("sgrant_release_keyboard_01", 0, 0, 0),
+            now,
+            (t, t),
+        )
+        .unwrap();
+    scheduler.barrier(verified, 0, t, &authority).unwrap();
+    let trace = Rc::new(RefCell::new(Trace {
+        cooperative: true,
+        pause_on_down: Some(scheduler.input_fence()),
+        ..Trace::default()
+    }));
+    let stop = Arc::new(AtomicBool::new(false));
+    let mut executor = Executor::new(Fake(trace.clone()), stop.clone(), true);
+    let packet = json!({"p":"palisade.assist.control","v":2,"session":fixtures()["session"],
+        "grant":"sgrant_release_keyboard_01","gen":4,"seq":1,"kind":"input-shortcut","name":"copy","t":1}).to_string();
+    let (permit, message, _) = gate
+        .permit_packet(&packet, InputProfile::Profile2, 1, now, (t, t))
+        .unwrap();
+    assert_eq!(
+        executor.dispatch_cooperative(
+            permit,
+            &mut gate,
+            &source(),
+            &message.action,
+            &mut scheduler,
+            || Ok((now, Instant::now()))
+        ),
+        Err("yielded")
+    );
+    assert_eq!(
+        trace.borrow().applied,
+        vec![Action::Key {
+            code: "ControlLeft".into(),
+            down: true
+        }]
+    );
+    assert_eq!(trace.borrow().fenced, 0);
+    assert!(!stop.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(!executor.yield_cleanup_complete());
+    let observation = trace.borrow_mut().pending_observation.take().unwrap();
+    scheduler
+        .observe_native(observation, 1, &authority, false)
+        .unwrap();
+    executor
+        .yield_owned(&source(), scheduler.local_holds())
+        .unwrap();
+    assert_eq!(
+        trace.borrow().applied[1],
+        Action::Key {
+            code: "ControlLeft".into(),
+            down: false
+        }
+    );
+    assert_eq!(trace.borrow().applied.len(), 2);
+    assert!(executor.yield_cleanup_complete());
+    assert!(
+        gate.authorize(
+            "sgrant_release_keyboard_01",
+            "control_keyboard",
+            now,
+            Instant::now()
+        )
+        .is_ok()
+    );
+}
+
+#[test]
+fn acknowledged_handover_keeps_mirror_retry_owned_through_terminal_cleanup_and_drop() {
+    for drop_cleanup in [false, true] {
+        let (mut gate, now) = setup(&["control_mouse"]);
+        let trace = Rc::new(RefCell::new(Trace {
+            cooperative: true,
+            ..Trace::default()
+        }));
+        let mut executor =
+            Executor::new(Fake(trace.clone()), Arc::new(AtomicBool::new(false)), true);
+        dispatch(
+            &mut gate,
+            &mut executor,
+            &fixtures()["scenarios"][0]["steps"][0]["message"],
+            now,
+        )
+        .unwrap();
+        let t = Instant::now();
+        let authority = gate.input_authority(&source(), now, t).unwrap();
+        let mut scheduler = LocalYield::new(authority.clone());
+        scheduler
+            .observe(
+                LocalEvent::Button {
+                    button: "left".into(),
+                    down: true,
+                },
+                1,
+                &authority,
+                false,
+            )
+            .unwrap();
+        trace.borrow_mut().fail_empty_intents = 1;
+        assert!(matches!(
+            executor.yield_owned(&source(), scheduler.local_holds()),
+            Err("mirror-unconfirmed")
+        ));
+        assert!(!executor.held());
+        assert!(!executor.yield_cleanup_complete());
+        let before = trace.borrow().intent_calls;
+        if !drop_cleanup {
+            // Failed terminal synchronization must also retain pending proof.
+            trace.borrow_mut().fail_empty_intents = 1;
+            assert_eq!(executor.release_owned(&source()), Err("mirror-unconfirmed"));
+            assert!(!executor.yield_cleanup_complete());
+            executor.release_owned(&source()).unwrap();
+            assert!(executor.yield_cleanup_complete());
+        }
+        drop(executor);
+        assert!(trace.borrow().intent_calls > before);
+        assert_eq!(
+            trace.borrow().applied.len(),
+            1,
+            "the host-owned button never receives an UP"
+        );
+    }
+}
+
+#[test]
+fn barrier_received_after_readiness_survives_slow_dispatch_but_preserves_ingress() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let t = Instant::now();
+    let authority = gate.input_authority(&source(), now, t).unwrap();
+    let mut scheduler = LocalYield::new(authority.clone());
+    let verified = gate
+        .verify_barrier(
+            &barrier_packet("sgrant_release_mouse_0001", 0, 0, 0),
+            now,
+            (t, t),
+        )
+        .unwrap();
+    scheduler.barrier(verified, 0, t, &authority).unwrap();
+    scheduler
+        .observe(LocalEvent::Activity, 1, &authority, true)
+        .unwrap();
+    let ready = t + std::time::Duration::from_secs(3);
+    scheduler.tick_at(3_000, ready, &authority, true).unwrap();
+    let delayed = ready + std::time::Duration::from_secs(1);
+    let verified = gate
+        .verify_barrier(
+            &barrier_packet("sgrant_release_mouse_0001", 1, 1, 0),
+            now + 4_000,
+            (ready, delayed),
+        )
+        .unwrap();
+    scheduler
+        .barrier(verified, 4_000, delayed, &authority)
+        .unwrap();
+    assert_eq!(scheduler.state(), State::Active);
+}
+
+#[test]
+fn first_terminal_release_with_failed_mirror_flush_is_retained_by_drop() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let trace = Rc::new(RefCell::new(Trace::default()));
+    let mut executor = Executor::new(Fake(trace.clone()), Arc::new(AtomicBool::new(false)), true);
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &fixtures()["scenarios"][0]["steps"][0]["message"],
+        now,
+    )
+    .unwrap();
+    trace.borrow_mut().fail_empty_intents = 1;
+    assert_eq!(executor.release_owned(&source()), Err("mirror-unconfirmed"));
+    assert!(!executor.held());
+    assert!(!executor.yield_cleanup_complete());
+    let before = trace.borrow().intent_calls;
+    drop(executor);
+    assert!(trace.borrow().intent_calls > before);
+    assert_eq!(
+        trace.borrow().applied.len(),
+        2,
+        "retry only the mirror; never a second UP"
     );
 }

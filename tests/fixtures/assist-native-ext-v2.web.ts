@@ -21,7 +21,13 @@ export const EXT_VERSION = 1;
  * Version 1 messages, validator behaviour and fixtures are unchanged.
  */
 export const EXT_VERSION_2 = 2;
-export type ExtVersion = 1 | 2;
+/**
+ * Version 3 (docs/51 §4.6): version 2 unchanged plus cooperative local input — the feature
+ * `localYield` and the display-only event `input.yield`. Negotiated with the same `ext.hello`
+ * (`versions: [3, 2, 1]`, version 1 envelope); after that every request and event uses `v: 3`.
+ */
+export const EXT_VERSION_3 = 3;
+export type ExtVersion = 1 | 2 | 3;
 
 export const EXT_ERRORS = [
   'unsupported-version',
@@ -125,7 +131,7 @@ export function isExtSafety(op: ExtOp, fields: Record<string, unknown> = {}): bo
 function requestTable(
   version: ExtVersion,
 ): Record<string, Record<string, (v: unknown) => boolean>> {
-  return version === 2 ? REQUESTS_V2 : REQUESTS;
+  return version >= 2 ? REQUESTS_V2 : REQUESTS;
 }
 
 const RESULTS: Record<keyof typeof REQUESTS, Record<string, (v: unknown) => boolean>> = {
@@ -156,6 +162,10 @@ export const EXT_V2_FEATURES = [
 ] as const;
 export type ExtV2Features = Record<(typeof EXT_V2_FEATURES)[number], boolean>;
 
+/** Version 3 features: version 2's plus `localYield` (descriptive only). */
+export const EXT_V3_FEATURES = [...EXT_V2_FEATURES, 'localYield'] as const;
+export type ExtV3Features = Record<(typeof EXT_V3_FEATURES)[number], boolean>;
+
 const transferList = (v: unknown) =>
   Array.isArray(v) &&
   v.length >= 1 &&
@@ -174,15 +184,21 @@ const RESULTS_V2: Record<keyof typeof REQUESTS_V2, Record<string, (v: unknown) =
   'resource.sync': {},
 };
 
-/** The `ext.hello` result: version 1 or 2, with that version's feature set. */
-function helloResult(r: Rec): boolean {
+/**
+ * The `ext.hello` result: a version up to the highest one offered (`max`), with that version's
+ * feature set. A client that offered [2, 1] never accepts version 3.
+ */
+function helloResult(r: Rec, max: ExtVersion): boolean {
   if (!exact(r, ['version', 'features']) || !plain(r.features)) return false;
+  if (typeof r.version !== 'number' || r.version > max) return false;
   const keys =
     r.version === EXT_VERSION
       ? ['cleanupEvents', 'clipboardText', 'files']
       : r.version === EXT_VERSION_2
         ? [...EXT_V2_FEATURES]
-        : undefined;
+        : r.version === EXT_VERSION_3
+          ? [...EXT_V3_FEATURES]
+          : undefined;
   return (
     keys !== undefined &&
     exact(r.features, keys) &&
@@ -271,7 +287,32 @@ const EVENTS_V2 = {
   },
 } as const satisfies Record<string, Record<string, (v: unknown) => boolean>>;
 
-export type ExtEventName = keyof typeof EVENTS | keyof typeof EVENTS_V2;
+const EPOCH_MAX = 2_147_483_647;
+/**
+ * The cooperative-input reasons (docs/51 §4.6). Kept here, not imported, so this file stays
+ * self-contained for native consumers that compile it; a unit test keeps it equal to
+ * `YIELD_REASONS` in control/protocol.ts.
+ */
+export const EXT_YIELD_REASONS = ['local-input', 'local-held', 'neutralizing'] as const;
+
+const EVENTS_V3 = {
+  ...EVENTS_V2,
+  /**
+   * Cooperative local input on this computer (display only): `yielded` while the local person
+   * has priority, `ready` once the endpoint is ready for fresh helper input (before the helper's
+   * barrier), `active` when remote input flows again. Never authority; terminal ends are
+   * `lifecycle` (docs/49) as before.
+   */
+  'input.yield': {
+    session: id,
+    state: (v: unknown) => v === 'active' || v === 'yielded' || v === 'ready',
+    epoch: (v: unknown) =>
+      Number.isSafeInteger(v) && (v as number) >= 0 && (v as number) <= EPOCH_MAX,
+    reason: (v: unknown) => v === null || (EXT_YIELD_REASONS as readonly unknown[]).includes(v),
+  },
+} as const satisfies Record<string, Record<string, (v: unknown) => boolean>>;
+
+export type ExtEventName = keyof typeof EVENTS | keyof typeof EVENTS_V3;
 
 export interface ExtRequest {
   p: typeof EXT_PROTOCOL;
@@ -357,12 +398,12 @@ export function parseExtResponse(
   if (m.ok !== true || !exact(m, ['p', 'v', 'id', 'ok', 'result']) || !plain(m.result)) {
     throw new ExtBridgeError('invalid-message');
   }
-  if (op === 'ext.hello' && version === EXT_VERSION_2) {
+  if (op === 'ext.hello' && version >= EXT_VERSION_2) {
     // A client offering both versions accepts either answer, each with its own features.
-    if (!helloResult(m.result)) throw new ExtBridgeError('invalid-message');
+    if (!helloResult(m.result, version)) throw new ExtBridgeError('invalid-message');
     return m as ExtResponse;
   }
-  const table = (version === 2 && op !== 'ext.hello' ? RESULTS_V2 : RESULTS) as Record<
+  const table = (version >= 2 && op !== 'ext.hello' ? RESULTS_V2 : RESULTS) as Record<
     string,
     Record<string, (v: unknown) => boolean> | undefined
   >;
@@ -379,7 +420,7 @@ export function parseExtEvent(raw: unknown, version: ExtVersion = EXT_VERSION): 
   const m = json(raw);
   if (!plain(m)) throw new ExtBridgeError('invalid-message');
   envelope(m, version, false);
-  const events = (version === 2 ? EVENTS_V2 : EVENTS) as Record<
+  const events = (version === 3 ? EVENTS_V3 : version === 2 ? EVENTS_V2 : EVENTS) as Record<
     string,
     Record<string, (v: unknown) => boolean>
   >;

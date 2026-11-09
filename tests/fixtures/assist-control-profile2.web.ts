@@ -79,7 +79,11 @@ export type ErrorCode =
   /** Profile 2: an input event older than `inputMaxAgeMs`. */
   | 'stale-input'
   /** Profile 2: `input-text` while modifier keys are held. */
-  | 'held-input';
+  | 'held-input'
+  /** Cooperative input (docs/51 §4.6): the local person has priority; remote input is paused. */
+  | 'yielded'
+  /** Cooperative input: a barrier or status for another epoch, or input sent before the barrier. */
+  | 'stale-epoch';
 
 export class ControlError extends Error {
   constructor(readonly code: ErrorCode) {
@@ -408,6 +412,38 @@ export const PROFILE2_KIND_FEATURE = Object.freeze({
   'file-resume-accept': 'fileResume',
 } as const satisfies Record<string, Profile2Feature>);
 
+// Cooperative local input (docs/51 §4.6) ---------------------------------------------------------
+
+/**
+ * Cooperative local input, version 1: the host keeps their own mouse and keyboard during an
+ * approved session and has priority. Ordinary local activity makes the endpoint **yield** remote
+ * input (nonterminal, separate from `lifecycle suspended/stopped`); only the endpoint's own
+ * observation decides yielding and readiness, and the helper resumes with fresh gestures after a
+ * readiness barrier. Negotiated by its own feature, outside profile 2's list (pinned fixtures):
+ * the endpoint declares `localYield` (enrollment and extension version 3); the helper opts in on
+ * each peer with `input-barrier {epoch: 0}` before any input.
+ */
+export const COOPERATIVE_FEATURES = ['localYield'] as const;
+export type CooperativeFeature = (typeof COOPERATIVE_FEATURES)[number];
+/** Every data-plane feature a receiver may declare. */
+export type DataFeature = Profile2Feature | CooperativeFeature;
+
+export const COOPERATIVE_KIND_FEATURE = Object.freeze({
+  'input-state': 'localYield',
+  'input-barrier': 'localYield',
+} as const satisfies Record<string, CooperativeFeature>);
+
+/** Why remote input is yielded (display only for the helper; never authority). */
+export const YIELD_REASONS = ['local-input', 'local-held', 'neutralizing'] as const;
+export type YieldReason = (typeof YIELD_REASONS)[number];
+
+export const LOCAL_YIELD = Object.freeze({
+  /** Local inactivity required (after cleanup and neutrality) before readiness. */
+  idleMs: 2_000,
+  /** Largest epoch; the next yield after it ends input authority instead. */
+  maxEpoch: 2_147_483_647,
+});
+
 /**
  * Bounded text entry (`input-text`): 1–256 UTF-16 code units, NFC, well-formed (no lone
  * surrogates), no control characters (C0, DEL, C1), no noncharacters U+FFFE/U+FFFF. Enter, Tab
@@ -491,6 +527,10 @@ export type ControlMessage = Envelope &
         sha256: string;
       }
     | { kind: 'file-resume-accept'; transfer: string; from: number }
+    /** Endpoint → helper (docs/51 §4.6): remote input yielded to the local person, or ready. */
+    | { kind: 'input-state'; state: 'yielded' | 'ready'; epoch: number; reason: YieldReason | null }
+    /** Helper → endpoint: opt-in (`epoch` 0) or "seen ready `epoch`; only fresh input follows". */
+    | { kind: 'input-barrier'; epoch: number; t: number }
   );
 export type ControlKind = ControlMessage['kind'];
 
@@ -518,15 +558,18 @@ const PAYLOAD_KEYS: Readonly<Record<ControlKind, readonly string[]>> = {
   'clipboard-sync': ['state'],
   'file-resume-offer': ['transfer', 'previous', 'name', 'size', 'sha256'],
   'file-resume-accept': ['transfer', 'from'],
+  'input-state': ['state', 'epoch', 'reason'],
+  'input-barrier': ['epoch', 't'],
 };
 
 /** Kinds that exist only in stream sessions (version 2): the receipt and all of profile 2. */
 const V2_ONLY: readonly ControlKind[] = [
   'file-receipt',
   ...(Object.keys(PROFILE2_KIND_FEATURE) as ControlKind[]),
+  ...(Object.keys(COOPERATIVE_KIND_FEATURE) as ControlKind[]),
 ];
 
-/** Input kinds (version 1 and profile 2): never on a resource channel. */
+/** Input kinds (version 1, profile 2, cooperative input): control channel only. */
 export const INPUT_KINDS: readonly ControlKind[] = [
   'pointer-move',
   'button',
@@ -540,6 +583,8 @@ export const INPUT_KINDS: readonly ControlKind[] = [
   'input-key',
   'input-text',
   'input-shortcut',
+  'input-state',
+  'input-barrier',
 ];
 
 /** Which capability authorizes each message kind (sender's perspective). */
@@ -580,6 +625,10 @@ export function capabilityFor(
     case 'file-receipt':
     case 'file-resume-accept':
       return 'transfer-reply';
+    case 'input-state':
+    case 'input-barrier':
+      // Cooperative input rides on either input grant (`authorizes`).
+      return undefined;
   }
 }
 
@@ -606,8 +655,12 @@ export function authorizes(
   capability: Capability,
   version: 1 | 2,
 ): boolean {
-  if (kind === 'release-all' && version === 2) {
+  if ((kind === 'release-all' || kind === 'input-barrier') && version === 2) {
     return from === 'guest' && Object.hasOwn(RELEASE_SCOPE, capability);
+  }
+  if (kind === 'input-state' && version === 2) {
+    // The endpoint's status to the helper, under one of the helper's input grants on this peer.
+    return from === 'host' && Object.hasOwn(RELEASE_SCOPE, capability);
   }
   return capabilityFor(kind, from) === capability;
 }
@@ -674,6 +727,31 @@ export function createOwnedInput(session: string) {
           return none();
       }
     },
+    /**
+     * Cooperative input (docs/51 §4.6): what this peer pressed is let go when input yields or
+     * ends, **except** what the local person is holding too — releasing that would release their
+     * hold. Those are handed over (forgotten without injecting anything); they become neutral when
+     * the local person lets go. Returns both lists; everything owned is cleared.
+     */
+    yieldTo(local: { buttons: readonly string[]; keys: readonly string[] }): {
+      released: { buttons: string[]; keys: string[] };
+      handedOver: { buttons: string[]; keys: string[] };
+    } {
+      const split = (owned: Set<string>, held: readonly string[]) => {
+        const all = [...owned].sort();
+        owned.clear();
+        return {
+          released: all.filter((x) => !held.includes(x)),
+          handedOver: all.filter((x) => held.includes(x)),
+        };
+      };
+      const b = split(buttons, local.buttons);
+      const k = split(keys, local.keys);
+      return {
+        released: { buttons: b.released, keys: k.released },
+        handedOver: { buttons: b.handedOver, keys: k.handedOver },
+      };
+    },
     /** Endpoint teardown (revocation, suspension, peer loss, stop): release everything owned. */
     releaseEverything(): { buttons: string[]; keys: string[] } {
       const released = { buttons: [...buttons].sort(), keys: [...keys].sort() };
@@ -717,7 +795,7 @@ export function parseControlMessage(
    * The profile 2 features this receiver declared (docs/51). When given, a profile 2 kind whose
    * feature is not listed is refused as `unsupported`. Omitted: every implemented kind parses.
    */
-  features?: ReadonlySet<Profile2Feature>,
+  features?: ReadonlySet<DataFeature>,
 ): ControlMessage {
   let value: unknown = raw;
   if (typeof raw === 'string') {
@@ -740,7 +818,12 @@ export function parseControlMessage(
   if (version === 1 && V2_ONLY.includes(kind as ControlKind)) {
     throw new ControlError('invalid-message');
   }
-  const feature = (PROFILE2_KIND_FEATURE as Record<string, Profile2Feature | undefined>)[kind];
+  const feature = (
+    { ...PROFILE2_KIND_FEATURE, ...COOPERATIVE_KIND_FEATURE } as Record<
+      string,
+      DataFeature | undefined
+    >
+  )[kind];
   if (feature && features && !features.has(feature)) throw new ControlError('unsupported');
   const keys = [
     'p',
@@ -882,6 +965,14 @@ export function parseControlMessage(
           TRANSFER.test(m.transfer) &&
           int(m.from, 0, Math.ceil(LIMITS.fileBytes / LIMITS.chunkBytes))
         );
+      case 'input-state':
+        return (
+          int(m.epoch, 1, LOCAL_YIELD.maxEpoch) &&
+          ((m.state === 'yielded' && (YIELD_REASONS as readonly unknown[]).includes(m.reason)) ||
+            (m.state === 'ready' && m.reason === null))
+        );
+      case 'input-barrier':
+        return int(m.epoch, 0, LOCAL_YIELD.maxEpoch) && time(m.t);
     }
   })();
   if (!ok) {

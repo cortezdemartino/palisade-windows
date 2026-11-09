@@ -1,0 +1,3011 @@
+{
+  "description": "Cooperative local input, version 1 (docs/51 §4.6): the host keeps their own mouse and keyboard and has priority; local activity yields remote input (nonterminal), readiness is decided only by the endpoint, and only fresh helper input after the readiness barrier is injected. Terminal transitions are unchanged.",
+  "contract": "palisade.assist.control v2 + feature localYield; palisade.assist.native.ext v3",
+  "session": "sassist_yield_fixture_01",
+  "defaults": {
+    "idleMs": 2000,
+    "maxEpoch": 2147483647
+  },
+  "rules": [
+    "The endpoint declares localYield; the helper opts in on each peer with input-barrier {epoch: 0} before any input. A peer whose first input has no opt-in is legacy: local input ends remote input as before.",
+    "Local activity, a local press or release yields: a new epoch from active or ready, the same epoch while yielded. The helper's owned input is released, except what the local person also holds (handed over: never released by the endpoint).",
+    "Readiness needs: no local key or button held, 2000 ms without local events, the endpoint's own cleanup complete, and unchanged authority since the yield began. Any authority change while yielded or ready is terminal.",
+    "After ready the endpoint drops every non-release input until input-barrier for that epoch; a barrier for another epoch is stale-epoch. Releases are always applied; after a yield nothing is owned, so they inject nothing.",
+    "input-barrier t repeats the last input t the helper sent on this peer (0 before any), so t never decreases; the endpoint's age guard (docs/51 §4.4) treats the barrier like a release: replay-checked, never dropped as stale.",
+    "Stop, revocation, lock, protected desktop, sensitive native UI, source/peer/lease loss, expiry, replacement and stream end are terminal exactly as before; yield never extends the deadline, broadens a capability, changes the controller or restores ended authority."
+  ],
+  "messages": {
+    "valid": [
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_yield_fixture_01",
+        "grant": "sgrant_yield_mouse_00001",
+        "gen": 5,
+        "seq": 1,
+        "kind": "input-state",
+        "state": "yielded",
+        "epoch": 1,
+        "reason": "local-input"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_yield_fixture_01",
+        "grant": "sgrant_yield_mouse_00001",
+        "gen": 5,
+        "seq": 1,
+        "kind": "input-state",
+        "state": "yielded",
+        "epoch": 2,
+        "reason": "local-held"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_yield_fixture_01",
+        "grant": "sgrant_yield_mouse_00001",
+        "gen": 5,
+        "seq": 1,
+        "kind": "input-state",
+        "state": "yielded",
+        "epoch": 3,
+        "reason": "neutralizing"
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_yield_fixture_01",
+        "grant": "sgrant_yield_mouse_00001",
+        "gen": 5,
+        "seq": 1,
+        "kind": "input-state",
+        "state": "ready",
+        "epoch": 2147483647,
+        "reason": null
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_yield_fixture_01",
+        "grant": "sgrant_yield_keyboard_01",
+        "gen": 5,
+        "seq": 1,
+        "kind": "input-barrier",
+        "epoch": 0,
+        "t": 0
+      },
+      {
+        "p": "palisade.assist.control",
+        "v": 2,
+        "session": "sassist_yield_fixture_01",
+        "grant": "sgrant_yield_keyboard_01",
+        "gen": 5,
+        "seq": 1,
+        "kind": "input-barrier",
+        "epoch": 7,
+        "t": 123456
+      }
+    ],
+    "features": ["localYield"],
+    "invalid": [
+      {
+        "name": "ready with a reason",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "ready",
+          "epoch": 1,
+          "reason": "local-input"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "yielded without a reason",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "yielded",
+          "epoch": 1,
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown reason",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "yielded",
+          "epoch": 1,
+          "reason": "busy"
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "unknown state",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "active",
+          "epoch": 1,
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "status epoch 0",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "ready",
+          "epoch": 0,
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "epoch above the limit",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "ready",
+          "epoch": 2147483648,
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "fractional epoch",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "ready",
+          "epoch": 1.5,
+          "reason": null
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "extra field",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "ready",
+          "epoch": 1,
+          "reason": null,
+          "resume": true
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "negative barrier epoch",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_keyboard_01",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-barrier",
+          "epoch": -1,
+          "t": 0
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "barrier without t",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_keyboard_01",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-barrier",
+          "epoch": 1
+        },
+        "error": "invalid-message"
+      },
+      {
+        "name": "version 1 envelope",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 1,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_keyboard_01",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-barrier",
+          "epoch": 0,
+          "t": 0
+        },
+        "version": 1,
+        "error": "invalid-message"
+      },
+      {
+        "name": "receiver did not declare localYield",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_keyboard_01",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-barrier",
+          "epoch": 0,
+          "t": 0
+        },
+        "features": [],
+        "error": "unsupported"
+      },
+      {
+        "name": "status to a receiver that did not declare localYield",
+        "message": {
+          "p": "palisade.assist.control",
+          "v": 2,
+          "session": "sassist_yield_fixture_01",
+          "grant": "sgrant_yield_mouse_00001",
+          "gen": 5,
+          "seq": 1,
+          "kind": "input-state",
+          "state": "ready",
+          "epoch": 1,
+          "reason": null
+        },
+        "features": ["input2"],
+        "error": "unsupported"
+      }
+    ],
+    "authorization": [
+      {
+        "kind": "input-barrier",
+        "from": "guest",
+        "capability": "control_mouse",
+        "authorized": true
+      },
+      {
+        "kind": "input-barrier",
+        "from": "guest",
+        "capability": "control_keyboard",
+        "authorized": true
+      },
+      {
+        "kind": "input-barrier",
+        "from": "guest",
+        "capability": "clipboard_to_host",
+        "authorized": false
+      },
+      {
+        "kind": "input-barrier",
+        "from": "host",
+        "capability": "control_mouse",
+        "authorized": false
+      },
+      {
+        "kind": "input-state",
+        "from": "host",
+        "capability": "control_mouse",
+        "authorized": true
+      },
+      {
+        "kind": "input-state",
+        "from": "host",
+        "capability": "control_keyboard",
+        "authorized": true
+      },
+      {
+        "kind": "input-state",
+        "from": "host",
+        "capability": "file_to_guest",
+        "authorized": false
+      },
+      {
+        "kind": "input-state",
+        "from": "guest",
+        "capability": "control_mouse",
+        "authorized": false
+      }
+    ]
+  },
+  "endpoint": [
+    {
+      "name": "local activity during a helper drag yields; idle after cleanup makes ready; the barrier resumes",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 1,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 5
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active",
+          "name": "opt-in"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 2,
+            "kind": "input-button",
+            "button": "left",
+            "down": true,
+            "sourceGen": 1,
+            "t": 10
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 3,
+            "kind": "input-move",
+            "x": 0.6,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 15
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 20,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": false,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": ["left"],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "the helper's held button is let go (never re-pressed later)"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 4,
+            "kind": "input-move",
+            "x": 0.7,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 20
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 110,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "yielded",
+          "state": "yielded"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 5,
+            "kind": "input-button",
+            "button": "left",
+            "down": false,
+            "sourceGen": 1,
+            "t": 25
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 120,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "the helper's late up is accepted and injects nothing (no longer owned)"
+        },
+        {
+          "tick": 1500,
+          "ctx": {
+            "cleanupComplete": false,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "still within 2 s of local activity"
+        },
+        {
+          "tick": 2100,
+          "ctx": {
+            "cleanupComplete": false,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "neutralizing"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "idle, but the endpoint's own release has not completed"
+        },
+        {
+          "tick": 2200,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "ready",
+                "epoch": 1,
+                "reason": null
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ready"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 6,
+            "kind": "input-move",
+            "x": 0.8,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 30
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 2210,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "stale-epoch",
+          "state": "ready",
+          "name": "input sent before the helper saw readiness is never injected"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 7,
+            "kind": "input-barrier",
+            "epoch": 1,
+            "t": 35
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 2220,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 8,
+            "kind": "input-move",
+            "x": 0.9,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 40
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 2230,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        }
+      ]
+    },
+    {
+      "name": "repeated host movement keeps one epoch; activity after ready starts a new epoch and the old barrier is stale",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 9,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 45
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 10,
+            "kind": "input-move",
+            "x": 0.5,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 50
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 1500,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "tick": 3000,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 3400,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "tick": 5399,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "1999 ms after the last local event"
+        },
+        {
+          "tick": 5400,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "ready",
+                "epoch": 1,
+                "reason": null
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ready",
+          "name": "exactly 2000 ms"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 5500,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 2,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 11,
+            "kind": "input-barrier",
+            "epoch": 1,
+            "t": 55
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 5510,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "stale-epoch",
+          "state": "yielded",
+          "name": "the barrier for epoch 1 arrives after epoch 2 began"
+        },
+        {
+          "tick": 7500,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "ready",
+                "epoch": 2,
+                "reason": null
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ready"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 12,
+            "kind": "input-barrier",
+            "epoch": 2,
+            "t": 60
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 7510,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        }
+      ]
+    },
+    {
+      "name": "held local input keeps yielding; overlapping input is handed over, never released",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_keyboard_01",
+            "gen": 5,
+            "seq": 1,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 65
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_keyboard_01",
+            "gen": 5,
+            "seq": 2,
+            "kind": "input-key",
+            "code": "ShiftLeft",
+            "down": true,
+            "repeat": false,
+            "t": 70
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 13,
+            "kind": "input-button",
+            "button": "left",
+            "down": true,
+            "sourceGen": 1,
+            "t": 75
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 20,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "local": {
+            "type": "down",
+            "key": "ShiftLeft"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": false,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-held"
+              }
+            ],
+            "release": {
+              "buttons": ["left"],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": ["ShiftLeft"]
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "the local person also holds Shift: releasing it would release their hold"
+        },
+        {
+          "tick": 5000,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded",
+          "name": "held for a long time: still yielded"
+        },
+        {
+          "local": {
+            "type": "up",
+            "key": "ShiftLeft"
+          },
+          "at": 6000,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "local": {
+            "type": "down",
+            "button": "left"
+          },
+          "at": 6100,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-held"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "local": {
+            "type": "up",
+            "button": "left"
+          },
+          "at": 6200,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "tick": 8199,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "tick": 8200,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "ready",
+                "epoch": 1,
+                "reason": null
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ready"
+        }
+      ]
+    },
+    {
+      "name": "Stop during yield is terminal; nothing returns through yield",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_keyboard_01",
+            "gen": 5,
+            "seq": 3,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 80
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_keyboard_01",
+            "gen": 5,
+            "seq": 4,
+            "kind": "input-key",
+            "code": "KeyA",
+            "down": true,
+            "repeat": false,
+            "t": 85
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": false,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": ["KeyA"]
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "end": "local-stop",
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": "local-stop"
+          },
+          "state": "ended"
+        },
+        {
+          "tick": 5000,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ended"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_keyboard_01",
+            "gen": 5,
+            "seq": 5,
+            "kind": "input-barrier",
+            "epoch": 1,
+            "t": 90
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "at": 5010,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "revoked",
+          "state": "ended"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_keyboard_01",
+            "gen": 5,
+            "seq": 6,
+            "kind": "input-key",
+            "code": "KeyB",
+            "down": true,
+            "repeat": false,
+            "t": 95
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "at": 5020,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "revoked",
+          "state": "ended"
+        }
+      ]
+    },
+    {
+      "name": "an authority change while yielded (grant, consent, lease, peer or source) is terminal",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 14,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 100
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 15,
+            "kind": "input-move",
+            "x": 0.5,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 105
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "tick": 3000,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "B"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": "authority-changed"
+          },
+          "state": "ended"
+        }
+      ]
+    },
+    {
+      "name": "revocation while ready is terminal; the barrier is refused afterwards",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 16,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 110
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 17,
+            "kind": "input-button",
+            "button": "right",
+            "down": true,
+            "sourceGen": 1,
+            "t": 115
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": ["right"],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "tick": 2100,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "ready",
+                "epoch": 1,
+                "reason": null
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ready"
+        },
+        {
+          "end": "revoked",
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": "revoked"
+          },
+          "state": "ended"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 18,
+            "kind": "input-barrier",
+            "epoch": 1,
+            "t": 120
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 2200,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "revoked",
+          "state": "ended"
+        }
+      ]
+    },
+    {
+      "name": "stream end while active releases what the helper owns",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 19,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 125
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 20,
+            "kind": "input-button",
+            "button": "middle",
+            "down": true,
+            "sourceGen": 1,
+            "t": 130
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "end": "stream-ended",
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": ["middle"],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": "stream-ended"
+          },
+          "state": "ended"
+        },
+        {
+          "end": "local-stop",
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ended"
+        }
+      ]
+    },
+    {
+      "name": "a peer without the opt-in keeps the old rule: local input ends remote input",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 21,
+            "kind": "input-move",
+            "x": 0.5,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 135
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 10,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": true,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "legacy"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 22,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 140
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 20,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "stale-epoch",
+          "state": "legacy",
+          "name": "opting in after input is refused"
+        },
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 100,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": "local-input"
+          },
+          "state": "ended"
+        }
+      ]
+    },
+    {
+      "name": "opting in while the local person is busy starts yielded",
+      "steps": [
+        {
+          "local": {
+            "type": "activity"
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "negotiating"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 23,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 145
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 500,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "yielded",
+                "epoch": 1,
+                "reason": "local-input"
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "yielded"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 24,
+            "kind": "input-move",
+            "x": 0.5,
+            "y": 0.5,
+            "sourceGen": 1,
+            "t": 150
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 510,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "yielded",
+          "state": "yielded"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 25,
+            "kind": "input-barrier",
+            "epoch": 1,
+            "t": 155
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 520,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "yielded",
+          "state": "yielded",
+          "name": "a barrier before readiness"
+        },
+        {
+          "tick": 2000,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [
+              {
+                "state": "ready",
+                "epoch": 1,
+                "reason": null
+              }
+            ],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "ready"
+        }
+      ]
+    },
+    {
+      "name": "refusals",
+      "steps": [
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 26,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 0,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "negotiating",
+          "name": "a release before the opt-in decides nothing"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_clipboard01",
+            "gen": 5,
+            "seq": 1,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 160
+          },
+          "grant": {
+            "capability": "clipboard_to_host",
+            "active": true
+          },
+          "at": 1,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "not-granted",
+          "state": "negotiating",
+          "name": "a resource grant never carries the barrier"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_02",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 27,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 165
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 2,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "binding-mismatch",
+          "state": "negotiating",
+          "name": "another session"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 28,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 170
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": false
+          },
+          "at": 3,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "revoked",
+          "state": "negotiating",
+          "name": "a revoked grant"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 29,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 1,
+            "reason": null
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 4,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "not-granted",
+          "state": "negotiating",
+          "name": "a status from the helper is never accepted"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 30,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 175
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 5,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "expect": {
+            "inject": false,
+            "send": [],
+            "release": {
+              "buttons": [],
+              "keys": []
+            },
+            "handedOver": {
+              "buttons": [],
+              "keys": []
+            },
+            "terminal": null
+          },
+          "state": "active"
+        },
+        {
+          "helper": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 31,
+            "kind": "input-barrier",
+            "epoch": 0,
+            "t": 180
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "at": 6,
+          "ctx": {
+            "cleanupComplete": true,
+            "authority": "A"
+          },
+          "error": "stale-epoch",
+          "state": "active",
+          "name": "a second opt-in"
+        }
+      ]
+    }
+  ],
+  "helper": [
+    {
+      "name": "yield, reason update, ready → barrier",
+      "steps": [
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 1,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 1,
+            "reason": "local-input"
+          },
+          "expect": {
+            "action": "yield",
+            "epoch": 1,
+            "reason": "local-input"
+          }
+        },
+        {
+          "canSend": {
+            "release": false
+          },
+          "expect": false
+        },
+        {
+          "canSend": {
+            "release": true
+          },
+          "expect": true
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 2,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 1,
+            "reason": "neutralizing"
+          },
+          "expect": {
+            "action": "update",
+            "epoch": 1,
+            "reason": "neutralizing"
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 3,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 1,
+            "reason": null
+          },
+          "expect": {
+            "action": "barrier",
+            "epoch": 1
+          }
+        },
+        {
+          "canSend": {
+            "release": false
+          },
+          "expect": true
+        }
+      ]
+    },
+    {
+      "name": "old and replayed native status is ignored",
+      "steps": [
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 1,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 2,
+            "reason": "local-held"
+          },
+          "expect": {
+            "action": "yield",
+            "epoch": 2,
+            "reason": "local-held"
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 2,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 1,
+            "reason": "local-input"
+          },
+          "expect": {
+            "action": "ignore",
+            "error": "stale-epoch"
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 3,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 1,
+            "reason": null
+          },
+          "expect": {
+            "action": "ignore",
+            "error": "stale-epoch"
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 3,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 2,
+            "reason": null
+          },
+          "expect": {
+            "action": "ignore",
+            "error": "replay"
+          },
+          "name": "a sequence number not above the last"
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 5,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 2,
+            "reason": null
+          },
+          "expect": {
+            "action": "barrier",
+            "epoch": 2
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 6,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 2,
+            "reason": null
+          },
+          "expect": {
+            "action": "ignore",
+            "error": "stale-epoch"
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 7,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 2,
+            "reason": "local-input"
+          },
+          "expect": {
+            "action": "ignore",
+            "error": "stale-epoch"
+          }
+        }
+      ]
+    },
+    {
+      "name": "yield/resume race: a new yield right after readiness",
+      "steps": [
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 1,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 3,
+            "reason": "local-input"
+          },
+          "expect": {
+            "action": "yield",
+            "epoch": 3,
+            "reason": "local-input"
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 2,
+            "kind": "input-state",
+            "state": "ready",
+            "epoch": 3,
+            "reason": null
+          },
+          "expect": {
+            "action": "barrier",
+            "epoch": 3
+          }
+        },
+        {
+          "receive": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_yield_fixture_01",
+            "grant": "sgrant_yield_mouse_00001",
+            "gen": 5,
+            "seq": 3,
+            "kind": "input-state",
+            "state": "yielded",
+            "epoch": 4,
+            "reason": "local-input"
+          },
+          "expect": {
+            "action": "yield",
+            "epoch": 4,
+            "reason": "local-input"
+          }
+        },
+        {
+          "canSend": {
+            "release": false
+          },
+          "expect": false
+        }
+      ]
+    }
+  ],
+  "bridge": {
+    "hello": {
+      "p": "palisade.assist.native.ext",
+      "v": 1,
+      "id": "req_yield_hello_01",
+      "op": "ext.hello",
+      "versions": [3, 2, 1]
+    },
+    "results": {
+      "valid": [
+        {
+          "name": "version 3",
+          "offered": 3,
+          "response": {
+            "p": "palisade.assist.native.ext",
+            "v": 1,
+            "id": "req_yield_hello_01",
+            "ok": true,
+            "result": {
+              "version": 3,
+              "features": {
+                "cleanupEvents": true,
+                "clipboardImage": true,
+                "clipboardSync": true,
+                "clipboardText": true,
+                "dropSurface": true,
+                "fileResume": true,
+                "files": true,
+                "input2": true,
+                "localYield": true,
+                "multiFile": true
+              }
+            }
+          }
+        },
+        {
+          "name": "a version 2 endpoint (no cooperative input)",
+          "offered": 3,
+          "response": {
+            "p": "palisade.assist.native.ext",
+            "v": 1,
+            "id": "req_yield_hello_01",
+            "ok": true,
+            "result": {
+              "version": 2,
+              "features": {
+                "cleanupEvents": true,
+                "clipboardImage": true,
+                "clipboardSync": true,
+                "clipboardText": true,
+                "dropSurface": true,
+                "fileResume": true,
+                "files": true,
+                "input2": true,
+                "multiFile": true
+              }
+            }
+          }
+        }
+      ],
+      "invalid": [
+        {
+          "name": "version 3 without localYield",
+          "offered": 3,
+          "response": {
+            "p": "palisade.assist.native.ext",
+            "v": 1,
+            "id": "req_yield_hello_01",
+            "ok": true,
+            "result": {
+              "version": 3,
+              "features": {
+                "cleanupEvents": true,
+                "clipboardImage": true,
+                "clipboardSync": true,
+                "clipboardText": true,
+                "dropSurface": true,
+                "fileResume": true,
+                "files": true,
+                "input2": true,
+                "multiFile": true
+              }
+            }
+          },
+          "error": "invalid-message"
+        },
+        {
+          "name": "version 2 with localYield",
+          "offered": 3,
+          "response": {
+            "p": "palisade.assist.native.ext",
+            "v": 1,
+            "id": "req_yield_hello_01",
+            "ok": true,
+            "result": {
+              "version": 2,
+              "features": {
+                "cleanupEvents": true,
+                "clipboardImage": true,
+                "clipboardSync": true,
+                "clipboardText": true,
+                "dropSurface": true,
+                "fileResume": true,
+                "files": true,
+                "input2": true,
+                "localYield": true,
+                "multiFile": true
+              }
+            }
+          },
+          "error": "invalid-message"
+        },
+        {
+          "name": "version 3 to a client that offered [2, 1]",
+          "offered": 2,
+          "response": {
+            "p": "palisade.assist.native.ext",
+            "v": 1,
+            "id": "req_yield_hello_01",
+            "ok": true,
+            "result": {
+              "version": 3,
+              "features": {
+                "cleanupEvents": true,
+                "clipboardImage": true,
+                "clipboardSync": true,
+                "clipboardText": true,
+                "dropSurface": true,
+                "fileResume": true,
+                "files": true,
+                "input2": true,
+                "localYield": true,
+                "multiFile": true
+              }
+            }
+          },
+          "error": "invalid-message"
+        }
+      ]
+    },
+    "events": {
+      "valid": [
+        {
+          "p": "palisade.assist.native.ext",
+          "v": 3,
+          "event": "input.yield",
+          "seq": 1,
+          "session": "sassist_yield_fixture_01",
+          "state": "yielded",
+          "epoch": 1,
+          "reason": "local-input"
+        },
+        {
+          "p": "palisade.assist.native.ext",
+          "v": 3,
+          "event": "input.yield",
+          "seq": 2,
+          "session": "sassist_yield_fixture_01",
+          "state": "ready",
+          "epoch": 1,
+          "reason": null
+        },
+        {
+          "p": "palisade.assist.native.ext",
+          "v": 3,
+          "event": "input.yield",
+          "seq": 3,
+          "session": "sassist_yield_fixture_01",
+          "state": "active",
+          "epoch": 1,
+          "reason": null
+        }
+      ],
+      "invalid": [
+        {
+          "name": "unknown reason",
+          "version": 3,
+          "message": {
+            "p": "palisade.assist.native.ext",
+            "v": 3,
+            "event": "input.yield",
+            "seq": 1,
+            "session": "sassist_yield_fixture_01",
+            "state": "yielded",
+            "epoch": 1,
+            "reason": "busy"
+          },
+          "error": "invalid-message"
+        },
+        {
+          "name": "negative epoch",
+          "version": 3,
+          "message": {
+            "p": "palisade.assist.native.ext",
+            "v": 3,
+            "event": "input.yield",
+            "seq": 1,
+            "session": "sassist_yield_fixture_01",
+            "state": "active",
+            "epoch": -1,
+            "reason": null
+          },
+          "error": "invalid-message"
+        },
+        {
+          "name": "not a version 2 event",
+          "version": 2,
+          "message": {
+            "p": "palisade.assist.native.ext",
+            "v": 2,
+            "event": "input.yield",
+            "seq": 1,
+            "session": "sassist_yield_fixture_01",
+            "state": "ready",
+            "epoch": 1,
+            "reason": null
+          },
+          "error": "invalid-message"
+        },
+        {
+          "name": "version 2 envelope after negotiating 3",
+          "version": 3,
+          "message": {
+            "p": "palisade.assist.native.ext",
+            "v": 2,
+            "event": "input.yield",
+            "seq": 1,
+            "session": "sassist_yield_fixture_01",
+            "state": "ready",
+            "epoch": 1,
+            "reason": null
+          },
+          "error": "unsupported-version"
+        }
+      ]
+    },
+    "requests": {
+      "valid": [
+        {
+          "version": 3,
+          "message": {
+            "p": "palisade.assist.native.ext",
+            "v": 3,
+            "id": "req_yield_cancel_1",
+            "op": "resource.cancel",
+            "session": "sassist_yield_fixture_01",
+            "transfer": "transfer_yield_0001"
+          }
+        }
+      ],
+      "invalid": [
+        {
+          "name": "version 2 envelope after negotiating 3",
+          "version": 3,
+          "message": {
+            "p": "palisade.assist.native.ext",
+            "v": 2,
+            "id": "req_yield_cancel_2",
+            "op": "resource.cancel",
+            "session": "sassist_yield_fixture_01",
+            "transfer": "transfer_yield_0001"
+          },
+          "error": "unsupported-version"
+        }
+      ]
+    }
+  }
+}

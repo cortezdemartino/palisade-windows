@@ -39,3 +39,24 @@ Diagnostic guardian v1 remains diagnostic only; its immediate-exit watchdog is n
 Native bridge v1 adds exact schema/provenance checks, a live preload challenge, per-document event envelopes, cancellation outside the ordinary queue and one-shot source/peer terminal events. Tests cover stale signatures, reload, spoofed frames, full queues, late replacement events and exhausted lifecycle capacity. All four endpoint statement vectors are purpose-separated; a proof cannot substitute for a grant acknowledgement. Live enrollment tuple and actual observed remote certificate checks are still integration requirements. These component tests do not qualify the product against a compromised renderer.
 
 The native enrollment tuple is private, non-deserializable and bound to the locally confirmed installation/account/device/endpoint and qualified issuer. Native session admission cannot derive the publisher from an offered grant. Revocation/Drop invalidates registered sessions, and dispatch observes global stop through blocking intent and final shortcut steps. Tests use synthetic native approval and actual temporary DPAPI identity keys; real dialogs/input and the owned remote gateway remain unqualified. Companion 82ac7de documents the corrected page safety budget and native resource/relay handoff in docs/50. Windows integration, omitted full-feature extensions and real joint qualification remain tracked in Windows#4.
+
+
+## Cooperative scheduler checkpoint
+
+The inactive [cooperative scheduler](ASSIST-COOPERATIVE-INPUT.md) adds these boundaries.
+Its backend gate is false for the real OS adapters pending native arbitration and qualification.
+
+| Threat | Enforcement and negative evidence | Remaining obligation |
+| --- | --- | --- |
+| Early helper barrier queued until after readiness | Original native ingress is compared to the readiness boundary; early barriers remain stale | Carry that original native boundary through the connected transport |
+| Authority changes between periodic ticks | Opaque signed-gate semantic snapshot is checked on every admission and barrier | Bind actual peer/source/consent lifecycle in the live registry |
+| Helper work continues inside an expanded shortcut after local activity | Independent atomic execution generation is checked at primitive boundaries; native-fence interruption retains cleanup ownership | Delivery-time OS arbitration must close the check/injection race |
+| Handover is followed by an unacknowledged mirror update | Cleanup stays pending; terminal cleanup and Drop retry final mirror acknowledgement even with no local hold | Positive native receipts must cover both child and guardian mirror |
+| Wrong or missing local-observation provenance | Exact native fence identity and original observation generation; foreign/replayed observations end admission, gaps remain uncertain | Physical/raw-input observation, device overlap, bounded callbacks and loss detection |
+
+A low-level hook can be removed after a timeout, and SendInput reports insertion rather
+than proof of downstream delivery. Callback progress or a bitmap cannot prove perfect
+overlap protection. See Microsoft's [keyboard hook contract](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc),
+[mouse hook contract](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelmouseproc)
+and [SendInput contract](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-sendinput).
+Real-device timeout/removal, multiple-device and handover tests remain mandatory before advertisement.

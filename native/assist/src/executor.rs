@@ -44,6 +44,11 @@ impl Source {
     }
 }
 pub trait Backend {
+    /// True only for an adapter with delivery-time arbitration in ordinary
+    /// input AND retained mirror cleanup. The existing OS adapter stays false.
+    fn cooperative_ready(&self) -> bool {
+        false
+    }
     fn retain_cleanup(&self) -> bool {
         false
     }
@@ -62,7 +67,65 @@ pub trait Backend {
     /// Stop/reap any queued executor before releasing mirrored input.
     fn fence(&mut self) -> Result<(), &'static str>;
     fn cleanup_allowed(&mut self) -> Result<(), &'static str>;
+    /// Nonterminal input fence: all expanded/in-flight ordinary work must be
+    /// quiescent, without destroying the session or resetting its authorization.
+    /// Old adapters fail closed until they implement delivery acknowledgements.
+    fn quiesce_for_yield(&mut self) -> Result<(), &'static str> {
+        Err("cooperative-unavailable")
+    }
+    /// Positive delivery-time disposition. A bitmap check followed by SendInput
+    /// is insufficient: both native child and mirror cleanup must honor host holds.
+    fn yield_release(
+        &mut self,
+        _source: &Source,
+        _action: &Action,
+        _local: &crate::cooperative::LocalHolds,
+    ) -> Result<YieldDisposition, &'static str> {
+        Err("cooperative-unavailable")
+    }
     fn finish(&mut self);
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum YieldDisposition {
+    Released,
+    HandedOver,
+}
+enum Admission {
+    Legacy,
+    Cooperative {
+        fence: Arc<crate::cooperative::InputFence>,
+        generation: u64,
+        release: bool,
+        interrupted: bool,
+    },
+}
+impl Admission {
+    fn check(&mut self) -> Result<(), &'static str> {
+        match self {
+            Self::Legacy | Self::Cooperative { release: true, .. } => Ok(()),
+            Self::Cooperative {
+                fence,
+                generation,
+                interrupted,
+                ..
+            } => {
+                let result = fence.check(*generation);
+                if result == Err("yielded") {
+                    *interrupted = true;
+                }
+                result
+            }
+        }
+    }
+    fn nonterminal(&self, result: Result<(), &'static str>) -> bool {
+        matches!(
+            self,
+            Self::Cooperative {
+                interrupted: true,
+                ..
+            }
+        ) && result == Err("yielded")
+    }
 }
 pub struct Executor<B: Backend> {
     backend: B,
@@ -75,6 +138,7 @@ pub struct Executor<B: Backend> {
     enabled: bool,
     last_source: Option<Source>,
     epoch: Option<u64>,
+    cleanup_pending: bool,
 }
 impl<B: Backend> Executor<B> {
     pub fn heartbeat(
@@ -108,6 +172,7 @@ impl<B: Backend> Executor<B> {
             enabled,
             last_source: None,
             epoch: None,
+            cleanup_pending: false,
         }
     }
     pub fn with_session_stop(mut self, stop: Arc<AtomicBool>) -> Self {
@@ -127,7 +192,58 @@ impl<B: Backend> Executor<B> {
         gate: &mut SessionGate,
         source: &Source,
         action: &Action,
+        clock: impl FnMut() -> Result<(u64, Instant), &'static str>,
+    ) -> Result<(), &'static str> {
+        self.dispatch_checked(permit, gate, source, action, clock, Admission::Legacy)
+    }
+    pub fn dispatch_cooperative(
+        &mut self,
+        permit: ExecutionPermit,
+        gate: &mut SessionGate,
+        source: &Source,
+        action: &Action,
+        scheduler: &mut crate::cooperative::LocalYield,
         mut clock: impl FnMut() -> Result<(u64, Instant), &'static str>,
+    ) -> Result<(), &'static str> {
+        if !self.backend.cooperative_ready() {
+            return Err("cooperative-unavailable");
+        }
+        let (now, instant) = clock()?;
+        let authority = gate.input_authority(source, now, instant)?;
+        let release = matches!(
+            action,
+            Action::ReleaseAll
+                | Action::Key { down: false, .. }
+                | Action::Button { down: false, .. }
+        );
+        scheduler.admit(release, &authority)?;
+        let fence = scheduler.input_fence();
+        let generation = fence.generation();
+        if !release && self.cleanup_pending {
+            return Err("yielded");
+        }
+        self.dispatch_checked(
+            permit,
+            gate,
+            source,
+            action,
+            clock,
+            Admission::Cooperative {
+                fence,
+                generation,
+                release,
+                interrupted: false,
+            },
+        )
+    }
+    fn dispatch_checked(
+        &mut self,
+        permit: ExecutionPermit,
+        gate: &mut SessionGate,
+        source: &Source,
+        action: &Action,
+        mut clock: impl FnMut() -> Result<(u64, Instant), &'static str>,
+        mut admission: Admission,
     ) -> Result<(), &'static str> {
         self.last_source = Some(source.clone());
         let result = (|| {
@@ -141,6 +257,7 @@ impl<B: Backend> Executor<B> {
             self.backend.prepare()?;
             let (now, t) = clock()?;
             gate.validate_permit(&permit, source.generation, now, t)?;
+            admission.check()?;
             let owner = permit.owner();
             self.epoch = Some(gate.input_epoch());
             match action {
@@ -174,6 +291,7 @@ impl<B: Backend> Executor<B> {
                 // Target/desktop checks may block; use endpoint-owned clocks afterwards.
                 let (now, t) = clock()?;
                 gate.validate_permit(&permit, source.generation, now, t)?;
+                admission.check()?;
                 if self.stopped() {
                     return Err("revoked");
                 }
@@ -195,6 +313,7 @@ impl<B: Backend> Executor<B> {
                 }
                 let (now, t) = clock()?;
                 gate.validate_permit(&permit, source.generation, now, t)?;
+                admission.check()?;
                 if self.stopped() {
                     return Err("revoked");
                 }
@@ -211,13 +330,16 @@ impl<B: Backend> Executor<B> {
                 }
                 let (now, t) = clock()?;
                 gate.tick(now, t)?;
+                admission.check()?;
                 if self.stopped() {
                     return Err("revoked");
                 }
             }
             Ok(())
         })();
-        if result.is_err() {
+        if admission.nonterminal(result) {
+            self.cleanup_pending = true;
+        } else if result.is_err() {
             gate.suspend_input();
             self.stop.store(true, Ordering::SeqCst);
             let _ = self.release_owned(source);
@@ -226,6 +348,7 @@ impl<B: Backend> Executor<B> {
         result
     }
     pub fn release_owned(&mut self, source: &Source) -> Result<(), &'static str> {
+        self.cleanup_pending = true;
         let result = (|| {
             if !self.enabled {
                 return Err("native-input-disabled");
@@ -239,8 +362,60 @@ impl<B: Backend> Executor<B> {
                 self.ledger.plan(&action)?;
                 self.backend.intent(&self.ledger)?;
             }
+            // Empty local state is not proof that the surviving backend mirror
+            // received the last handover/release. Keep the owner until its final
+            // empty intent is acknowledged, including terminal cleanup retries.
+            self.backend.intent(&self.ledger)?;
             self.owners.clear();
+            self.cleanup_pending = false;
             Ok(())
+        })();
+        self.backend.finish();
+        result
+    }
+    /// Settle the existing write-ahead ledgers without revoking grants. The
+    /// caller must continue gating input until a native ready/barrier transition.
+    /// Unsupported, uncertain or partial delivery retains unresolved ownership.
+    pub fn yield_owned(
+        &mut self,
+        source: &Source,
+        local: &crate::cooperative::LocalHolds,
+    ) -> Result<Vec<(Action, YieldDisposition)>, &'static str> {
+        self.last_source = Some(source.clone());
+        self.cleanup_pending = true;
+        let result = (|| {
+            if !self.enabled || self.stopped() {
+                return Err("revoked");
+            }
+            if !self.backend.cooperative_ready() {
+                return Err("cooperative-unavailable");
+            }
+            self.backend.quiesce_for_yield()?;
+            if !local.certain() {
+                return Err("yield-uncertain");
+            }
+            self.backend.prepare()?;
+            let mut completed = Vec::new();
+            for action in self.ledger.clone().releases() {
+                self.backend.cleanup_allowed()?;
+                let disposition = self.backend.yield_release(source, &action, local)?;
+                // Only a positive native delivery/handover can clear either
+                // mirror. A timeout or insertion count is never that proof.
+                self.ledger.plan(&action)?;
+                for owned in self.owners.values_mut() {
+                    if owned.owns(&action) {
+                        owned.plan(&action)?;
+                    }
+                }
+                self.owners.retain(|_, owned| owned.held());
+                self.backend.intent(&self.ledger)?;
+                completed.push((action, disposition));
+            }
+            // Retry a failed final mirror write even if its positive delivery
+            // acknowledgement already left the local ledger empty.
+            self.backend.intent(&self.ledger)?;
+            self.cleanup_pending = false;
+            Ok(completed)
         })();
         self.backend.finish();
         result
@@ -248,10 +423,13 @@ impl<B: Backend> Executor<B> {
     pub fn held(&self) -> bool {
         self.ledger.held()
     }
+    pub fn yield_cleanup_complete(&self) -> bool {
+        !self.cleanup_pending && !self.ledger.held()
+    }
 }
 impl<B: Backend> Drop for Executor<B> {
     fn drop(&mut self) {
-        if self.enabled && self.ledger.held() {
+        if self.enabled && (self.ledger.held() || self.cleanup_pending) {
             if let Some(source) = self.last_source.clone() {
                 loop {
                     if self.release_owned(&source).is_ok() || !self.backend.retain_cleanup() {
