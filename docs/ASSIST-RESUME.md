@@ -1,5 +1,15 @@
 # Assist continuation checkpoint
 
+## Direct monitored cancellation continuation
+
+Session isolation `5d95cdadaad87f4effb99ff0e653b3a903ce93e2` passed full exact-SHA
+CI [42679846356](https://github.com/cortezdemartino/palisade-windows/actions/runs/42679846356).
+The coordinator now checks exact wait-only monitor/event handles directly and
+retains terminal Shutdown ingress after the event is signaled. Stop controls start
+before the coordinator. [Evidence](evidence/2026-11-09-direct-native-stop.md).
+No authority-bootstrap proof, runtime or wider cleanup scope is exposed. Continue
+positive cleanup receipts and the witness-preserving launch/session registry.
+
 ## Per-session cancellation continuation
 
 The observer correction `11f650890192f7ec79035c98424adbbe2e01e3ad` passed exact-SHA

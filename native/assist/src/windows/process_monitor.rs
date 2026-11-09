@@ -226,6 +226,21 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
     let query = tree.query_handle()?;
     let stop = Arc::new(StopEvent::new()?);
     let _stop_on_all_exit_paths = RevokeOnDrop(stop.clone());
+    // Establish the one mandatory Stop surface/hotkey before creating even an
+    // inactive coordinator. A later authority bootstrap must also prove receipt
+    // registrar readiness; this ordering alone is not an authorization proof.
+    let native_flag = Arc::new(AtomicBool::new(false));
+    let _native_stop = if probe {
+        None
+    } else {
+        Some(super::lifecycle::NativeStop::start(
+            native_flag.clone(),
+            false,
+        )?)
+    };
+    if native_flag.load(Ordering::SeqCst) {
+        return Err("native-stop-unavailable");
+    }
     let child_stop = stop.reader()?;
     let child = tree.launch(
         &image,
@@ -250,15 +265,6 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
         .map_err(|_| "monitor-process-handle")?;
     let signals = Arc::new(Signals::default());
     let finished = Arc::new(AtomicBool::new(false));
-    let native_flag = Arc::new(AtomicBool::new(false));
-    let _native_stop = if probe {
-        None
-    } else {
-        Some(super::lifecycle::NativeStop::start(
-            native_flag.clone(),
-            false,
-        )?)
-    };
     let state = Arc::new(Mutex::new(State::default()));
     let guard = Arc::new(Mutex::new(Watchdog::new(
         Arc::new(AtomicBool::new(false)),

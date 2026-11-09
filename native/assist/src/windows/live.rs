@@ -86,6 +86,13 @@ fn run_inner(
         Parent::validate(parent_pid, probe)?
     };
     let signals = Arc::new(Signals::default());
+    let live_stop = match &tree {
+        Some(tree) => crate::cancellation::SessionStop::monitored(
+            signals.cancellation(),
+            Arc::new(super::process_stop::ProcessStop::retain(&parent, tree)?),
+        ),
+        None => signals.cancellation().into(),
+    };
     let finished = Arc::new(AtomicBool::new(false));
     let guard = Arc::new(Mutex::new(Watchdog::new(
         Arc::new(AtomicBool::new(false)),
@@ -116,13 +123,11 @@ fn run_inner(
     let watch_signals = signals.clone();
     let watch_guard = guard.clone();
     let watch_finished = finished.clone();
+    let watch_stop = live_stop.clone();
     let watcher = thread::spawn(move || {
         while !watch_finished.load(Ordering::SeqCst) {
             thread::sleep(Duration::from_millis(25));
-            if tree
-                .as_ref()
-                .is_some_and(|tree| tree.revoked().unwrap_or(true))
-            {
+            if watch_stop.is_stopped() {
                 watch_signals.revoke();
             }
             if super::lease::now()
@@ -143,6 +148,7 @@ fn run_inner(
     let read_shutdown = shutdown.clone();
     let read_signals = signals.clone();
     let read_output = output.clone();
+    let read_stop = live_stop.clone();
     thread::spawn(move || {
         let mut input = std::io::stdin().lock();
         let mut ingress = if owned {
@@ -156,6 +162,12 @@ fn run_inner(
                     .map_err(|_| "live-frame")?
                     .ok_or("live-eof")?;
                 let request = ingress.accept(&bytes, &read_signals)?;
+                if read_stop.is_stopped() && !matches!(request.command, Command::Shutdown {}) {
+                    // The monitor signals Stop before forwarding Shutdown.
+                    // Validate sequence/grammar, discard earlier queued work,
+                    // and retain urgent terminal ingress for its cleanup metadata.
+                    continue;
+                }
                 match &request.command {
                     Command::Hello { challenge, .. } => {
                         guard
@@ -215,6 +227,12 @@ fn run_inner(
                     break;
                 }
             };
+            if live_stop.is_stopped() {
+                // Shutdown revokes before publishing its terminal metadata.
+                // Discard queued ordinary work while the urgent reader finishes;
+                // revocation is not itself a channel-cleanup failure.
+                continue;
+            }
             match request.command {
                 Command::Status {} => emit(
                     &output,

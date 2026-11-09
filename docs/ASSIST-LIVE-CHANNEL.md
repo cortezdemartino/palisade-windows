@@ -1,5 +1,13 @@
 # Private native Assist channel
 
+## Direct native stop checks
+
+The owned coordinator retains wait-only monitor/event handles and checks them
+directly before channel dispatch. Normal Stop controls are established before
+coordinator startup. After revocation, strict terminal Shutdown ingress remains
+available while ordinary work is discarded. [Evidence and remaining authority-bootstrap requirements](evidence/2026-11-09-direct-native-stop.md).
+This does not widen either cleanup scope or start a native runtime.
+
 ## Owned process monitor, private version 2
 
 An explicit trusted-main `ownedTree: true` option now launches the verified same-image monitor with private protocol version2. Version1 below is unchanged. The monitor atomically places its fixed coordinator in a private Windows Job Object at creation, restricts inherited handles, and retains exact process/job handles through descendant exit. It has no kill-on-close, breakaway or terminating limits. The coordinator receives only query access to the job and read access to a terminal stop event.

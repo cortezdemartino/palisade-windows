@@ -2,7 +2,10 @@
 //! revision owns no sessions or sensitive resources; its completion proof is
 //! deliberately limited to this channel. It cannot attest descendant cleanup.
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
 
 pub const PROTOCOL: &str = "palisade.assist.live";
 pub const MAX_FRAME: usize = 65_536;
@@ -11,11 +14,14 @@ pub const OUTPUT_CAPACITY: usize = 10;
 
 #[derive(Default)]
 pub struct Signals {
-    revoked: AtomicBool,
+    revoked: Arc<AtomicBool>,
     shutdown: AtomicBool,
     failed: AtomicBool,
 }
 impl Signals {
+    pub(crate) fn cancellation(&self) -> Arc<AtomicBool> {
+        self.revoked.clone()
+    }
     /// No locks, pipe writes, joins, UI or network work on the urgent path.
     pub fn revoke(&self) {
         self.revoked.store(true, Ordering::SeqCst);

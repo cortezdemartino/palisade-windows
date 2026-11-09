@@ -9,20 +9,37 @@ use std::sync::{
 pub struct SessionStop {
     launch: Arc<AtomicBool>,
     session: Arc<AtomicBool>,
+    witness: Option<Arc<dyn StopWitness>>,
+}
+/// Native-owned liveness only. It never creates permission or cleanup proof.
+pub(crate) trait StopWitness: Send + Sync {
+    fn stopped(&self) -> bool;
 }
 impl SessionStop {
     pub(crate) fn child(launch: Arc<AtomicBool>) -> Self {
         Self {
             launch,
             session: Arc::new(AtomicBool::new(false)),
+            witness: None,
+        }
+    }
+    pub(crate) fn monitored(launch: Arc<AtomicBool>, witness: Arc<dyn StopWitness>) -> Self {
+        Self {
+            witness: Some(witness),
+            ..Self::child(launch)
         }
     }
     pub fn is_stopped(&self) -> bool {
         if self.session.load(Ordering::SeqCst) {
             return true;
         }
-        if self.launch.load(Ordering::SeqCst) {
-            self.revoke();
+        if self.launch.load(Ordering::SeqCst)
+            || self
+                .witness
+                .as_ref()
+                .is_some_and(|witness| witness.stopped())
+        {
+            self.revoke_launch();
             return true;
         }
         false

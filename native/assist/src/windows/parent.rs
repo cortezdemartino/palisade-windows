@@ -26,6 +26,26 @@ impl Drop for Parent {
     }
 }
 impl Parent {
+    pub(crate) fn wait_handle(&self) -> Result<std::os::windows::io::OwnedHandle, &'static str> {
+        use std::os::windows::io::FromRawHandle;
+        let mut handle = ptr::null_mut();
+        // Duplicate this exact validated process, never reopen a reported PID.
+        if unsafe {
+            DuplicateHandle(
+                GetCurrentProcess(),
+                self.0,
+                GetCurrentProcess(),
+                &mut handle,
+                PROCESS_SYNCHRONIZE,
+                0,
+                0,
+            )
+        } == 0
+        {
+            return Err("parent-handle");
+        }
+        Ok(unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(handle) })
+    }
     pub fn pid(&self) -> u32 {
         unsafe { GetProcessId(self.0) }
     }

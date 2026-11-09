@@ -1,5 +1,14 @@
 # Validation
 
+## November 9 direct native stop
+
+Session isolation `5d95cda` passed full exact-SHA CI42679846356. The direct-witness
+candidate passed 140 Rust tests per configuration, strict formatting/Clippy,
+202 app tests, 26 no-input process groups per configuration, hidden-startup checks,
+NSIS/integrity and the full packaged desktop/capture/peer checks. Independent source
+review cleared its corrected terminal ingress. [Evidence, hashes and limits](evidence/2026-11-09-direct-native-stop.md).
+No active-input or physical-device result is inferred.
+
 ## November 9 session cancellation
 
 The observer correction `11f6508` passed full exact-SHA Windows CI42677575263.

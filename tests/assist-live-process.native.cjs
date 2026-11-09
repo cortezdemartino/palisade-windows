@@ -53,6 +53,19 @@ test('actual owned monitor waits for a delayed descendant after coordinator exit
   assert.equal(life.status().holders, 0);
 });
 
+test('owned shutdown retains terminal ingress after the native stop event precedes queued frames', async () => {
+  for (let i = 0; i < 8; i++) {
+    const life = createAssistLifecycle();
+    const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true });
+    // Monitor signals its native event before forwarding Shutdown. Earlier
+    // ordinary frames may still be queued in the independent pipe writer.
+    const pending = Promise.allSettled(Array.from({ length: 4 }, () => channel.probeWait(1000)));
+    await channel.close();
+    assert.equal(life.status().holders, 0);
+    assert.ok((await pending).every(result => result.status === 'rejected'));
+  }
+});
+
 test('actual owned monitor keeps shutdown independent of eight stalled requests', async () => {
   const life = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true });
