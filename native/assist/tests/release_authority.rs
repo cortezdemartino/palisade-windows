@@ -788,3 +788,239 @@ fn first_terminal_release_with_failed_mirror_flush_is_retained_by_drop() {
         "retry only the mirror; never a second UP"
     );
 }
+
+fn managed(gate: &mut SessionGate, trace: Rc<RefCell<Trace>>) -> Executor<Fake> {
+    let reservation = gate.reserve_executor().unwrap();
+    Executor::registered(
+        Fake(trace),
+        Arc::new(AtomicBool::new(false)),
+        true,
+        reservation,
+    )
+}
+
+#[test]
+fn registered_cleanup_is_one_shot_and_keeps_resource_authority_and_deadline() {
+    let (mut gate, now) = setup(&["control_mouse", "clipboard_to_host"]);
+    let deadline = gate.deadline();
+    let generation = gate.highest_generation();
+    let trace = Rc::new(RefCell::new(Trace::default()));
+    let mut executor = managed(&mut gate, trace.clone());
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &fixtures()["scenarios"][0]["steps"][0]["message"],
+        now,
+    )
+    .unwrap();
+    assert!(matches!(
+        gate.require_input_cleanup(),
+        Err("input-still-authorized")
+    ));
+    gate.suspend_input();
+    let requirement = gate.require_input_cleanup().unwrap();
+    assert!(matches!(
+        gate.require_input_cleanup(),
+        Err("cleanup-pending")
+    ));
+    assert!(matches!(gate.reserve_executor(), Err("cleanup-pending")));
+    trace.borrow_mut().fail_empty_intents = 1;
+    assert!(matches!(
+        executor.release_for(&requirement, &source()),
+        Err("mirror-unconfirmed")
+    ));
+    assert!(!executor.held());
+    assert!(!executor.yield_cleanup_complete());
+    assert!(
+        gate.authorize(
+            "sgrant_release_clipboard1",
+            "clipboard_to_host",
+            now,
+            Instant::now()
+        )
+        .is_ok()
+    );
+    let receipt = executor.release_for(&requirement, &source()).unwrap();
+    assert!(matches!(
+        executor.release_for(&requirement, &source()),
+        Err("cleanup-replayed")
+    ));
+    gate.accept_input_cleanup(receipt).unwrap();
+    assert!(
+        gate.authorize(
+            "sgrant_release_clipboard1",
+            "clipboard_to_host",
+            now,
+            Instant::now()
+        )
+        .is_ok()
+    );
+    assert!(
+        gate.authorize(
+            "sgrant_release_mouse_0001",
+            "control_mouse",
+            now,
+            Instant::now()
+        )
+        .is_err()
+    );
+    assert_eq!(gate.deadline(), deadline);
+    assert_eq!(gate.highest_generation(), generation);
+    assert_eq!(
+        trace.borrow().applied.len(),
+        2,
+        "retry cannot inject another UP"
+    );
+    assert!(
+        matches!(gate.reserve_executor(), Err("not-granted")),
+        "cleanup never restores input permission"
+    );
+}
+
+#[test]
+fn empty_or_foreign_executor_cannot_satisfy_a_registered_cleanup_requirement() {
+    let (mut gate, _) = setup(&["control_mouse"]);
+    let mut executor = managed(&mut gate, Rc::new(RefCell::new(Trace::default())));
+    gate.suspend_input();
+    let requirement = gate.require_input_cleanup().unwrap();
+    let mut empty = Executor::new(
+        Fake(Rc::new(RefCell::new(Trace::default()))),
+        Arc::new(AtomicBool::new(false)),
+        true,
+    );
+    assert!(matches!(
+        empty.release_for(&requirement, &source()),
+        Err("executor-binding-mismatch")
+    ));
+    let (mut other, _) = setup(&["control_mouse"]);
+    let mut foreign = managed(&mut other, Rc::new(RefCell::new(Trace::default())));
+    assert!(matches!(
+        foreign.release_for(&requirement, &source()),
+        Err("executor-binding-mismatch")
+    ));
+    gate.accept_input_cleanup(executor.release_for(&requirement, &source()).unwrap())
+        .unwrap();
+}
+
+#[test]
+fn wrong_gate_consumes_no_matching_cleanup_and_cannot_clear_its_own_executor() {
+    let (mut a, _) = setup(&["control_mouse"]);
+    let (mut b, _) = setup(&["control_mouse"]);
+    let mut executor_a = managed(&mut a, Rc::new(RefCell::new(Trace::default())));
+    let mut executor_b = managed(&mut b, Rc::new(RefCell::new(Trace::default())));
+    a.suspend_input();
+    b.suspend_input();
+    let request_a = a.require_input_cleanup().unwrap();
+    let request_b = b.require_input_cleanup().unwrap();
+    let wrong = executor_a.release_for(&request_a, &source()).unwrap();
+    assert_eq!(b.accept_input_cleanup(wrong), Err("cleanup-stale"));
+    assert!(matches!(b.reserve_executor(), Err("cleanup-pending")));
+    b.accept_input_cleanup(executor_b.release_for(&request_b, &source()).unwrap())
+        .unwrap();
+    assert!(
+        matches!(a.require_input_cleanup(), Err("cleanup-pending")),
+        "a wrong-gate attempt cannot complete its original gate either"
+    );
+}
+
+#[test]
+fn unstarted_reservation_is_linear_and_cancellation_invalidates_prior_permits() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let message = palisade_assist_guardian::input::parse(
+        &release("sgrant_release_mouse_0001", 1).to_string(),
+    )
+    .unwrap();
+    let t = Instant::now();
+    let old = gate.permit(&message, 1, now, t).unwrap();
+    let reservation = gate.reserve_executor().unwrap();
+    assert!(matches!(gate.reserve_executor(), Err("cleanup-pending")));
+    gate.cancel_unstarted_executor(reservation).unwrap();
+    assert!(gate.validate_permit(&old, 1, now, t).is_err());
+    let reservation = gate.reserve_executor().unwrap();
+    let next = palisade_assist_guardian::input::parse(
+        &release("sgrant_release_mouse_0001", 2).to_string(),
+    )
+    .unwrap();
+    let _admitted = gate.permit(&next, 1, now, t).unwrap();
+    assert_eq!(
+        gate.cancel_unstarted_executor(reservation),
+        Err("executor-binding-mismatch")
+    );
+    assert!(matches!(gate.reserve_executor(), Err("cleanup-pending")));
+    let (mut resources, _) = setup(&["clipboard_to_host"]);
+    assert!(matches!(resources.reserve_executor(), Err("not-granted")));
+}
+
+#[test]
+fn permit_minted_before_registration_cannot_be_used_by_registered_executor() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let message = palisade_assist_guardian::input::parse(
+        &release("sgrant_release_mouse_0001", 1).to_string(),
+    )
+    .unwrap();
+    let t = Instant::now();
+    let old = gate.permit(&message, 1, now, t).unwrap();
+    let trace = Rc::new(RefCell::new(Trace::default()));
+    let mut executor = managed(&mut gate, trace.clone());
+    assert_eq!(
+        executor.dispatch(old, &mut gate, &source(), &message.action, || Ok((now, t))),
+        Err("executor-binding-mismatch")
+    );
+    assert!(trace.borrow().applied.is_empty());
+    let requirement = gate.require_input_cleanup().unwrap();
+    gate.accept_input_cleanup(executor.release_for(&requirement, &source()).unwrap())
+        .unwrap();
+}
+
+#[test]
+fn nonterminal_yield_is_not_a_terminal_cleanup_authorization() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let trace = Rc::new(RefCell::new(Trace {
+        cooperative: true,
+        ..Trace::default()
+    }));
+    let mut executor = managed(&mut gate, trace);
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &fixtures()["scenarios"][0]["steps"][0]["message"],
+        now,
+    )
+    .unwrap();
+    let authority = gate
+        .input_authority(&source(), now, Instant::now())
+        .unwrap();
+    let scheduler = LocalYield::new(authority);
+    executor
+        .yield_owned(&source(), scheduler.local_holds())
+        .unwrap();
+    assert!(executor.yield_cleanup_complete());
+    assert!(matches!(
+        gate.require_input_cleanup(),
+        Err("input-still-authorized")
+    ));
+    assert!(matches!(gate.reserve_executor(), Err("cleanup-pending")));
+    gate.suspend_input();
+    let requirement = gate.require_input_cleanup().unwrap();
+    gate.accept_input_cleanup(executor.release_for(&requirement, &source()).unwrap())
+        .unwrap();
+}
+
+#[test]
+fn input_cleanup_receipt_remains_valid_after_resource_revocation_or_session_end() {
+    for ended in [false, true] {
+        let (mut gate, _) = setup(&["control_mouse", "clipboard_to_host"]);
+        let mut executor = managed(&mut gate, Rc::new(RefCell::new(Trace::default())));
+        gate.suspend_input();
+        let requirement = gate.require_input_cleanup().unwrap();
+        if ended {
+            gate.stop();
+        } else {
+            gate.revoke("sgrant_release_clipboard1");
+        }
+        gate.accept_input_cleanup(executor.release_for(&requirement, &source()).unwrap())
+            .unwrap();
+        assert_eq!(gate.ended(), ended);
+        assert!(gate.reserve_executor().is_err());
+    }
+}

@@ -76,6 +76,38 @@ pub struct StreamRuntime {
     lease_cancel: Arc<AtomicBool>,
     cleanup_failed: bool,
 }
+fn release_registered_input(
+    gate: &Arc<Mutex<SessionGate>>,
+    executor: &mut Executor<ProcessInput>,
+    source: &Source,
+    stop: &AtomicBool,
+) -> Result<(), &'static str> {
+    let requirement = gate
+        .lock()
+        .map_err(|_| "input-cleanup-gate")?
+        .require_input_cleanup()?;
+    loop {
+        match executor.release_for(&requirement, source) {
+            Ok(receipt) => {
+                return gate
+                    .lock()
+                    .map_err(|_| "input-cleanup-gate")?
+                    .accept_input_cleanup(receipt);
+            }
+            // Retain the same requirement, executor and input slot. Protected
+            // desktops or incomplete mirror writes cannot become success.
+            Err("executor-binding-mismatch" | "cleanup-replayed" | "native-input-disabled") => {
+                return Err("input-cleanup-unproven");
+            }
+            Err(_) => {
+                if ordinary_desktop().is_err() {
+                    stop.store(true, Ordering::SeqCst);
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+        }
+    }
+}
 impl StreamRuntime {
     pub fn begin(
         enrolled: EnrolledIdentity<'_>,
@@ -220,22 +252,47 @@ impl StreamRuntime {
                             {
                                 return Err("random-failed");
                             }
-                            let child = ProcessInput::spawn(
+                            let (reservation, start_epoch) = {
+                                let mut gate = worker_gate.lock().map_err(|_| "endpoint-failed")?;
+                                let reservation = gate.reserve_executor()?;
+                                (reservation, gate.input_epoch())
+                            };
+                            let child = match ProcessInput::spawn(
                                 usize::from_le_bytes(tag),
                                 false,
                                 &manifest,
                                 owner.as_ref().ok_or("input-owner-required")?,
-                            )?;
+                            ) {
+                                Ok(child) => child,
+                                Err(error) => {
+                                    worker_gate
+                                        .lock()
+                                        .map_err(|_| "endpoint-failed")?
+                                        .cancel_unstarted_executor(reservation)?;
+                                    return Err(error);
+                                }
+                            };
                             executor = Some(
-                                Executor::new(child, worker_input_stop.clone(), true)
-                                    .with_session_stop(worker_stop.clone()),
+                                Executor::registered(
+                                    child,
+                                    worker_input_stop.clone(),
+                                    true,
+                                    reservation,
+                                )
+                                .with_session_stop(worker_stop.clone()),
                             );
-                            active_epoch = Some(
-                                worker_gate
-                                    .lock()
-                                    .map_err(|_| "endpoint-failed")?
-                                    .input_epoch(),
-                            );
+                            let current = {
+                                let mut gate = worker_gate.lock().map_err(|_| "endpoint-failed")?;
+                                gate.input_epoch() == start_epoch
+                                    && gate.input_active(lease::now()?, Instant::now())
+                            };
+                            if !current
+                                || worker_stop.load(Ordering::SeqCst)
+                                || worker_input_stop.load(Ordering::SeqCst)
+                            {
+                                return Err("revoked");
+                            }
+                            active_epoch = Some(start_epoch);
                             worker_ready.store(true, Ordering::SeqCst);
                             Ok::<(), &'static str>(())
                         })();
@@ -275,11 +332,16 @@ impl StreamRuntime {
                             gate.suspend_input();
                         }
                         if let Some(mut child) = executor.take() {
-                            while child.release_owned(&source).is_err() {
-                                if ordinary_desktop().is_err() {
-                                    worker_stop.store(true, Ordering::SeqCst);
-                                }
-                                thread::sleep(Duration::from_millis(100));
+                            if release_registered_input(
+                                &worker_gate,
+                                &mut child,
+                                &source,
+                                &worker_stop,
+                            )
+                            .is_err()
+                            {
+                                worker_stop.store(true, Ordering::SeqCst);
+                                return Err("input-cleanup-unproven");
                             }
                         }
                         owner.take();
@@ -345,15 +407,16 @@ impl StreamRuntime {
                 .stop();
             if let (Some(mut executor), Some(source)) = (executor, worker_source) {
                 {
-                    let source = source.lock().unwrap_or_else(|error| {
-                        failed = true;
-                        error.into_inner()
-                    });
+                    let source = source
+                        .lock()
+                        .unwrap_or_else(|error| {
+                            failed = true;
+                            error.into_inner()
+                        })
+                        .clone();
                     // Fence/reap the child before mirror cleanup; protected desktops
                     // keep only a release retry alive, never new remote input.
-                    while executor.release_owned(&source).is_err() {
-                        thread::sleep(Duration::from_millis(100));
-                    }
+                    release_registered_input(&worker_gate, &mut executor, &source, &worker_stop)?;
                 }
             }
             if failed {

@@ -130,3 +130,18 @@ Native tests compile both feature configurations, exercising fake sinks, owned h
 ## Integration gates
 
 Complete the owned DTLS gateway, capture provenance and versioned page endpoint contract before exposing operations. Reuse one native stop owner. The live watchdog must invalidate/fence and retain cleanup rather than use diagnostic immediate exit. Complete canonical source-end wiring. Native controller exclusion and input/resource separation are implemented internally; qualify their live application integration. Suspended input requires fresh authorization and local approval, never an old grant or renewed lease. Qualify consent, stop, input, lock/sleep, DPI, encryption and recovery on disposable Windows devices. Installation, activation and release need separate owner approval.
+
+
+## Local executor generation binding
+
+The dormant runtime reserves one exact executor in SessionGate before input-child
+startup, then consumes that linear reservation. Registered permits carry this identity;
+the active ProcessInput adapter refuses unregistered dispatch. Terminal cleanup uses
+one gate-issued requirement and a one-shot matching receipt after fence/reap, owned
+release and final mirror acknowledgement. Yield does not satisfy it; another gate or
+empty replacement cannot erase it. The gate does not restore consent, grants or time.
+
+These local Rust tokens are neither deserializable page authority nor crash-surviving
+monitor receipts. Native input remains disabled in the application, same-capability
+reacquisition remains unfinished, and the private process scope is unchanged. See
+[implementation evidence](evidence/2026-11-09-executor-registration.md).

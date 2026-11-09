@@ -249,6 +249,9 @@ pub struct SessionGate {
     instance: u64,
     peer_verified: bool,
     input_age: Option<(crate::input_age::InputAgeGuard, Instant)>,
+    executor: Option<(crate::executor::ExecutorIdentity, bool)>,
+    cleanup_nonce: u64,
+    cleanup_required: Option<u64>,
 }
 pub struct ExecutionPermit {
     instance: u64,
@@ -258,8 +261,12 @@ pub struct ExecutionPermit {
     source_generation: u32,
     until: Instant,
     action: crate::input::Action,
+    executor: Option<crate::executor::ExecutorIdentity>,
 }
 impl ExecutionPermit {
+    pub(crate) fn executor_registration(&self) -> Option<(crate::executor::ExecutorIdentity, u64)> {
+        self.executor.map(|id| (id, self.instance))
+    }
     pub fn matches(&self, action: &crate::input::Action) -> bool {
         self.action == *action
     }
@@ -300,6 +307,9 @@ impl SessionGate {
                 .expect("endpoint instance exhausted"),
             peer_verified: false,
             input_age: None,
+            executor: None,
+            cleanup_nonce: 0,
+            cleanup_required: None,
         }
     }
     fn clock(&mut self, now: u64) -> Result<(), &'static str> {
@@ -349,10 +359,107 @@ impl SessionGate {
         self.grants.insert(g.grant_id.clone(), g.clone());
         Ok(())
     }
+    /// One native execution generation per gate. Reserve before startup/READY;
+    /// there is no replacement while a previous generation remains registered.
+    pub fn reserve_executor(
+        &mut self,
+    ) -> Result<crate::executor::ExecutorReservation, &'static str> {
+        if self.ended {
+            return Err("revoked");
+        }
+        if self.executor.is_some() || self.cleanup_required.is_some() {
+            return Err("cleanup-pending");
+        }
+        if !self
+            .grants
+            .values()
+            .any(|g| is_input(&g.capability) && !self.revoked.contains(&g.grant_id))
+        {
+            return Err("not-granted");
+        }
+        let identity = crate::executor::ExecutorIdentity::fresh()?;
+        self.executor = Some((identity, false));
+        Ok(crate::executor::ExecutorReservation {
+            identity,
+            instance: self.instance,
+        })
+    }
+    /// The still-linear reservation proves no Executor can have consumed it.
+    /// Once a registered permit exists, cancellation is no longer sufficient.
+    pub fn cancel_unstarted_executor(
+        &mut self,
+        reservation: crate::executor::ExecutorReservation,
+    ) -> Result<(), &'static str> {
+        if reservation.instance != self.instance
+            || self.executor != Some((reservation.identity, false))
+            || self.cleanup_required.is_some()
+        {
+            return Err("executor-binding-mismatch");
+        }
+        let next_epoch = self
+            .input_epoch
+            .checked_add(1)
+            .ok_or("input-epoch-exhausted")?;
+        self.executor = None;
+        self.input_epoch = next_epoch;
+        Ok(())
+    }
+    pub fn require_input_cleanup(
+        &mut self,
+    ) -> Result<crate::executor::InputCleanupRequirement, &'static str> {
+        if self
+            .grants
+            .values()
+            .any(|g| is_input(&g.capability) && !self.revoked.contains(&g.grant_id))
+        {
+            return Err("input-still-authorized");
+        }
+        if self.cleanup_required.is_some() {
+            return Err("cleanup-pending");
+        }
+        let (identity, _) = self.executor.ok_or("executor-required")?;
+        let nonce = self
+            .cleanup_nonce
+            .checked_add(1)
+            .ok_or("cleanup-epoch-exhausted")?;
+        self.cleanup_nonce = nonce;
+        self.cleanup_required = Some(nonce);
+        Ok(crate::executor::InputCleanupRequirement {
+            identity,
+            instance: self.instance,
+            nonce,
+        })
+    }
+    pub fn accept_input_cleanup(
+        &mut self,
+        receipt: crate::executor::InputCleanupReceipt,
+    ) -> Result<(), &'static str> {
+        let (identity, _) = self.executor.ok_or("cleanup-stale")?;
+        let nonce = self.cleanup_required.ok_or("cleanup-stale")?;
+        if !receipt.matches(identity, self.instance, nonce) {
+            return Err("cleanup-stale");
+        }
+        let next_epoch = self
+            .input_epoch
+            .checked_add(1)
+            .ok_or("input-epoch-exhausted")?;
+        self.executor = None;
+        self.cleanup_required = None;
+        self.input_epoch = next_epoch;
+        Ok(())
+    }
     pub fn consent(&mut self, grant_id: &str, now: u64) -> Result<(), &'static str> {
         self.clock(now)?;
         if !self.grants.contains_key(grant_id) || self.revoked.contains(grant_id) {
             return Err("not-granted");
+        }
+        if self.cleanup_required.is_some()
+            && self
+                .grants
+                .get(grant_id)
+                .is_some_and(|g| is_input(&g.capability))
+        {
+            return Err("cleanup-pending");
         }
         self.consent.insert(grant_id.into());
         Ok(())
@@ -645,6 +752,12 @@ impl SessionGate {
             return Err("stale-generation");
         }
         self.check_sequence(&message.grant, message.sequence, instant, !release)?;
+        if self.cleanup_required.is_some() {
+            return Err("cleanup-pending");
+        }
+        if let Some((_, admitted)) = self.executor.as_mut() {
+            *admitted = true;
+        }
         Ok(ExecutionPermit {
             instance: self.instance,
             epoch: self.input_epoch,
@@ -653,6 +766,7 @@ impl SessionGate {
             source_generation,
             until: instant + Duration::from_millis(100),
             action: message.action.clone(),
+            executor: self.executor.map(|(id, _)| id),
         })
     }
     /// Profile2 authority and sequence checks precede age observation so forged
@@ -809,6 +923,8 @@ impl SessionGate {
         instant: Instant,
     ) -> Result<(), &'static str> {
         if permit.instance != self.instance
+            || permit.executor != self.executor.map(|(id, _)| id)
+            || self.cleanup_required.is_some()
             || permit.epoch != self.input_epoch
             || source_generation != permit.source_generation
             || instant >= permit.until

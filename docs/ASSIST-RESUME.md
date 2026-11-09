@@ -1,5 +1,9 @@
 # Assist continuation checkpoint
 
+## Local executor registration continuation
+
+The parent-loss correction at `5046a0d0d95ddae6da2f31bae580c4542a84d863` passed exact-SHA Windows CI [42620269751](https://github.com/cortezdemartino/palisade-windows/actions/runs/42620269751). The next dormant slice binds local execution permits and terminal cleanup to one exact gate/executor reservation, with one-shot cleanup requirements and receipts. See [evidence and next integration constraints](evidence/2026-11-09-executor-registration.md). It does not yet implement same-capability fresh-grant admission, new peer acquisition or crash-surviving monitor receipts. Do not reset terminal atomics or report full Assist ready.
+
 ## November 9 parent-loss correction
 
 The cooperative scheduler checkpoint is pushed as `ab94c6fda59d37e94c47ae18cbd21d4f519c6372`. Its first exact-SHA CI failed the parent-loss process case. Investigation found libuv kill-on-parent-exit launch policy and broken-stderr panic defects. The new launchers keep native cleanup alive with referenced detached processes; the enhanced test retains all three original process handles and tests clean/forced fixture-parent death with the original four-second deadline. See [evidence](evidence/2026-11-09-native-parent-loss.md). Do not count the failed run as a CI pass.

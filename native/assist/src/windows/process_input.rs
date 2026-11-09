@@ -161,6 +161,9 @@ impl ProcessInput {
     }
 }
 impl Backend for ProcessInput {
+    fn requires_registration(&self) -> bool {
+        !self.probe
+    }
     fn retain_cleanup(&self) -> bool {
         !self.probe
     }

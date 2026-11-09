@@ -1,5 +1,9 @@
 # Validation
 
+## November 9 registered-executor cleanup
+
+202 application tests and 127 native tests per configuration pass, including seven new exact-executor/receipt negative groups. Formatting, strict Clippy, 25 no-input process groups per configuration, NSIS and packaged integrity/desktop/capture/peer checks pass. The local cleanup token is not a crash-surviving monitor proof or a completed fresh-acquisition flow. See [scope and evidence](evidence/2026-11-09-executor-registration.md).
+
 ## November 9 native parent loss
 
 The first cooperative candidate CI failed one process case. The launch-policy and diagnostic fixes, exact retained-handle tests and independent review are documented in [the investigation](evidence/2026-11-09-native-parent-loss.md). Local native/application/process regressions pass; record the successor exact-SHA CI separately and retain the historical failure.

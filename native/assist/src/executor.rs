@@ -8,10 +8,42 @@ use std::{
     collections::BTreeMap,
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
     },
     time::Instant,
 };
+static NEXT_EXECUTOR: AtomicU64 = AtomicU64::new(1);
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct ExecutorIdentity(u64);
+impl ExecutorIdentity {
+    pub(crate) fn fresh() -> Result<Self, &'static str> {
+        NEXT_EXECUTOR
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |n| n.checked_add(1))
+            .map(Self)
+            .map_err(|_| "executor-identity-exhausted")
+    }
+}
+/// Linear native registration, reserved by SessionGate before child startup.
+/// It is not serialized, cloneable, or accepted from a renderer.
+pub struct ExecutorReservation {
+    pub(crate) identity: ExecutorIdentity,
+    pub(crate) instance: u64,
+}
+pub struct InputCleanupRequirement {
+    pub(crate) identity: ExecutorIdentity,
+    pub(crate) instance: u64,
+    pub(crate) nonce: u64,
+}
+pub struct InputCleanupReceipt {
+    identity: ExecutorIdentity,
+    instance: u64,
+    nonce: u64,
+}
+impl InputCleanupReceipt {
+    pub(crate) fn matches(&self, identity: ExecutorIdentity, instance: u64, nonce: u64) -> bool {
+        self.identity == identity && self.instance == instance && self.nonce == nonce
+    }
+}
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Source {
@@ -44,6 +76,9 @@ impl Source {
     }
 }
 pub trait Backend {
+    fn requires_registration(&self) -> bool {
+        false
+    }
     /// True only for an adapter with delivery-time arbitration in ordinary
     /// input AND retained mirror cleanup. The existing OS adapter stays false.
     fn cooperative_ready(&self) -> bool {
@@ -128,6 +163,8 @@ impl Admission {
     }
 }
 pub struct Executor<B: Backend> {
+    identity: ExecutorIdentity,
+    registered_instance: Option<u64>,
     backend: B,
     ledger: Ledger,
     // The combined ledger remains the write-ahead process cleanup mirror.
@@ -139,6 +176,7 @@ pub struct Executor<B: Backend> {
     last_source: Option<Source>,
     epoch: Option<u64>,
     cleanup_pending: bool,
+    receipt_issued: bool,
 }
 impl<B: Backend> Executor<B> {
     pub fn heartbeat(
@@ -164,6 +202,9 @@ impl<B: Backend> Executor<B> {
     }
     pub fn new(backend: B, stop: Arc<AtomicBool>, enabled: bool) -> Self {
         Self {
+            // Keep zero outside the managed reservation identity space.
+            identity: ExecutorIdentity::fresh().unwrap_or(ExecutorIdentity(0)),
+            registered_instance: None,
             backend,
             ledger: Ledger::default(),
             owners: BTreeMap::new(),
@@ -173,7 +214,19 @@ impl<B: Backend> Executor<B> {
             last_source: None,
             epoch: None,
             cleanup_pending: false,
+            receipt_issued: false,
         }
+    }
+    pub fn registered(
+        backend: B,
+        stop: Arc<AtomicBool>,
+        enabled: bool,
+        reservation: ExecutorReservation,
+    ) -> Self {
+        let mut executor = Self::new(backend, stop, enabled);
+        executor.identity = reservation.identity;
+        executor.registered_instance = Some(reservation.instance);
+        executor
     }
     pub fn with_session_stop(mut self, stop: Arc<AtomicBool>) -> Self {
         self.session_stop = Some(stop);
@@ -252,6 +305,15 @@ impl<B: Backend> Executor<B> {
             }
             if !permit.matches(action) {
                 return Err("binding-mismatch");
+            }
+            let registration = permit.executor_registration();
+            if registration
+                != self
+                    .registered_instance
+                    .map(|instance| (self.identity, instance))
+                || (self.backend.requires_registration() && registration.is_none())
+            {
+                return Err("executor-binding-mismatch");
             }
             action.validate()?;
             self.backend.prepare()?;
@@ -425,6 +487,29 @@ impl<B: Backend> Executor<B> {
     }
     pub fn yield_cleanup_complete(&self) -> bool {
         !self.cleanup_pending && !self.ledger.held()
+    }
+    /// A terminal receipt belongs to this exact registered executor. Ordinary
+    /// yield, a fresh empty replacement and failed mirror sync cannot issue it.
+    pub fn release_for(
+        &mut self,
+        requirement: &InputCleanupRequirement,
+        source: &Source,
+    ) -> Result<InputCleanupReceipt, &'static str> {
+        if requirement.identity != self.identity
+            || self.registered_instance != Some(requirement.instance)
+        {
+            return Err("executor-binding-mismatch");
+        }
+        if self.receipt_issued {
+            return Err("cleanup-replayed");
+        }
+        self.release_owned(source)?;
+        self.receipt_issued = true;
+        Ok(InputCleanupReceipt {
+            identity: self.identity,
+            instance: requirement.instance,
+            nonce: requirement.nonce,
+        })
     }
 }
 impl<B: Backend> Drop for Executor<B> {
