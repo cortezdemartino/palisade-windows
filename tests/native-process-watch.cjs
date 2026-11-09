@@ -10,7 +10,8 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $owned = @()
 try {
-  $items = ConvertFrom-Json -InputObject $env:PALISADE_TEST_PROCESS_HANDLES
+  [Console]::Out.WriteLine('observer-ready')
+  $items = ConvertFrom-Json -InputObject ([Console]::In.ReadLine())
   if ($items.Count -lt 1 -or $items.Count -gt 3) { throw 'Unexpected process count' }
   foreach ($item in $items) {
     if ($item.pid -le 0 -or $item.role -notin @('monitor','coordinator','holder')) { throw 'Invalid fixture identity' }
@@ -38,44 +39,73 @@ try {
   foreach ($item in $owned) { $item.process.Dispose() }
 }
 `;
-async function watchProcesses(binary, entries) {
+async function prepareProcessWatcher(binary) {
   const observer = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand',
     Buffer.from(script, 'utf16le').toString('base64')], {
     windowsHide: true, shell: false, stdio: ['pipe', 'pipe', 'pipe'],
-    env: { ...process.env, PALISADE_TEST_PROCESS_HANDLES: JSON.stringify(entries),
-      PALISADE_TEST_PROCESS_IMAGE: binary },
+    env: { ...process.env, PALISADE_TEST_PROCESS_IMAGE: binary },
   });
   observer.stdin.on('error', () => {});
   let errors = ''; observer.stderr.on('data', bytes => { errors = (errors + bytes).slice(-4096); });
   const lines = createInterface({ input: observer.stdout });
   const result = [];
   let streamFailed = false;
+  let retainedResolve, retainedReject;
+  const retained = new Promise((resolve, reject) => { retainedResolve = resolve; retainedReject = reject; });
+  void retained.catch(() => {});
   const ready = new Promise((resolve, reject) => {
-    lines.on('line', line => { result.push(line); if (line === 'handles-retained') resolve(); });
+    lines.on('line', line => {
+      result.push(line);
+      if (line === 'observer-ready') resolve();
+      if (line === 'handles-retained') retainedResolve();
+    });
     observer.once('error', reject);
-    const streamError = error => { streamFailed = true; reject(error); };
+    observer.once('error', retainedReject);
+    const streamError = error => { streamFailed = true; reject(error); retainedReject(error); };
     observer.stdout.once('error', streamError);
     lines.once('error', streamError);
-    observer.once('exit', code => { if (!result.includes('handles-retained')) reject(Error('Process observer ended: ' + code + ' ' + errors)); });
+    observer.once('close', code => {
+      const error = Error('Process observer ended: ' + code + ' ' + errors);
+      if (!result.includes('observer-ready')) reject(error);
+      if (!result.includes('handles-retained')) retainedReject(error);
+    });
   });
   // Only this read-only observer is reaped on harness failure. It neither
   // signals nor terminates any observed process, and has no Assist authority.
-  const timer = setTimeout(() => observer.kill(), 12_000);
+  let timer = setTimeout(() => observer.kill(), 12_000);
+  function deadline(milliseconds) {
+    clearTimeout(timer);
+    timer = setTimeout(() => observer.kill(), milliseconds);
+  }
   // Exit can precede stdout drain. Validate the terminal JSON only after close.
   const closed = once(observer, 'close');
   closed.catch(() => {}); // Ready failures also own and report a failed launch.
   try { await ready; } catch (error) { clearTimeout(timer); observer.kill(); throw error; }
+  deadline(12_000); // Retention setup has its own bound after cold shell startup.
+  let registered = false;
   return {
+    async retain(entries) {
+      assert.equal(registered, false, 'Process observer already registered');
+      registered = true;
+      observer.stdin.write(JSON.stringify(entries) + '\n');
+      await retained;
+    },
     async finish(timeout = 4000) {
+      assert.equal(registered, true, 'Process observer not registered');
+      await retained;
+      // The native assertion remains four seconds; allow only output/observer
+      // teardown beyond that, measured separately from shell startup.
+      deadline(6000);
       observer.stdin.end(String(timeout) + '\n');
       const [code] = await closed;
       clearTimeout(timer);
       assert.equal(code, 0, errors);
       assert.equal(streamFailed, false, 'Process observer output failed');
-      assert.equal(result.length, 2, 'Unexpected observer protocol: ' + result.join('\n'));
-      return JSON.parse(result[1]);
+      assert.equal(result.length, 3, 'Unexpected observer protocol: ' + result.join('\n'));
+      assert.deepEqual(result.slice(0, 2), ['observer-ready', 'handles-retained']);
+      return JSON.parse(result[2]);
     },
     close() { clearTimeout(timer); observer.kill(); lines.close(); },
   };
 }
-module.exports = { watchProcesses };
+module.exports = { prepareProcessWatcher };

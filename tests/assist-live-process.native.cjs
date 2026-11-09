@@ -6,7 +6,7 @@ const path = require('node:path'), { spawn } = require('node:child_process');
 const { once } = require('node:events'), { randomBytes } = require('node:crypto');
 const { openLiveChannel, PROTOCOL } = require('../src/assist/live-channel.cjs');
 const { createAssistLifecycle } = require('../src/assist/lifecycle.cjs');
-const { watchProcesses } = require('./native-process-watch.cjs');
+const { prepareProcessWatcher } = require('./native-process-watch.cjs');
 const binary = process.env.PALISADE_ASSIST_TEST_BINARY || path.resolve('.assist/Palisade-Assist.exe');
 const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('src/assist/guardian-integrity.json');
 const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: randomBytes(32).toString('base64url') };
@@ -118,6 +118,10 @@ test('owned monitor crash cannot manufacture a successful lifecycle proof', asyn
 
 test('owned parent death revokes the monitor and its coordinator without ordinary dispatch', async () => {
   for (const forced of [false, true]) {
+  // PowerShell startup must precede the bounded event-only survivor. A cold CI
+  // shell can take longer than that probe's six-second lifetime. Keep both the
+  // native timeout and the four-second post-parent-death assertion unchanged.
+  const observer = await prepareProcessWatcher(binary);
   const script = String.raw`const {openLiveChannel}=require(process.argv[3]);
     const {createAssistLifecycle}=require(process.argv[4]);
     openLiveChannel({binary:process.argv[1],manifestFile:process.argv[2],lifecycle:createAssistLifecycle(),probe:true,ownedTree:true})
@@ -136,7 +140,6 @@ test('owned parent death revokes the monitor and its coordinator without ordinar
   const lines = require('node:readline').createInterface({ input: parent.stdout });
   const exited = once(parent, 'exit');
   const timer = setTimeout(() => parent.kill(), 10_000);
-  let observer;
   try {
     const [text] = await Promise.race([once(lines, 'line'), exited.then(([code]) => {
       throw Error('Fixture parent ended before process registration: ' + code + ' ' + diagnostic);
@@ -144,7 +147,7 @@ test('owned parent death revokes the monitor and its coordinator without ordinar
     const pids = JSON.parse(text);
     assert.equal(new Set(pids).size, 3);
     assert.ok(pids.every(pid => Number.isInteger(pid) && pid > 0));
-    observer = await watchProcesses(binary, pids.map((pid, index) => ({ pid, role: ['monitor', 'coordinator', 'holder'][index] })));
+    await observer.retain(pids.map((pid, index) => ({ pid, role: ['monitor', 'coordinator', 'holder'][index] })));
     if (forced) parent.kill(); // Only this disposable no-authority Node fixture.
     else parent.stdin.end('exit\n');
     const [code, signal] = await exited;

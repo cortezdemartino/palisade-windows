@@ -1,5 +1,15 @@
 # Assist continuation checkpoint
 
+## Cold observer startup correction
+
+The endpoint-key checkpoint `e4e5332` failed exact-SHA CI 42676519053 in the
+parent-loss fixture before process-handle retention. The observer now starts
+before the six-second event-only holder; native timeouts, the four-second
+post-parent-death assertion and required exit codes are unchanged. See
+[evidence](evidence/2026-11-09-process-observer-startup.md). Continue native
+launch-owned registry/runtime and positive cleanup work after checking the
+successor CI; full Assist is unfinished.
+
 ## Operational endpoint signer continuation
 
 Local executor registration at `3fc0e1406b2528d09ad16c5d93086bf6ab5c06ed` passed exact-SHA CI [42625418856](https://github.com/cortezdemartino/palisade-windows/actions/runs/42625418856). A separate operational endpoint key type now protects the native API from accidentally reusing the preserved DPAPI installation signer after restart. See [evidence and remaining owner/tombstone work](evidence/2026-11-09-operational-endpoint-key.md). The frozen manifest v3 is now pinned from `01ae585`, with all 30 acceptance cases and unchanged protocol/fixture bytes. The real authority owner must still retain one key per launch, perform fresh canonical enrollment and prevent in-launch session resets. Live native runtime, fresh acquisition and resource integration remain unfinished.
