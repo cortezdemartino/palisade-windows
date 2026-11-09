@@ -1,5 +1,11 @@
 # Native Assist components
 
+## M4G-WEB-6 release ownership
+
+The current inactive executor keeps per-gate/grant held-input ownership derived from validated native permits, alongside its combined write-ahead cleanup ledger. V2 `release-all` accepts the carried mouse or keyboard grant and releases only its owner's scope; ordinary UP and repeats cannot take another owner's holds. Releases bypass ordinary input rate tokens while retaining current authority and replay checks. Independent terminal fence/release still clears all endpoint-owned input. [Evidence](evidence/2026-11-08-release-authority.md).
+
+Cooperative local host/helper input remains Planned. Current local activity monitoring terminates control; a future negotiated local-yield scheduler must preserve local priority without restoring terminally revoked input. Overlapping physical/injected holds require native ownership tracking and real device acceptance before activation.
+
 ## November 8 Profile 2 continuation
 
 Companion refreshed read-only at `ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6`; Windows began at `87daf784daa48d1ce3b64460dcf67fa27cb71a93`. Docs/51 now defines the full added web contracts. Native Profile 2 parsing, key/button/Unicode execution and authoritative age/queue admission are implemented as an inactive component. [Scope and evidence](evidence/2026-11-08-profile2-native.md). Full live coordinator, crash-surviving cleanup, protected approval UI, fresh control generations and extension v2 resources remain unfinished. Do not ask Claude to recreate the new contracts. The mouse-only release-all defect is tracked in Windows #4.

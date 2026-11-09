@@ -263,6 +263,10 @@ impl ExecutionPermit {
     pub fn matches(&self, action: &crate::input::Action) -> bool {
         self.action == *action
     }
+    /// Created only after native authorization; never supplied by a packet.
+    pub(crate) fn owner(&self) -> (u64, String) {
+        (self.instance, self.grant.clone())
+    }
 }
 impl SessionGate {
     pub fn new(
@@ -431,8 +435,10 @@ impl SessionGate {
         }
         let g = self.grants.get(grant_id).ok_or("not-granted")?;
         let l = self.lease.as_ref().ok_or("not-granted")?;
-        if self.revoked.contains(grant_id)
-            || !self.consent.contains(grant_id)
+        if self.revoked.contains(grant_id) {
+            return Err("revoked");
+        }
+        if !self.consent.contains(grant_id)
             || g.capability != capability
             || !l.grants.iter().any(|v| v == grant_id)
             || g.generation > l.generation
@@ -459,17 +465,28 @@ impl SessionGate {
         {
             return Err("stale-generation");
         }
+        self.check_sequence(grant_id, sequence, instant, true)
+    }
+    fn check_sequence(
+        &mut self,
+        grant_id: &str,
+        sequence: u32,
+        instant: Instant,
+        rate_limited: bool,
+    ) -> Result<(), &'static str> {
         if self.sequences.get(grant_id).is_some_and(|&n| sequence <= n) {
             return Err("replay");
         }
-        self.rate.1 =
-            (self.rate.1 + instant.duration_since(self.rate.0).as_secs_f64() * 120.0).min(240.0);
-        self.rate.0 = instant;
-        if self.rate.1 < 1.0 {
-            self.stop();
-            return Err("rate-limited");
+        if rate_limited {
+            self.rate.1 = (self.rate.1 + instant.duration_since(self.rate.0).as_secs_f64() * 120.0)
+                .min(240.0);
+            self.rate.0 = instant;
+            if self.rate.1 < 1.0 {
+                self.stop();
+                return Err("rate-limited");
+            }
+            self.rate.1 -= 1.0;
         }
-        self.rate.1 -= 1.0;
         self.sequences.insert(grant_id.into(), sequence);
         Ok(())
     }
@@ -603,21 +620,36 @@ impl SessionGate {
             crate::input::Action::Move { .. }
             | crate::input::Action::Button { .. }
             | crate::input::Action::Wheel { .. } => "control_mouse",
+            crate::input::Action::ReleaseAll => self
+                .grants
+                .get(&message.grant)
+                .filter(|g| is_input(&g.capability))
+                .map(|g| g.capability.as_str())
+                .ok_or("not-granted")?,
             _ => "control_keyboard",
-        };
-        self.check_message(
-            &message.grant,
-            capability,
-            message.generation,
-            message.sequence,
-            now,
-            instant,
-        )?;
+        }
+        .to_owned();
+        // Releases keep all authority and replay checks, but cannot be starved
+        // by the ordinary input budget. The executor still enforces ownership.
+        let release = matches!(
+            message.action,
+            crate::input::Action::ReleaseAll
+                | crate::input::Action::Key { down: false, .. }
+                | crate::input::Action::Button { down: false, .. }
+        );
+        if self
+            .authorize(&message.grant, &capability, now, instant)?
+            .generation
+            != message.generation
+        {
+            return Err("stale-generation");
+        }
+        self.check_sequence(&message.grant, message.sequence, instant, !release)?;
         Ok(ExecutionPermit {
             instance: self.instance,
             epoch: self.input_epoch,
             grant: message.grant.clone(),
-            capability: capability.into(),
+            capability,
             source_generation,
             until: instant + Duration::from_millis(100),
             action: message.action.clone(),

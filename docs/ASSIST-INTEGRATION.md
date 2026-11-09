@@ -1,5 +1,11 @@
 # Windows Assist integration
 
+## M4G-WEB-6 release-authority integration
+
+Current Profile 2 contracts are pinned to companion `5b82bc90e4997f35dd18273427c258fe54eefb95`. Native `release-all` now uses the carried mouse or keyboard grant and releases only that native gate/grant owner's input. Ordinary UP events also require ownership; independent fenced teardown still releases all endpoint-owned input. The eight canonical fixture families and 23-case acceptance inventory are pinned, not marked as executed. See [component evidence](evidence/2026-11-08-release-authority.md).
+
+The owner requires cooperative mouse/keyboard use with local host priority. This is **Planned**, not implemented: current native activity monitoring stops input on any local movement. The canonical web contract needs a distinct nonterminal local-yield/readiness transition before this behavior changes. Stop, revocation, security transitions and authority/session loss remain terminal. [Companion request](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+
 ## November 8 Profile 2 continuation
 
 Companion refreshed read-only at `ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6`; Windows began at `87daf784daa48d1ce3b64460dcf67fa27cb71a93`. Docs/51 now defines the full added web contracts. Native Profile 2 parsing, key/button/Unicode execution and authoritative age/queue admission are implemented as an inactive component. [Scope and evidence](evidence/2026-11-08-profile2-native.md). Full live coordinator, crash-surviving cleanup, protected approval UI, fresh control generations and extension v2 resources remain unfinished. Do not ask Claude to recreate the new contracts. The mouse-only release-all defect is tracked in Windows #4.

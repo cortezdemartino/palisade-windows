@@ -5,6 +5,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     sync::{
         Arc,
         atomic::{AtomicBool, Ordering},
@@ -66,6 +67,9 @@ pub trait Backend {
 pub struct Executor<B: Backend> {
     backend: B,
     ledger: Ledger,
+    // The combined ledger remains the write-ahead process cleanup mirror.
+    // Packet-driven releases use only the native permit's exact owner.
+    owners: BTreeMap<(u64, String), Ledger>,
     stop: Arc<AtomicBool>,
     session_stop: Option<Arc<AtomicBool>>,
     enabled: bool,
@@ -98,6 +102,7 @@ impl<B: Backend> Executor<B> {
         Self {
             backend,
             ledger: Ledger::default(),
+            owners: BTreeMap::new(),
             stop,
             session_stop: None,
             enabled,
@@ -136,6 +141,7 @@ impl<B: Backend> Executor<B> {
             self.backend.prepare()?;
             let (now, t) = clock()?;
             gate.validate_permit(&permit, source.generation, now, t)?;
+            let owner = permit.owner();
             self.epoch = Some(gate.input_epoch());
             match action {
                 Action::Move { source_gen, .. }
@@ -147,15 +153,21 @@ impl<B: Backend> Executor<B> {
                 }
                 _ => (),
             }
+            let owned = self.owners.get(&owner).cloned().unwrap_or_default();
             let plan = match action {
-                Action::Shortcut(_)
-                | Action::Text(_)
-                | Action::RepeatKey(_)
-                | Action::ReleaseAll => self.ledger.clone().plan(action)?,
+                Action::ReleaseAll => owned.clone().releases(),
+                Action::RepeatKey(_) => owned.clone().plan(action)?,
+                Action::Shortcut(_) | Action::Text(_) => self.ledger.clone().plan(action)?,
                 _ => vec![action.clone()],
             };
             for step in plan {
-                if !self.ledger.owns(&step) {
+                if !self
+                    .owners
+                    .get(&owner)
+                    .cloned()
+                    .unwrap_or_default()
+                    .owns(&step)
+                {
                     continue;
                 }
                 self.backend.validate(source, &step, &self.ledger)?;
@@ -172,7 +184,13 @@ impl<B: Backend> Executor<B> {
                         | Action::Unicode { down: true, .. }
                 );
                 if down {
+                    if self.ledger.is_held(&step)
+                        && !self.owners.get(&owner).is_some_and(|l| l.is_held(&step))
+                    {
+                        return Err("held-input");
+                    }
                     self.ledger.plan(&step)?;
+                    self.owners.entry(owner.clone()).or_default().plan(&step)?;
                     self.backend.intent(&self.ledger)?;
                 }
                 let (now, t) = clock()?;
@@ -183,6 +201,12 @@ impl<B: Backend> Executor<B> {
                 self.backend.apply(source, &step)?;
                 if !down {
                     self.ledger.plan(&step)?;
+                    if let Some(owned) = self.owners.get_mut(&owner) {
+                        owned.plan(&step)?;
+                        if !owned.held() {
+                            self.owners.remove(&owner);
+                        }
+                    }
                     self.backend.intent(&self.ledger)?;
                 }
                 let (now, t) = clock()?;
@@ -215,6 +239,7 @@ impl<B: Backend> Executor<B> {
                 self.ledger.plan(&action)?;
                 self.backend.intent(&self.ledger)?;
             }
+            self.owners.clear();
             Ok(())
         })();
         self.backend.finish();

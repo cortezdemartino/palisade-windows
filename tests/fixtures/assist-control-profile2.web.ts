@@ -556,6 +556,7 @@ export function capabilityFor(
     case 'shortcut':
       return from === 'guest' ? 'control_keyboard' : undefined;
     case 'release-all':
+      // Version 1 only; version 2 accepts either input grant, scoped to it (`authorizes`).
       return from === 'guest' ? 'control_keyboard' : undefined;
     case 'input-move':
     case 'input-button':
@@ -580,6 +581,110 @@ export function capabilityFor(
     case 'file-resume-accept':
       return 'transfer-reply';
   }
+}
+
+/**
+ * Release authority, version 2 (docs/51 §4.5). `release-all` rides on **either** active input
+ * grant of the session — `control_mouse` or `control_keyboard` — and its **scope is that grant**:
+ * under `control_mouse` it releases only the buttons this peer pressed in this session, under
+ * `control_keyboard` only the keys. It never authorizes any other input, never releases input it
+ * did not press (the local person's, another session's or another peer's), and never needs the
+ * other capability. Version 1 (docs/47, pinned) keeps `control_keyboard` (see `capabilityFor`).
+ * The endpoint's own release of everything at revocation, suspension or teardown is separate and
+ * always happens.
+ */
+export const RELEASE_SCOPE = Object.freeze({
+  control_mouse: 'buttons',
+  control_keyboard: 'keys',
+} as const);
+export type ReleaseScope = (typeof RELEASE_SCOPE)[keyof typeof RELEASE_SCOPE];
+
+/** Whether a message of `kind` from `from` may ride on a grant of `capability` (`version`). */
+export function authorizes(
+  kind: ControlKind,
+  from: 'host' | 'guest',
+  capability: Capability,
+  version: 1 | 2,
+): boolean {
+  if (kind === 'release-all' && version === 2) {
+    return from === 'guest' && Object.hasOwn(RELEASE_SCOPE, capability);
+  }
+  return capabilityFor(kind, from) === capability;
+}
+
+type InputMessage = Pick<Envelope, 'session'> & {
+  kind: ControlKind;
+  button?: unknown;
+  code?: unknown;
+  down?: unknown;
+};
+
+/**
+ * Reference receiver bookkeeping for one session's input on one peer (version 2), shared with
+ * native endpoints through `docs/assist-control/v2-release/fixtures.json`. Call `apply` with a
+ * message that already parsed, verified its grant and generation and passed replay and age
+ * checks, together with the capability and current state of the grant it carries. It returns the
+ * releases the endpoint must inject now; presses are executed by the caller and recorded here.
+ */
+export function createOwnedInput(session: string) {
+  const buttons = new Set<string>();
+  const keys = new Set<string>();
+  const none = (): { buttons: string[]; keys: string[] } => ({ buttons: [], keys: [] });
+  return {
+    apply(
+      message: InputMessage,
+      grant: { capability: Capability; active: boolean },
+    ): { buttons: string[]; keys: string[] } {
+      if (message.session !== session) throw new ControlError('binding-mismatch');
+      if (!grant.active) throw new ControlError('revoked');
+      if (!INPUT_KINDS.includes(message.kind)) throw new ControlError('invalid-message');
+      if (!authorizes(message.kind, 'guest', grant.capability, 2)) {
+        throw new ControlError('not-granted');
+      }
+      switch (message.kind) {
+        case 'button':
+        case 'input-button': {
+          const button = String(message.button);
+          if (message.down === true) {
+            buttons.add(button);
+            return none();
+          }
+          // An up for a button this peer never pressed is ignored, never injected.
+          return buttons.delete(button) ? { buttons: [button], keys: [] } : none();
+        }
+        case 'key':
+        case 'input-key': {
+          const code = String(message.code);
+          if (message.down === true) {
+            keys.add(code);
+            return none();
+          }
+          return keys.delete(code) ? { buttons: [], keys: [code] } : none();
+        }
+        case 'release-all': {
+          const scope = RELEASE_SCOPE[grant.capability as keyof typeof RELEASE_SCOPE];
+          const owned = scope === 'buttons' ? buttons : keys;
+          const released = [...owned].sort();
+          owned.clear();
+          return scope === 'buttons'
+            ? { buttons: released, keys: [] }
+            : { buttons: [], keys: released };
+        }
+        default:
+          return none();
+      }
+    },
+    /** Endpoint teardown (revocation, suspension, peer loss, stop): release everything owned. */
+    releaseEverything(): { buttons: string[]; keys: string[] } {
+      const released = { buttons: [...buttons].sort(), keys: [...keys].sort() };
+      buttons.clear();
+      keys.clear();
+      return released;
+    },
+    get held(): { buttons: string[]; keys: string[] } {
+      return { buttons: [...buttons].sort(), keys: [...keys].sort() };
+    },
+  };
 }
 
 const TRANSFER = /^[A-Za-z0-9_-]{16,64}$/;

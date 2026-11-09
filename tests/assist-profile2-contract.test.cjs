@@ -25,7 +25,7 @@ function check(fn, expected) {
   catch(e) { if (e.code === expected) return; throw e; }
 }
 test("pin exact web commit, Git blobs and fixture SHA256", () => {
-  assert.equal(provenance.commit,"ae3542fc0adb9d7f19b3e9a8521fb039555ee7f6");
+  assert.equal(provenance.commit,"5b82bc90e4997f35dd18273427c258fe54eefb95");
   const verified = new Set();
   for(const file of provenance.files) {
     const bytes = Buffer.from(fs.readFileSync(path.join(__dirname,"..",file.local),"utf8").replace(/\r\n/g,"\n"));
@@ -37,6 +37,44 @@ test("pin exact web commit, Git blobs and fixture SHA256", () => {
     }
   }
   assert.deepEqual([...verified].sort(), Object.keys(provenance.fixtureSha256).sort());
+});
+
+test("canonical v2 release authority and ownership match every shared scenario", async () => {
+  const api = await canonical;
+  const fixture = require("./fixtures/assist-control-v2-release.json");
+  assert.deepEqual(api.RELEASE_SCOPE, fixture.releaseScope);
+  assert.equal(api.authorizes("release-all", "guest", "control_mouse", 1), false);
+  assert.equal(api.authorizes("release-all", "guest", "control_keyboard", 1), true);
+  for (const scenario of fixture.scenarios) {
+    const owned = api.createOwnedInput(fixture.session);
+    for (const step of scenario.steps) {
+      if (step.error) {
+        assert.throws(() => owned.apply(step.message, step.grant), e => e.code === step.error, step.name);
+      } else {
+        assert.deepEqual(owned.apply(step.message, step.grant), step.expect, step.name);
+      }
+    }
+    if (scenario.teardown) assert.deepEqual(owned.releaseEverything(), scenario.teardown);
+  }
+});
+
+test("interop manifest agrees with every pinned fixture and preserves the acceptance inventory", () => {
+  const manifest = require("./fixtures/assist-interop-manifest.json");
+  const files = {
+    "control-v1": "assist-control-v1.json", "control-v2": "assist-control-v2.json",
+    "control-v2-schema": "assist-control-v2.schema.json", "control-v2-profile2": "assist-control-v2-profile2.json",
+    "control-v2-release": "assist-control-v2-release.json", "native-v1": "assist-native-v1.json",
+    "native-ext-v1": "assist-native-ext-v1.json", "native-ext-v2": "assist-native-ext-v2.json",
+  };
+  assert.deepEqual(Object.keys(manifest.fixtures).sort(), Object.keys(files).sort());
+  for (const [family, local] of Object.entries(files)) {
+    const bytes = Buffer.from(fs.readFileSync(path.join(root, local), "utf8").replace(/\r\n/g, "\n"));
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), manifest.fixtures[family].sha256, family);
+    assert.equal(createHash("sha1").update("blob " + bytes.length + "\0").update(bytes).digest("hex"), manifest.fixtures[family].gitBlob, family);
+  }
+  assert.equal(manifest.sources["apps/web/src/assist/control/protocol.ts"].gitBlob,
+    provenance.files.find(f => f.source === "apps/web/src/assist/control/protocol.ts").gitBlob);
+  assert.equal(manifest.acceptance.length, 23);
 });
 test("web profile 2 accepts exact valid and refuses invalid kinds",async()=>{
   const api = await canonical;

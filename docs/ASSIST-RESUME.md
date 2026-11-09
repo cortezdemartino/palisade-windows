@@ -1,8 +1,10 @@
 # Assist continuation checkpoint
 
-## Queued after the Windows registration and silent-tray release
+## M4G-WEB-6 integration after desktop v0.3.3
 
-Owner supplied the M4G-WEB-6 handoff for companion commit `5b82bc90e4997f35dd18273427c258fe54eefb95`. Complete the current desktop v0.3.3 work first, then inspect that committed handoff read-only and integrate its canonical changes. This queue does not change existing pinned fixtures or activate Assist.
+Desktop v0.3.3 is published at `5ebca7f4f52f62e0460da47f768323d19a1c4e60`; exact CI/release and six public assets passed signature/hash/discovery verification. The following handoff is now being integrated. Native release authority is a component checkpoint only; see [evidence](evidence/2026-11-08-release-authority.md). Existing v1 sources and the seven earlier fixtures remain unchanged. The owner additionally requires cooperative host/helper input with local priority. Current local-activity hard stop remains unchanged until a canonical nonterminal local-yield contract and native integration are implemented; use the updated [Claude prompt](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+
+Owner supplied the M4G-WEB-6 handoff for companion commit `5b82bc90e4997f35dd18273427c258fe54eefb95`. The desktop maintenance release is complete. Companion inspection remains read-only; the integration does not activate Assist.
 
 1. Read companion `docs/52-ASSIST-WINDOWS-ACCEPTANCE.md`, `docs/51-ASSIST-FEATURE-COMPLETION.md`, `docs/assist-interop/manifest.json` and `docs/evidence/m4g-web-6-integration-acceptance.md`. Verify the source blobs and hashes independently before re-pinning.
 2. The handoff reports a deliberate v2-only change to `protocol.ts`, blob `9d499137d469280c8798e72bed4ef88b56a318c3`; v1 and the seven existing fixtures/extension source remain unchanged. New `docs/assist-control/v2-release/fixtures.json` SHA-256: `1bc0231199e1c342fa885f3dd30bbe84e3db2b671c7b14c083067143bed73cc6`. Interop manifest SHA-256: `4ab9e541ac052fac32ca340a0585848e42cbc0388fde0530c493319d1ce17e03`.

@@ -1,0 +1,397 @@
+{
+  "description": "Release authority for version 2 input (docs/51 §4.5): release-all rides on either active input grant and releases only what this peer pressed under that grant's scope. Version 1 is unchanged.",
+  "contract": "palisade.assist.control v2, profile 2",
+  "session": "sassist_release_fixture_01",
+  "releaseScope": {
+    "control_mouse": "buttons",
+    "control_keyboard": "keys"
+  },
+  "sender": "release-all is sent once under each active input grant the helper holds (control_mouse and/or control_keyboard); never under a resource grant; not rate-limited; sent even into a congested channel.",
+  "scenarios": [
+    {
+      "name": "mouse-only blur: release-all under the mouse grant releases the owned button",
+      "grants": ["control_mouse"],
+      "steps": [
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 1,
+            "kind": "input-button",
+            "button": "left",
+            "down": true,
+            "sourceGen": 1,
+            "t": 1010
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        },
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 2,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": ["left"],
+            "keys": []
+          }
+        },
+        {
+          "name": "a second release-all has nothing left to release",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 3,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "each scope releases only its own kind of input",
+      "grants": ["control_mouse", "control_keyboard"],
+      "steps": [
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 4,
+            "kind": "input-button",
+            "button": "right",
+            "down": true,
+            "sourceGen": 1,
+            "t": 1020
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        },
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_keyboard_01",
+            "gen": 4,
+            "seq": 1,
+            "kind": "input-key",
+            "code": "ShiftLeft",
+            "down": true,
+            "repeat": false,
+            "t": 1030
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        },
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_keyboard_01",
+            "gen": 4,
+            "seq": 2,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": ["ShiftLeft"]
+          }
+        },
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 5,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": ["right"],
+            "keys": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "unowned releases are ignored, never injected",
+      "grants": ["control_mouse"],
+      "steps": [
+        {
+          "name": "nothing pressed by this peer: release-all releases nothing",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 6,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        },
+        {
+          "name": "an up for a button this peer never pressed (the local person's)",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 7,
+            "kind": "input-button",
+            "button": "middle",
+            "down": false,
+            "sourceGen": 1,
+            "t": 1040
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "refusals",
+      "grants": ["control_mouse"],
+      "steps": [
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 8,
+            "kind": "input-button",
+            "button": "left",
+            "down": true,
+            "sourceGen": 1,
+            "t": 1050
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        },
+        {
+          "name": "wrong session",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_02",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 9,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "error": "binding-mismatch"
+        },
+        {
+          "name": "revoked mouse grant: refused (the endpoint already released at revocation)",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 10,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": false
+          },
+          "error": "revoked"
+        },
+        {
+          "name": "a resource grant never carries release-all",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_clipboard1",
+            "gen": 4,
+            "seq": 1,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "clipboard_to_host",
+            "active": true
+          },
+          "error": "not-granted"
+        },
+        {
+          "name": "the keyboard grant never authorizes mouse input (no workaround)",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_keyboard_01",
+            "gen": 4,
+            "seq": 3,
+            "kind": "input-button",
+            "button": "left",
+            "down": false,
+            "sourceGen": 1,
+            "t": 1060
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "error": "not-granted"
+        },
+        {
+          "name": "the refusals left the owned button pressed: the mouse grant still releases it",
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 11,
+            "kind": "release-all"
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": ["left"],
+            "keys": []
+          }
+        }
+      ]
+    },
+    {
+      "name": "endpoint teardown releases everything owned, independently of release-all",
+      "grants": ["control_mouse", "control_keyboard"],
+      "steps": [
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_mouse_0001",
+            "gen": 4,
+            "seq": 12,
+            "kind": "input-button",
+            "button": "back",
+            "down": true,
+            "sourceGen": 1,
+            "t": 1070
+          },
+          "grant": {
+            "capability": "control_mouse",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        },
+        {
+          "message": {
+            "p": "palisade.assist.control",
+            "v": 2,
+            "session": "sassist_release_fixture_01",
+            "grant": "sgrant_release_keyboard_01",
+            "gen": 4,
+            "seq": 4,
+            "kind": "input-key",
+            "code": "ControlLeft",
+            "down": true,
+            "repeat": false,
+            "t": 1080
+          },
+          "grant": {
+            "capability": "control_keyboard",
+            "active": true
+          },
+          "expect": {
+            "buttons": [],
+            "keys": []
+          }
+        }
+      ],
+      "teardown": {
+        "buttons": ["back"],
+        "keys": ["ControlLeft"]
+      }
+    }
+  ]
+}

@@ -1,0 +1,1179 @@
+{
+  "manifest": "palisade.assist.interop",
+  "manifestVersion": 1,
+  "status": "web/backend candidate; gates off; native Windows cases not executed (see acceptance[].native)",
+  "authority": "Only service-issued Ed25519 grants and endpoint leases authorize; capabilities, features, presence and messages never do.",
+  "sources": {
+    "apps/web/src/assist/control/protocol.ts": {
+      "gitBlob": "9d499137d469280c8798e72bed4ef88b56a318c3"
+    },
+    "apps/web/src/assist/control/streamProtocol.ts": {
+      "gitBlob": "f7c3f00dc206c91ab9214042b79113b91e4819c5"
+    },
+    "apps/web/src/assist/native/protocol.ts": {
+      "gitBlob": "62f29f433dbc20de881108b635a97eee3bde6827"
+    },
+    "apps/web/src/assist/native/extension.ts": {
+      "gitBlob": "0619f0d6c98dee247caf27619d117a7154b1c74b"
+    },
+    "apps/web/src/platform/desktopAssistBridge.ts": {
+      "gitBlob": "258c87f84aae1c0a8b91fa7ea16f5127e0ee840d"
+    }
+  },
+  "fixtures": {
+    "control-v1": {
+      "path": "docs/assist-control/v1/fixtures.json",
+      "sha256": "37039a161fd89bfabf5cf0e33dc19b6f2cfa9a79df30c8d259d0c125688a2a22",
+      "gitBlob": "8d903eaff3dea2ed342e51f8f26b0c1a8a205bf4",
+      "rejections": {
+        "binding-mismatch": 5,
+        "expired": 1,
+        "incompatible-protocol": 2,
+        "invalid-message": 10,
+        "too-large": 1
+      }
+    },
+    "control-v2": {
+      "path": "docs/assist-control/v2/fixtures.json",
+      "sha256": "01db46d3978507d6395f3c95030f880ca0f5a255e4edfa928d4317d8736e4f85",
+      "gitBlob": "fa63a8e0d0fb3cb0941780beea2a8cffcfbe1caf",
+      "rejections": {
+        "binding-mismatch": 13,
+        "expired": 2,
+        "incompatible-protocol": 2,
+        "invalid-message": 15,
+        "stale-generation": 1
+      }
+    },
+    "control-v2-schema": {
+      "path": "docs/assist-control/v2/schema.json",
+      "sha256": "965f61cb5534a4ba3ab5fb5e81d44144f609862c527d176d95e741555e223d0c",
+      "gitBlob": "3d875119bf1132389ad2884aab44f40cca58f690",
+      "rejections": {}
+    },
+    "control-v2-profile2": {
+      "path": "docs/assist-control/v2-profile2/fixtures.json",
+      "sha256": "5ea9ea3b3440c379525fc0e8be9cc98860542152ecce8ee4049de9e5d65b5885",
+      "gitBlob": "915cbf90825cdea7756e622935bc8873a1a4332b",
+      "rejections": {
+        "binding-mismatch": 2,
+        "invalid-message": 27,
+        "stale-generation": 1,
+        "unsupported": 3
+      }
+    },
+    "control-v2-release": {
+      "path": "docs/assist-control/v2-release/fixtures.json",
+      "sha256": "1bc0231199e1c342fa885f3dd30bbe84e3db2b671c7b14c083067143bed73cc6",
+      "gitBlob": "c758e97408decf42d06e55968d52f02f1b49193d",
+      "rejections": {
+        "binding-mismatch": 1,
+        "not-granted": 2,
+        "revoked": 1
+      }
+    },
+    "native-v1": {
+      "path": "docs/assist-native/v1/fixtures.json",
+      "sha256": "e621c29b87b1774d8201d72a9ea6cb076c75df35da48d8dfd4338611d5760b1f",
+      "gitBlob": "9fcbf0063721fb47cfb8b4fd536115f81ddebeb7",
+      "rejections": {
+        "invalid-message": 17,
+        "unsupported-version": 1
+      }
+    },
+    "native-ext-v1": {
+      "path": "docs/assist-native/ext-v1/fixtures.json",
+      "sha256": "b2470d6b0ab123be42ecf3d9dd400336d6230284567c33755b32700adcf95429",
+      "gitBlob": "c645d94a924690a9040c7b57cd99a87244e68093",
+      "rejections": {
+        "invalid-message": 18,
+        "unsupported-version": 1
+      }
+    },
+    "native-ext-v2": {
+      "path": "docs/assist-native/ext-v2/fixtures.json",
+      "sha256": "6ccc5cfa26e94b1d534f3b9c8ff4d474f23622acf7100ef0da2e713f37eafdc6",
+      "gitBlob": "39d72ff26de86b2018fb66e6deafab4415d7891d",
+      "rejections": {
+        "invalid-message": 17,
+        "unsupported-version": 4
+      }
+    }
+  },
+  "families": {
+    "bridge": {
+      "protocol": "palisade.assist.bridge",
+      "versions": [1],
+      "doc": "docs/45-ASSIST-CROSS-CLIENT-PROTOCOL.md",
+      "descriptiveOnly": true,
+      "timeoutMs": 3000,
+      "maxReportChars": 2048,
+      "minimumDesktop": "0.3.0"
+    },
+    "native": {
+      "protocol": "palisade.assist.native",
+      "versions": [1],
+      "doc": "docs/49-ASSIST-NATIVE-BRIDGE.md",
+      "operations": [
+        "hello",
+        "enroll.key",
+        "enroll.prove",
+        "grant.offer",
+        "peer.offer",
+        "peer.candidate",
+        "peer.close",
+        "capture.start",
+        "capture.bind",
+        "capture.cancel",
+        "capture.stop",
+        "status",
+        "stop"
+      ],
+      "events": ["peer.candidate", "capture.status", "lifecycle"],
+      "errors": [
+        "unsupported-version",
+        "invalid-message",
+        "busy",
+        "not-enrolled",
+        "issuer-mismatch",
+        "consent-denied",
+        "grant-invalid",
+        "binding-mismatch",
+        "transport-mismatch",
+        "capture-unavailable",
+        "cancelled",
+        "stale-operation",
+        "timeout",
+        "stopped",
+        "internal"
+      ],
+      "limits": {
+        "messageChars": 32768,
+        "sdpChars": 16384,
+        "candidateChars": 1024,
+        "grantChars": 4096,
+        "leaseChars": 2048,
+        "outstanding": 8,
+        "requestTimeoutMs": 120000
+      },
+      "fixtures": ["native-v1"]
+    },
+    "nativeExtension": {
+      "protocol": "palisade.assist.native.ext",
+      "versions": [1, 2],
+      "doc": "docs/50-ASSIST-NATIVE-RESOURCES.md, docs/51-ASSIST-FEATURE-COMPLETION.md §3",
+      "negotiation": "ext.hello is always a version 1 envelope offering [2, 1]; the endpoint answers one version; every later request and event uses it; no answer or an unknown version means the extension is unavailable (never assumed).",
+      "operations": {
+        "1": [
+          "ext.hello",
+          "resource.send-text",
+          "resource.offer-file",
+          "resource.cancel"
+        ],
+        "2": [
+          "ext.hello",
+          "resource.send-text",
+          "resource.offer-file",
+          "resource.cancel",
+          "resource.send-image",
+          "resource.offer-files",
+          "resource.drop-surface",
+          "resource.resume",
+          "resource.sync"
+        ]
+      },
+      "events": {
+        "1": ["resource.status", "cleanup"],
+        "2": ["resource.status", "cleanup", "sync.status"]
+      },
+      "safetyOperations": ["resource.cancel"],
+      "featuresV2": [
+        "cleanupEvents",
+        "clipboardImage",
+        "clipboardSync",
+        "clipboardText",
+        "dropSurface",
+        "fileResume",
+        "files",
+        "input2",
+        "multiFile"
+      ],
+      "errors": [
+        "unsupported-version",
+        "invalid-message",
+        "busy",
+        "consent-denied",
+        "grant-invalid",
+        "not-active",
+        "unsupported",
+        "too-large",
+        "cancelled",
+        "stale-operation",
+        "timeout",
+        "stopped",
+        "internal"
+      ],
+      "fixtures": ["native-ext-v1", "native-ext-v2"]
+    },
+    "control": {
+      "protocol": "palisade.assist.control",
+      "versions": [1, 2],
+      "doc": "docs/47 (v1, direct calls), docs/48 (v2, streams), docs/51 (profile 2)",
+      "capabilities": [
+        "pointer",
+        "annotate",
+        "control_mouse",
+        "control_keyboard",
+        "clipboard_to_host",
+        "clipboard_to_guest",
+        "file_to_host",
+        "file_to_guest"
+      ],
+      "nativeCapabilities": ["control_mouse", "control_keyboard"],
+      "kinds": {
+        "pointer-move": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_mouse",
+            "host": null
+          }
+        },
+        "button": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_mouse",
+            "host": null
+          }
+        },
+        "wheel": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_mouse",
+            "host": null
+          }
+        },
+        "key": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_keyboard",
+            "host": null
+          }
+        },
+        "shortcut": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_keyboard",
+            "host": null
+          }
+        },
+        "release-all": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_keyboard",
+            "host": null
+          }
+        },
+        "clipboard-text": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "clipboard_to_host",
+            "host": "clipboard_to_guest"
+          }
+        },
+        "file-offer": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "file_to_host",
+            "host": "file_to_guest"
+          }
+        },
+        "file-accept": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "transfer-reply",
+            "host": "transfer-reply"
+          }
+        },
+        "file-reject": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "transfer-reply",
+            "host": "transfer-reply"
+          }
+        },
+        "file-cancel": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "transfer-reply",
+            "host": "transfer-reply"
+          }
+        },
+        "file-complete": {
+          "versions": [1, 2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "file_to_host",
+            "host": "file_to_guest"
+          }
+        },
+        "file-receipt": {
+          "versions": [2],
+          "feature": null,
+          "input": false,
+          "authorizedBy": {
+            "guest": "transfer-reply",
+            "host": "transfer-reply"
+          }
+        },
+        "input-move": {
+          "versions": [2],
+          "feature": "input2",
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_mouse",
+            "host": null
+          }
+        },
+        "input-button": {
+          "versions": [2],
+          "feature": "input2",
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_mouse",
+            "host": null
+          }
+        },
+        "input-wheel": {
+          "versions": [2],
+          "feature": "input2",
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_mouse",
+            "host": null
+          }
+        },
+        "input-key": {
+          "versions": [2],
+          "feature": "input2",
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_keyboard",
+            "host": null
+          }
+        },
+        "input-text": {
+          "versions": [2],
+          "feature": "input2",
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_keyboard",
+            "host": null
+          }
+        },
+        "input-shortcut": {
+          "versions": [2],
+          "feature": "input2",
+          "input": true,
+          "authorizedBy": {
+            "guest": "control_keyboard",
+            "host": null
+          }
+        },
+        "clipboard-image": {
+          "versions": [2],
+          "feature": "clipboardImage",
+          "input": false,
+          "authorizedBy": {
+            "guest": "clipboard_to_host",
+            "host": "clipboard_to_guest"
+          }
+        },
+        "clipboard-sync": {
+          "versions": [2],
+          "feature": "clipboardSync",
+          "input": false,
+          "authorizedBy": {
+            "guest": "clipboard_to_host",
+            "host": "clipboard_to_guest"
+          }
+        },
+        "file-resume-offer": {
+          "versions": [2],
+          "feature": "fileResume",
+          "input": false,
+          "authorizedBy": {
+            "guest": "file_to_host",
+            "host": "file_to_guest"
+          }
+        },
+        "file-resume-accept": {
+          "versions": [2],
+          "feature": "fileResume",
+          "input": false,
+          "authorizedBy": {
+            "guest": "transfer-reply",
+            "host": "transfer-reply"
+          }
+        }
+      },
+      "errors": [
+        "incompatible-protocol",
+        "invalid-message",
+        "too-large",
+        "binding-mismatch",
+        "stale-generation",
+        "replay",
+        "not-granted",
+        "expired",
+        "revoked",
+        "endpoint-unavailable",
+        "consent-required",
+        "rate-limited",
+        "transfer-cancelled",
+        "integrity-failure",
+        "unsupported",
+        "stale-input",
+        "held-input"
+      ],
+      "limits": {
+        "messageChars": 16384,
+        "clipboardBytes": 65536,
+        "fileBytes": 1073741824,
+        "chunkBytes": 65536,
+        "concurrentTransfers": 1,
+        "controlPerSecond": 120,
+        "dataPerSecond": 20,
+        "filenameChars": 180,
+        "heldKeys": 16,
+        "imageBytes": 16777216,
+        "imageSide": 16384,
+        "imagePixels": 33554432,
+        "textInputChars": 256,
+        "inputMaxAgeMs": 300
+      },
+      "keyCodes": {
+        "v1": [
+          "KeyA",
+          "KeyB",
+          "KeyC",
+          "KeyD",
+          "KeyE",
+          "KeyF",
+          "KeyG",
+          "KeyH",
+          "KeyI",
+          "KeyJ",
+          "KeyK",
+          "KeyL",
+          "KeyM",
+          "KeyN",
+          "KeyO",
+          "KeyP",
+          "KeyQ",
+          "KeyR",
+          "KeyS",
+          "KeyT",
+          "KeyU",
+          "KeyV",
+          "KeyW",
+          "KeyX",
+          "KeyY",
+          "KeyZ",
+          "Digit0",
+          "Digit1",
+          "Digit2",
+          "Digit3",
+          "Digit4",
+          "Digit5",
+          "Digit6",
+          "Digit7",
+          "Digit8",
+          "Digit9",
+          "F1",
+          "F2",
+          "F3",
+          "F4",
+          "F5",
+          "F6",
+          "F7",
+          "F8",
+          "F9",
+          "F10",
+          "F11",
+          "F12",
+          "ControlLeft",
+          "ControlRight",
+          "ShiftLeft",
+          "ShiftRight",
+          "AltLeft",
+          "AltRight",
+          "Enter",
+          "Escape",
+          "Tab",
+          "Space",
+          "Backspace",
+          "Delete",
+          "Insert",
+          "Home",
+          "End",
+          "PageUp",
+          "PageDown",
+          "ArrowUp",
+          "ArrowDown",
+          "ArrowLeft",
+          "ArrowRight",
+          "Minus",
+          "Equal",
+          "BracketLeft",
+          "BracketRight",
+          "Backslash",
+          "Semicolon",
+          "Quote",
+          "Backquote",
+          "Comma",
+          "Period",
+          "Slash"
+        ],
+        "profile2Added": [
+          "F13",
+          "F14",
+          "F15",
+          "F16",
+          "F17",
+          "F18",
+          "F19",
+          "F20",
+          "F21",
+          "F22",
+          "F23",
+          "F24",
+          "Numpad0",
+          "Numpad1",
+          "Numpad2",
+          "Numpad3",
+          "Numpad4",
+          "Numpad5",
+          "Numpad6",
+          "Numpad7",
+          "Numpad8",
+          "Numpad9",
+          "NumpadAdd",
+          "NumpadSubtract",
+          "NumpadMultiply",
+          "NumpadDivide",
+          "NumpadDecimal",
+          "NumpadEnter",
+          "NumLock",
+          "CapsLock",
+          "ScrollLock",
+          "ContextMenu",
+          "IntlBackslash",
+          "IntlRo",
+          "IntlYen",
+          "KanaMode",
+          "Lang1",
+          "Lang2",
+          "Convert",
+          "NonConvert"
+        ]
+      },
+      "modifiers": [
+        "ControlLeft",
+        "ControlRight",
+        "ShiftLeft",
+        "ShiftRight",
+        "AltLeft",
+        "AltRight"
+      ],
+      "buttonsProfile2": ["left", "middle", "right", "back", "forward"],
+      "imageFormats": ["image/png"],
+      "shortcuts": [
+        "copy",
+        "paste",
+        "cut",
+        "selectAll",
+        "undo",
+        "redo",
+        "save",
+        "find",
+        "nextTab",
+        "previousTab"
+      ],
+      "profile2Features": [
+        "input2",
+        "clipboardImage",
+        "clipboardSync",
+        "fileResume"
+      ],
+      "releaseAuthority": {
+        "v1": "control_keyboard (docs/47, pinned)",
+        "v2": "either active input grant; releases only what this peer pressed under that grant (docs/51 §4.5)",
+        "scope": {
+          "control_mouse": "buttons",
+          "control_keyboard": "keys"
+        }
+      },
+      "fixtures": [
+        "control-v1",
+        "control-v2",
+        "control-v2-schema",
+        "control-v2-profile2",
+        "control-v2-release"
+      ]
+    },
+    "streamGrants": {
+      "version": 2,
+      "doc": "docs/48-ASSIST-STREAM-PROTOCOL.md, docs/51 §5",
+      "grantKeys": [
+        "approvedAt",
+        "capability",
+        "endpoint",
+        "expiresAt",
+        "generation",
+        "grantId",
+        "helperAccount",
+        "helperDevice",
+        "helperTransport",
+        "issuedAt",
+        "issuer",
+        "nonce",
+        "protocol",
+        "publisherAccount",
+        "publisherDevice",
+        "room",
+        "session",
+        "sessionDeadline",
+        "stream",
+        "version"
+      ],
+      "leaseKeys": [
+        "expiresAt",
+        "generation",
+        "grants",
+        "issuedAt",
+        "issuer",
+        "kind",
+        "protocol",
+        "session",
+        "sessionDeadline",
+        "stream",
+        "version"
+      ],
+      "limits": {
+        "defaultDurationMs": 900000,
+        "minDurationMs": 60000,
+        "maxDurationMs": 7200000,
+        "leaseMs": 20000,
+        "skewMs": 30000,
+        "pendingRequests": 32,
+        "solicitations": 4,
+        "requestTtlMs": 600000
+      },
+      "durationChoicesMinutes": [5, 15, 30, 60, 90, 120],
+      "freshAcquisition": "input-request → input-decide: new grantId and nonce, generation strictly higher, the original approvedAt and sessionDeadline, state issued until the endpoint acknowledges; at most 16 per session; a revoked grant is never re-activated.",
+      "endpointStatements": [
+        "palisade.assist.control/endpoint-proof/v2",
+        "palisade.assist.control/endpoint-ack/v2",
+        "palisade.assist.control/endpoint-lease/v2",
+        "palisade.assist.control/endpoint-ice/v2",
+        "palisade.assist.control/endpoint-transport/v2"
+      ],
+      "serviceSessionOperations": [
+        "revoke",
+        "end",
+        "acknowledge",
+        "input-request",
+        "input-decide"
+      ],
+      "serviceEndpointOperations": [
+        "endpoint-proof",
+        "endpoint-revoke",
+        "endpoint-ice",
+        "endpoint-lease",
+        "stopped"
+      ],
+      "serviceRefusals": [
+        "P_ASSIST_ENDED",
+        "P_AUTHORITY_UNAVAILABLE",
+        "P_CONTROLLER_ACTIVE",
+        "P_DURATION",
+        "P_ENDPOINT_PROOF",
+        "P_ENDPOINT_UNAVAILABLE",
+        "P_ESCALATION",
+        "P_FORBIDDEN",
+        "P_GRANT_GONE",
+        "P_INPUT_ACTIVE",
+        "P_INVALID",
+        "P_LIMIT",
+        "P_NOT_ELIGIBLE",
+        "P_NOT_FOUND",
+        "P_REPLAY",
+        "P_REQUEST_GONE",
+        "P_SESSION_ACTIVE",
+        "P_STREAM_ENDED",
+        "P_TRANSPORT_MISMATCH",
+        "P_WRONG_DEVICE"
+      ]
+    }
+  },
+  "acceptance": [
+    {
+      "id": "WIN-P01",
+      "area": "protocol",
+      "title": "Pinned fixtures and web sources match the manifest",
+      "capabilities": [],
+      "fixtures": [
+        "control-v1",
+        "control-v2",
+        "control-v2-schema",
+        "control-v2-profile2",
+        "native-v1",
+        "native-ext-v1",
+        "native-ext-v2"
+      ],
+      "steps": [
+        "Copy each fixture and pinned source; compare SHA-256 and git blob with manifest.fixtures/sources (LF line endings).",
+        "Run the native validators over every valid and invalid case."
+      ],
+      "pass": [
+        "Every hash equal; every valid case accepted; every invalid case refused with its listed error."
+      ],
+      "reject": ["Any hash difference blocks the remaining cases."],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-P02",
+      "area": "protocol",
+      "title": "Extension negotiation and fallback",
+      "capabilities": [],
+      "fixtures": ["native-ext-v1", "native-ext-v2"],
+      "steps": [
+        "Web sends ext.hello (v1 envelope) offering [2, 1].",
+        "Repeat with an endpoint configured for v1 only, and with no extension."
+      ],
+      "pass": [
+        "v2 endpoint answers version 2 and declares only implemented features; later messages use v: 2.",
+        "v1-only endpoint answers 1; the web hides every v2 action.",
+        "No answer: the web shows native resources as unavailable."
+      ],
+      "reject": [
+        "A v2 request inside a v1 session: invalid-message / unsupported-version."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-C01",
+      "area": "capture",
+      "title": "Real OS consent before screen or window capture",
+      "capabilities": [],
+      "fixtures": ["native-v1"],
+      "steps": [
+        "Helper requests Assist; publisher approves in Palisade.",
+        "Endpoint shows its own consent UI (outside the renderer) for capture.start.",
+        "Decline once, then approve and choose a window, then a full display."
+      ],
+      "pass": [
+        "Decline: consent-denied; no track published.",
+        "Approve: an encrypted track is published; the helper sees it; a visible capture indicator is on."
+      ],
+      "reject": [
+        "A renderer click, a keyboard shortcut from the remote side or a page message never counts as consent."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-C02",
+      "area": "capture",
+      "title": "Source replacement and encrypted viewing",
+      "capabilities": [],
+      "fixtures": ["native-v1"],
+      "steps": [
+        "During a session change the shared window, then the display, then stop sharing."
+      ],
+      "pass": [
+        "Each change raises sourceGen; input with the old sourceGen is dropped.",
+        "Media frames on the SFU are ciphertext (E2EE): a non-member subscriber cannot decode them.",
+        "Stop sharing ends input authority for that source."
+      ],
+      "reject": ["Input carrying a previous sourceGen: stale-generation."],
+      "web": "browser-real",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-I01",
+      "area": "input",
+      "title": "Mouse: move, buttons, double click, drag, wheel",
+      "capabilities": ["control_mouse"],
+      "fixtures": ["control-v2-profile2"],
+      "steps": [
+        "Grant control_mouse; endpoint acknowledges the grant and leases it.",
+        "Helper moves, clicks each of the five buttons, double-clicks, drags and scrolls both axes."
+      ],
+      "pass": [
+        "Every action lands at the mapped position on the captured surface (normalized 0..1 of the source).",
+        "Buttons still held when the channel closes are released by the endpoint."
+      ],
+      "reject": [
+        "Without control_mouse: not-granted.",
+        "Events older than inputMaxAgeMs relative to the fastest seen: stale-input (releases still applied).",
+        "Decreasing t: replay."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-I02",
+      "area": "input",
+      "title": "Keyboard: physical keys, modifiers, repeat, AltGr, dead keys, text",
+      "capabilities": ["control_keyboard"],
+      "fixtures": ["control-v2-profile2"],
+      "steps": [
+        "Grant control_keyboard; type with a US layout and a German layout (AltGr+Q = @, dead key ^ then e).",
+        "Send input-text \"héllo ✓\" and a permitted shortcut (copy)."
+      ],
+      "pass": [
+        "Physical codes map by scan code; text is injected as Unicode; the shortcut runs its fixed chord.",
+        "Keys still held at revocation or channel loss are released."
+      ],
+      "reject": [
+        "MetaLeft/OS key, PrintScreen and any protected combination (Ctrl+Alt+Delete and the others in the fixture): invalid-message.",
+        "input-text while modifiers are held: held-input.",
+        "Text above textInputChars: too-large."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-I05",
+      "area": "input",
+      "title": "Mouse-only release on focus loss (release authority)",
+      "capabilities": ["control_mouse"],
+      "fixtures": ["control-v2-release"],
+      "steps": [
+        "Grant only control_mouse; the helper holds the left button down on the shared surface.",
+        "The helper window loses focus while the peer stays open."
+      ],
+      "pass": [
+        "The helper sends release-all under the mouse grant; the endpoint injects exactly one left-button up and holds nothing.",
+        "A release-all under the keyboard grant releases only keys; neither releases input this peer did not press."
+      ],
+      "reject": [
+        "release-all for another session: binding-mismatch; under a revoked grant: revoked; under a resource grant: not-granted.",
+        "The keyboard grant never authorizes mouse input (no workaround).",
+        "Endpoint teardown still releases everything at revocation, suspension and peer loss."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-I03",
+      "area": "input",
+      "title": "Multi-monitor, scaling and negative origins",
+      "capabilities": ["control_mouse"],
+      "fixtures": ["control-v2-profile2"],
+      "steps": [
+        "Arrange two displays with the secondary left of the primary (negative x) at 150 % scaling; share each in turn, then a window spanning both.",
+        "Change the resolution during the session."
+      ],
+      "pass": [
+        "Normalized coordinates map to the shared source only; corners land within one physical pixel.",
+        "A resolution or source change raises sourceGen and drops older input."
+      ],
+      "reject": ["Coordinates outside 0..1: invalid-message."],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-I04",
+      "area": "input",
+      "title": "Protected desktop isolation",
+      "capabilities": ["control_mouse", "control_keyboard"],
+      "fixtures": [],
+      "steps": [
+        "While controlled, trigger UAC, lock the workstation and open the native consent UI."
+      ],
+      "pass": [
+        "The endpoint suspends input (lifecycle suspended); the web revokes input grants on the service.",
+        "The secure desktop and the consent UI are never captured or controllable."
+      ],
+      "reject": [
+        "No input reaches the secure desktop; resuming needs a fresh acquisition (WIN-L02)."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-K01",
+      "area": "clipboard",
+      "title": "Clipboard text and PNG in each direction",
+      "capabilities": ["clipboard_to_host", "clipboard_to_guest"],
+      "fixtures": ["control-v2-profile2", "native-ext-v2"],
+      "steps": [
+        "Grant only clipboard_to_guest; endpoint sends text, then a PNG (resource.send-text, resource.send-image).",
+        "Then grant clipboard_to_host; the helper sends text and a PNG; the endpoint applies them after its local confirmation."
+      ],
+      "pass": [
+        "Each direction works only with its grant; the received PNG decodes with the declared width/height and SHA-256."
+      ],
+      "reject": [
+        "Opposite direction without its grant: not-granted.",
+        "Non-PNG, oversized (imageBytes/imagePixels/imageSide) or mismatched hash: invalid-message / too-large / integrity-failure."
+      ],
+      "web": "browser-real",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-K02",
+      "area": "clipboard",
+      "title": "Temporary clipboard synchronization and loop prevention",
+      "capabilities": ["clipboard_to_guest"],
+      "fixtures": ["control-v2-profile2", "native-ext-v2"],
+      "steps": [
+        "Enable sync (resource.sync on); copy on the host three times; copy the received text back on the helper."
+      ],
+      "pass": [
+        "Each new copy arrives once; an identical text is not resent; the echo does not bounce back.",
+        "Sync turns off at revocation, session end and on resource.sync off; nothing is monitored afterwards."
+      ],
+      "reject": ["Sync without the direction grant: grant-invalid."],
+      "web": "browser-real",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-F01",
+      "area": "files",
+      "title": "Multiple files, per-file acceptance, progress, cancel, SHA-256",
+      "capabilities": ["file_to_host", "file_to_guest"],
+      "fixtures": ["control-v2", "control-v2-profile2", "native-ext-v2"],
+      "steps": [
+        "Endpoint offers three files through its own picker (resource.offer-files); helper accepts two, rejects one.",
+        "Cancel one mid-transfer; let the other complete."
+      ],
+      "pass": [
+        "Accepted file arrives with an equal SHA-256 and a file-receipt ok; the rejected one never transfers.",
+        "Cancelled transfer: both sides discard partial data (terminal state cleaned)."
+      ],
+      "reject": [
+        "Names with path separators, reserved device names or over filenameChars are sanitized or refused.",
+        "Above fileBytes: too-large; hash mismatch: integrity-failure."
+      ],
+      "web": "browser-real",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-F02",
+      "area": "files",
+      "title": "Resume after connection loss",
+      "capabilities": ["file_to_guest"],
+      "fixtures": ["control-v2-profile2", "native-ext-v2"],
+      "steps": [
+        "Break the data channel mid-transfer; reconnect within resumeWindow; the helper chooses Resume."
+      ],
+      "pass": [
+        "file-resume-offer names the previous transfer, identical name/size/sha256; transfer continues from the acknowledged offset; final hash equal."
+      ],
+      "reject": [
+        "Different identity or after the window: refused; never resumed without the helper choosing it.",
+        "Resume never restores input authority."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-F03",
+      "area": "files",
+      "title": "Storage isolation and quota",
+      "capabilities": ["file_to_host"],
+      "fixtures": ["native-ext-v2"],
+      "steps": [
+        "Helper sends files to the host; endpoint stores them only in its private receive area after the user saves."
+      ],
+      "pass": [
+        "No path from the page reaches the OS; the endpoint picks the location in its own UI.",
+        "Incomplete files are deleted on cancel, failure, revocation and session end."
+      ],
+      "reject": ["Above the receive quota: refused before data is accepted."],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-A01",
+      "area": "annotations",
+      "title": "Pointer, laser, drawings, clear and revocation",
+      "capabilities": ["pointer", "annotate"],
+      "fixtures": [],
+      "steps": [
+        "Grant pointer and annotate; draw freehand, arrow, rectangle, ellipse; use laser; clear mine; revoke annotate."
+      ],
+      "pass": [
+        "Annotations render over the shared view only; never generate OS input.",
+        "After revocation further annotations are ignored; existing ones can be cleared."
+      ],
+      "reject": ["Annotations without the grant are not rendered."],
+      "web": "browser-real",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-L01",
+      "area": "lifecycle",
+      "title": "Emergency stop",
+      "capabilities": ["control_mouse", "control_keyboard"],
+      "fixtures": ["native-v1"],
+      "steps": [
+        "During active control press the endpoint’s local stop (hotkey and tray), and separately \"Stop remote control now\" in the web."
+      ],
+      "pass": [
+        "Input stops within one event; held keys/buttons released; the endpoint reports lifecycle stopped; the service revokes input grants.",
+        "Stop works while the ordinary channel is saturated (dedicated capacity)."
+      ],
+      "reject": ["No input is applied after stop, including queued events."],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-L02",
+      "area": "lifecycle",
+      "title": "Stop → request again → approve → fresh native consent → new grant → new peer → input",
+      "capabilities": ["control_mouse"],
+      "fixtures": ["control-v2-profile2"],
+      "steps": [
+        "After WIN-L01 the helper chooses \"Ask to control again\"; the publisher approves.",
+        "Endpoint shows consent again and acknowledges only the new grant."
+      ],
+      "pass": [
+        "New grantId, higher generation, same sessionDeadline; a new native peer carries it; input works."
+      ],
+      "reject": [
+        "The old grant, old peer or old lease is refused (revoked / stale-generation).",
+        "SessionGate must admit the fresh grant for the same capability (today it refuses a second grant — Windows change required).",
+        "A resource transfer never restores input."
+      ],
+      "web": "browser-mock-endpoint",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-L03",
+      "area": "lifecycle",
+      "title": "Expiry, revocation and cleanup states",
+      "capabilities": ["control_mouse", "clipboard_to_guest"],
+      "fixtures": ["control-v2", "native-ext-v2"],
+      "steps": [
+        "Start a 1-minute session; revoke clipboard mid-transfer; let the deadline pass."
+      ],
+      "pass": [
+        "Revocation is observable before cleanup; cleanup completed is reported only after native cleanup finishes (cleanup event).",
+        "At the deadline every grant and lease ends; no reconnect or resume happens by itself."
+      ],
+      "reject": ["Any message after expiry: expired."],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-L04",
+      "area": "lifecycle",
+      "title": "One controller at a time",
+      "capabilities": ["control_mouse"],
+      "fixtures": [],
+      "steps": ["A second helper requests control while the first controls."],
+      "pass": [
+        "Service refuses (P_SESSION_ACTIVE / P_CONTROLLER_ACTIVE) unless the publisher explicitly chooses replacement; replacement revokes the first controller first."
+      ],
+      "reject": ["Two concurrent input peers are never active."],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-L05",
+      "area": "lifecycle",
+      "title": "Process and descendant cleanup",
+      "capabilities": [],
+      "fixtures": ["native-ext-v2"],
+      "steps": [
+        "End the session while capture, a transfer and a picker are open; kill the Palisade renderer."
+      ],
+      "pass": [
+        "All helper processes and descendants exit; temp files are removed; the endpoint reports cleanup."
+      ],
+      "reject": ["No orphaned capture or input process remains."],
+      "web": "not-applicable",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-T01",
+      "area": "transport",
+      "title": "Certificate binding and wrong peer",
+      "capabilities": ["control_mouse"],
+      "fixtures": ["control-v2-profile2"],
+      "steps": [
+        "Connect with the expected helper certificate, then with a different certificate and a different endpoint statement."
+      ],
+      "pass": [
+        "Only the DTLS certificate bound in the grant and the endpoint-transport statement connects."
+      ],
+      "reject": [
+        "Mismatched fingerprint or statement: transport-mismatch / binding-mismatch; channel closed."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-T02",
+      "area": "transport",
+      "title": "Relay-only policy and TURN",
+      "capabilities": [],
+      "fixtures": [],
+      "steps": [
+        "Set relay-only; first with no TURN, then with the approved TURN relay (#48)."
+      ],
+      "pass": [
+        "No relay: connection refused clearly, no direct or plaintext fallback.",
+        "With relay: connects through TURN only."
+      ],
+      "reject": ["Host/srflx candidates under relay-only."],
+      "web": "browser-real",
+      "native": "not-executed"
+    },
+    {
+      "id": "WIN-T03",
+      "area": "transport",
+      "title": "Endpoint issuer trust",
+      "capabilities": [],
+      "fixtures": ["control-v2"],
+      "steps": [
+        "Install with the production issuer pin (#47); present a grant signed by another key."
+      ],
+      "pass": ["Only the pinned issuer verifies."],
+      "reject": [
+        "Other issuer: issuer-mismatch / grant-invalid; TOFU is not allowed."
+      ],
+      "web": "unit",
+      "native": "not-executed"
+    }
+  ]
+}

@@ -1,5 +1,9 @@
 # Validation
 
+## M4G-WEB-6 native release authority, November 8, 2026
+
+The current checkpoint consumes the exact companion `5b82bc90e4997f35dd18273427c258fe54eefb95` protocol/release fixture/interop manifest and fixes carried-grant release ownership in the native gate/executor. All186 application tests and all100 native tests in each configuration pass. The native tests use fake input sinks. The 23 canonical Windows acceptance cases remain unexecuted; cooperative local host/helper input remains Planned. [Scope and detailed evidence](evidence/2026-11-08-release-authority.md).
+
 The combined desktop fix is now v0.3.3 after the owner requested **Open Update Manager** wording while v0.3.2 was awaiting publication. Exact v0.3.2 Windows CI42531849621 passed; its protected release run42532678660 was cancelled before signing/publication. Preserve tag v0.3.2 at7019c65. The v0.3.3 candidate adds only the requested wording and version/docs to the verified registration/tray implementation. The companion handoff remains queued afterward.
 
 ## Windows registration and silent tray, November 8, 2026
