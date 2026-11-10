@@ -1,5 +1,24 @@
 # Assist continuation checkpoint
 
+## Native physical observation continuation
+
+The dormant Windows raw/low-level observer and bounded physical hold reconciliation
+now feed the existing native InputFence/LocalObservation boundary. Both release
+orders, multiple devices, repeat, generation/queue failures and unsafe packets have
+fake-source tests. No hooks or physical-device observation were run here. A baseline
+is deliberately unqualified and native cooperative dispatch stays disabled.
+[Evidence](evidence/2026-11-10-physical-observation.md) and
+[current design/technical delivery blocker](ASSIST-COOPERATIVE-INPUT.md).
+Silent Windows hook removal means heartbeat/tag checks cannot qualify synthetic-UP
+delivery. Continue native baseline/delivery enforcement, then status/runtime wiring;
+do not claim COOP-1 complete or hide the normal runtime/cleanup gaps below.
+
+Companion main inspected read-only: `c9f822bef6d6257f2a2845b309131e83729a0e42`.
+Its new docs/54 acceptance tooling does not change the frozen protocol, nine fixture
+families or manifest v3/all 30 cases. Both the older e45 manifest hash and frozen
+manifest hash were independently verified; retain the latter. Phase U1 (#8/#9)
+remains queued after COOP-1, with no signing/publication/deployment authorization.
+
 ## Direct executor stop continuation
 
 Normal input now requires a creator-owned per-generation stop event. It is retained

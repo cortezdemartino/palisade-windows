@@ -1,8 +1,10 @@
 # Native cooperative input
 
 Status: scheduler and executor integration **Implemented / Verified in simulation**.
-Physical observation, native delivery arbitration, connected runtime and native UI are
-**Planned / Not Verified**. The packaged endpoint does not advertise `localYield`.
+The native Windows observation adapter and bounded hold model are **Implemented /
+Experimental**, with fake-source verification only. Actual hook/raw-device behavior,
+delivery arbitration, connected runtime and native UI remain **Planned / Not Verified**.
+The packaged endpoint does not advertise `localYield`.
 Existing local-activity termination and production feature switches remain unchanged.
 
 ## Canonical contract
@@ -58,7 +60,72 @@ An independent atomic `InputFence` invalidates expanded shortcut/text primitives
 without revoking service grants. Native observation stamps its event before ordinary
 queue processing. Processing one event cannot acknowledge a later unseen local hold.
 Lost observation continuity stays uncertain; foreign or replayed observation handles
-end admission. Native callbacks still need to be connected to this boundary.
+end admission. The dormant native observer now stamps at callback receipt, including
+RAW-first activity before packet/device queries. Its production/runtime attachment
+and actual device qualification remain unfinished.
+
+## Windows observation implementation
+
+`observation.rs` tracks low-level provisional holds, independent raw per-device
+holds and bounded unresolved transition journals. Effective ownership is their
+union. Neither LL-UP nor RAW-UP alone clears a hold; two keyboards holding the same
+key require both raw releases. Repeat does not add another hold. Matching follows
+ordered transitions, never timestamp proximity or a presumed raw/LL delivery order.
+An unresolved transition expires to uncertainty, not neutrality.
+
+`windows/physical_activity.rs` uses one message-only Raw Input target and a separate
+monitor lifetime. It registers INPUTSINK/DEVNOTIFY without suppressing legacy input,
+hotkeys or mouse capture. A shared slot prevents simultaneous legacy/cooperative
+monitor instances in one native process. It refuses existing class registrations,
+detects replacement and removes only targets bound to its own window. The legacy
+terminal monitor remains the selected implementation in existing native execution.
+
+Low-level callbacks copy numeric events into a preallocated 512-entry queue and
+pause the existing InputFence before deferred work. They pass all input onward.
+Mapping, raw-device queries, reconciliation and output delivery occur outside hook
+callbacks. FenceStamp is not cloneable; converting it to LocalObservation does not
+pause twice. Queue overflow, reentry, stale stamps, unknown provenance, unsupported
+scans and device-generation loss fail closed. Observation remains live across an
+ordinary yield. Stop/failure fences before native cleanup, and cleanup failure is
+sticky. Independent resource permissions are not revoked by this observer.
+
+Limits are 32 retained device records, 256 holds per device/LL set and 512 unresolved
+transitions. Packet size/type/flags and device information are checked. Zero device
+handles, including unsupported precision-touchpad ownership, are uncertainty;
+coalesced opposite button transitions and unsupported E1 data are not guessed.
+International observation reuses the existing scan mapping without adding remote
+Windows/security keys. No text conversion, clipboard, file or consent API exists.
+Bounded in-flight numeric correlation data is discarded as transitions reconcile;
+it is never logged or retained as typing history.
+
+The new observer never qualifies an initial baseline: an empty table, timer,
+GetAsyncKeyState or application tag cannot establish per-device physical neutrality.
+`Snapshot.require_neutral()` refuses the current unqualified baseline. A future
+runtime must enforce this in addition to signed authority, native cleanup and the
+existing barrier checks. The snapshot is descriptive and cannot authorize input.
+
+```mermaid
+flowchart LR
+    LL[Low-level numeric observations] --> Stamp[Immediate native fence stamp]
+    RAW[Raw Input receipt] --> Stamp
+    Stamp --> Queue[Bounded ordered queue]
+    Queue --> Holds[LL and per-device holds plus reconciliation]
+    Holds --> Events[Existing LocalObservation and LocalYield]
+    Holds --> Qual[Native baseline and delivery qualification required]
+    Qual --> Blocked[Current native backend refuses cooperative dispatch]
+```
+
+**Delivery enforcement remains unresolved.** Windows can silently remove a low-level
+hook after a timeout, without reliable notification. A thread heartbeat or earlier
+canary acknowledgement cannot prove interception of the next synthetic UP. A missing
+acknowledgement after SendInput is too late to prove that UP did not reach a local
+host hold. Do not turn on `cooperative_ready` or advertise `localYield` using only
+this observer, tags or hook liveness. This requires a reviewed delivery mechanism
+and device acceptance, not another web protocol. See Microsoft's
+[keyboard hook documentation](https://learn.microsoft.com/en-us/windows/win32/winmsg/lowlevelkeyboardproc)
+and [Raw Input registration rules](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-registerrawinputdevices).
+
+[Implementation evidence and remaining gates](evidence/2026-11-10-physical-observation.md).
 
 ## Ownership and retained cleanup
 

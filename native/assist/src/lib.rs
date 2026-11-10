@@ -12,6 +12,7 @@ pub mod input;
 pub mod input_age;
 pub mod issuer;
 pub mod live;
+pub mod observation;
 pub mod statements;
 pub mod stream;
 #[cfg(windows)]

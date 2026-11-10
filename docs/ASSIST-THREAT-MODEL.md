@@ -1,5 +1,15 @@
 # Windows Assist threat model
 
+The new physical observer is dormant and never supplies consent or injects input.
+It combines low-level provisional holds with raw per-device holds and unresolved
+transition journals; either source alone cannot clear ownership. Stale/lost stamps,
+queue overflow, unsupported/ambiguous raw data, injected input and device-generation
+loss retain uncertainty. The baseline remains unqualified. Windows hook timeout
+can silently remove an interception hook, so hook heartbeats or prior canaries do
+not establish delivery-time protection for the next synthetic UP. Observer source
+review/fake-source tests do not resolve this enforcement blocker or qualify physical
+overlap. [Scope and evidence](evidence/2026-11-10-physical-observation.md).
+
 Monitor custody now has a bounded, launch/generation-bound evidence model and
 dedicated no-input Windows qualification. Armed is recorded before ARM I/O; every
 created child remains retained even when bootstrap/binding fails. Invalid ready or

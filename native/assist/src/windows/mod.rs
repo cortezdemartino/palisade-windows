@@ -14,6 +14,7 @@ pub mod lifecycle;
 pub mod live;
 pub mod local_ice;
 pub mod parent;
+pub mod physical_activity;
 pub mod process_input;
 pub mod process_monitor;
 mod process_stop;

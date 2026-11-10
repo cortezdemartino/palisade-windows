@@ -47,8 +47,13 @@ app.whenReady().then(async () => {
     assert.ok(picker); assert.equal(await picker.webContents.executeJavaScript('document.getElementById("share").disabled'), true);
     assert.equal(await picker.webContents.executeJavaScript('document.querySelectorAll("script").length'), 1);
     phase = `picker ${select ? 'select' : 'cancel'} click`;
-    if (select) await picker.webContents.executeJavaScript('document.querySelector("input").click();document.getElementById("share").click()');
-    else await picker.webContents.executeJavaScript('document.getElementById("cancel").click()');
+    // Click IPC can destroy this renderer before executeJavaScript returns its
+    // acknowledgement. The actual picker result remains authoritative; an
+    // earlier script failure still rejects, and the same deadline/assertion apply.
+    const click = picker.webContents.executeJavaScript(select
+      ? 'document.querySelector("input").click();document.getElementById("share").click()'
+      : 'document.getElementById("cancel").click()');
+    await Promise.race([click, result]);
     phase = `picker ${select ? 'select' : 'cancel'} completion`;
     assert.equal(await result, select ? 'window:11:0' : null);
   }

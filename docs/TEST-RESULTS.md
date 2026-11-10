@@ -1,5 +1,22 @@
 # Validation
 
+## November 10 native physical observation
+
+The dormant native observer candidate passed formatting/strict Clippy and 193 Rust
+tests per default/all-feature configuration (140 library plus 53 integration),
+including ten host-hold model and eight numeric Windows-adapter/queue/lifetime
+groups. All 29 process regression groups per configuration passed. Tests did not
+install the new hooks/register Raw Input, observe physical devices or inject input.
+Source-only independent review cleared the observer after raw-first fencing,
+partial-registration cleanup, monotonic stamp and ordered expiry fixes.
+202 app tests, dependency audits, NSIS and packaged native integrity passed.
+The first desktop run timed out awaiting a destroyed picker's JavaScript response;
+after a harness-only close/ack correction, all 30 packaged desktop cases, five
+isolated capture runs (12 negatives) and 14 fake-input peer cases passed.
+[Detailed evidence and remaining enforcement blocker](evidence/2026-11-10-physical-observation.md).
+Baseline qualification, actual raw/hook behavior and delivery arbitration remain
+Not Verified. COOP-1 and full Assist are unfinished; localYield stays unadvertised.
+
 ## November 9 custody and normal executor fencing
 
 Custody checkpoint `718348fd7dc4fbb907da7bda897fe09da0500c3a` passed full exact-SHA

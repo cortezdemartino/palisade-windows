@@ -1,5 +1,14 @@
 # Complete Windows Assist delivery plan
 
+COOP-1 now includes a dormant raw/low-level native observation adapter and bounded
+physical hold reconciliation. [Evidence](evidence/2026-11-10-physical-observation.md).
+It supplies observations only: baseline qualification, delivery arbitration, native
+status and live runtime remain open. Silent hook removal prevents treating hook
+heartbeat/tag checks as a guarantee that synthetic UP cannot release host input.
+Keep native cooperative dispatch disabled pending a reviewed mechanism and actual
+device acceptance. This is not an architecture-approval request or web-contract gap.
+Phase U1 is queued afterward; preserve existing update/Manager behavior meanwhile.
+
 Normal executor Stop now has an independent per-generation kernel event and direct
 creator/event checks before primitives; EOF-only fencing is insufficient for queued
 steps. [Evidence](evidence/2026-11-09-executor-stop-event.md). This remains a dormant

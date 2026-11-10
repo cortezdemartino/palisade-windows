@@ -17,9 +17,26 @@ thread_local! { static CONTEXT: RefCell<Option<(Arc<AtomicBool>,usize)>> = const
 pub struct ActivityMonitor {
     stop: Arc<AtomicBool>,
     worker: Option<thread::JoinHandle<()>>,
+    _slot: ActivitySlot,
+}
+static ACTIVE: AtomicBool = AtomicBool::new(false);
+pub(crate) struct ActivitySlot;
+impl ActivitySlot {
+    pub(crate) fn acquire() -> Result<Self, &'static str> {
+        ACTIVE
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+            .map_err(|_| "activity-monitor-busy")?;
+        Ok(Self)
+    }
+}
+impl Drop for ActivitySlot {
+    fn drop(&mut self) {
+        ACTIVE.store(false, Ordering::SeqCst);
+    }
 }
 impl ActivityMonitor {
     pub fn start(stop: Arc<AtomicBool>, tag: usize) -> Result<Self, &'static str> {
+        let slot = ActivitySlot::acquire()?;
         let (ready, receive) = mpsc::sync_channel(1);
         let flag = stop.clone();
         let worker = thread::spawn(move || unsafe {
@@ -61,6 +78,7 @@ impl ActivityMonitor {
         Ok(Self {
             stop,
             worker: Some(worker),
+            _slot: slot,
         })
     }
 }

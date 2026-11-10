@@ -27,8 +27,12 @@ impl InputFence {
         self: &Arc<Self>,
         event: LocalEvent,
     ) -> Result<LocalObservation, &'static str> {
-        Ok(LocalObservation {
-            event,
+        Ok(self.stamp()?.attach(event))
+    }
+    /// Stamp the numeric native event immediately, before deferred decoding.
+    /// Consuming the stamp later must not pause again or acknowledge later work.
+    pub(crate) fn stamp(self: &Arc<Self>) -> Result<FenceStamp, &'static str> {
+        Ok(FenceStamp {
             generation: self.pause()?,
             fence: self.clone(),
         })
@@ -187,6 +191,25 @@ pub struct LocalObservation {
     event: LocalEvent,
     generation: u64,
     fence: Arc<InputFence>,
+}
+pub(crate) struct FenceStamp {
+    generation: u64,
+    fence: Arc<InputFence>,
+}
+impl FenceStamp {
+    pub(crate) fn is_for(&self, fence: &Arc<InputFence>) -> bool {
+        Arc::ptr_eq(&self.fence, fence)
+    }
+    pub(crate) fn generation(&self) -> u64 {
+        self.generation
+    }
+    pub(crate) fn attach(self, event: LocalEvent) -> LocalObservation {
+        LocalObservation {
+            event,
+            generation: self.generation,
+            fence: self.fence,
+        }
+    }
 }
 #[derive(Clone, Default)]
 pub struct LocalHolds {
