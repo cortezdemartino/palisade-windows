@@ -35,12 +35,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Native compilation failed.' }
           npm run test:assist-process
           if ($LASTEXITCODE -ne 0) { throw 'Native process verification failed.' }
+      - name: Verify native update trust and staging
+        run: npm run test:update-native
       - name: Audit locked native dependencies
         run: |
           cargo install cargo-audit --locked --version 0.22.2
           if ($LASTEXITCODE -ne 0) { throw 'Native audit tool unavailable.' }
           cargo audit --file native/assist/Cargo.lock --deny warnings
           if ($LASTEXITCODE -ne 0) { throw 'Native dependency audit failed.' }
+          cargo audit --file native/update/Cargo.lock --deny warnings
+          if ($LASTEXITCODE -ne 0) { throw 'Update helper dependency audit failed.' }
       - name: Run tests
         run: npm run check
       - name: Audit production dependencies

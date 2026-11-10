@@ -9,6 +9,13 @@ desktop-owned installer staging/apply and installed-upgrade qualification remain
 unfinished. See `RELEASE-NOTES-FORMAT.md` and the U1 evidence record. No release,
 production signing, deployment or installation is authorized for this phase.
 
+The independent inactive `native/update` library now verifies signed release
+authority, protected staging, parent/installation identity and private pipe binding.
+Its Windows tests do not qualify actual installed-parent authentication or upgrades.
+See `NATIVE-UPDATER.md` and `evidence/2026-11-10-u1-native-foundation.md`. Stage/apply
+dispatch, desktop coordinator and installer completion/recovery remain unfinished.
+COOP-2 is queued to begin automatically after U1, with fail-closed dispatch preserved.
+
 ## Native physical observation continuation
 
 The dormant Windows raw/low-level observer and bounded physical hold reconciliation

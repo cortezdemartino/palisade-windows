@@ -14,6 +14,9 @@ secrets/
 .manager/
 out-unified/
 native/assist/target/
+native/update/target/
+.update/
+src/updates/helper-integrity.json
 .assist/
 src/assist/guardian-integrity.json
 src/assist/hosted-preload.cjs

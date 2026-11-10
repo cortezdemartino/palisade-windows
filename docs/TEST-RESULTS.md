@@ -1,5 +1,12 @@
 # Validation
 
+## November 10 U1 offline native foundation
+
+The inactive update library passed 18 native tests per configuration, strict
+formatting/Clippy and its locked dependency audit. Tests include real Windows
+file/ACL/pipe behavior and simulated registration records, not an installed upgrade.
+[Evidence and remaining handoff work](evidence/2026-11-10-u1-native-foundation.md).
+
 ## November 10 U1 signed changelog
 
 The signed-notes foundation passed desktop/Manager unit, isolated real Electron UI
