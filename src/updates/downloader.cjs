@@ -3,34 +3,47 @@
 const { createHash, timingSafeEqual } = require('node:crypto');
 const { open, rm } = require('node:fs/promises');
 const path = require('node:path');
-const { fetchAsset, releaseAssetUrl } = require('./release.cjs');
+const { fetchAsset, releaseAssetUrl, normalisePayload } = require('./release.cjs');
 
-async function downloadInstaller(manifest, destination, fetchFn = fetch, onProgress = () => {}) {
+async function downloadInstaller(manifest, destination, fetchFn = fetch, onProgress = () => {}, options = {}) {
+  manifest = normalisePayload(manifest);
+  const signal = AbortSignal.any([options.signal, AbortSignal.timeout(10 * 60 * 1000)].filter(Boolean));
+  signal.throwIfAborted();
   const filename = path.join(destination, manifest.filename);
   const response = await fetchAsset(releaseAssetUrl(manifest.version, manifest.filename), {
-    fetchFn, signal: AbortSignal.timeout(10 * 60 * 1000),
+    fetchFn, signal,
   });
+  signal.throwIfAborted();
+  const length = response.headers?.get('content-length');
+  if (!response.body || (length != null && (!/^\d+$/.test(length) || Number(length) !== manifest.size))) {
+    await response.body?.cancel?.();
+    throw new Error('Installer response does not match the signed size.');
+  }
   let fd;
   let bytes = 0;
   const hash = createHash('sha512');
   const sha256 = createHash('sha256');
   let created = false;
   try {
+    signal.throwIfAborted();
     fd = await open(filename, 'wx', 0o600);
     created = true;
     for await (const part of response.body) {
+      signal.throwIfAborted();
       bytes += part.length;
       if (bytes > manifest.size) throw new Error('Installer is larger than the signed size.');
       hash.update(part);
       sha256.update(part);
       let offset = 0;
       while (offset < part.length) {
+        signal.throwIfAborted();
         const { bytesWritten } = await fd.write(part, offset, part.length - offset, null);
         if (bytesWritten <= 0) throw new Error('Installer write did not complete.');
         offset += bytesWritten;
       }
       onProgress(bytes, manifest.size);
     }
+    signal.throwIfAborted();
     await fd.sync();
     await fd.close();
     fd = undefined;
@@ -40,6 +53,7 @@ async function downloadInstaller(manifest, destination, fetchFn = fetch, onProgr
         !timingSafeEqual(actual, expected) || (manifest.schema >= 2 && sha256.digest('hex') !== manifest.sha256)) {
       throw new Error('Installer does not match the signed manifest.');
     }
+    signal.throwIfAborted();
     return filename;
   } catch (error) {
     if (fd) await fd.close();

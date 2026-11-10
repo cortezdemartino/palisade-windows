@@ -1,5 +1,14 @@
 # Assist continuation checkpoint
 
+## Active work: U1, by owner direction
+
+The owner switched priority to the native updater and shared changelog. Assist
+remains disabled and its outstanding runtime/qualification work below is preserved.
+The U1 signed-notes foundation is implemented in the development candidate;
+desktop-owned installer staging/apply and installed-upgrade qualification remain
+unfinished. See `RELEASE-NOTES-FORMAT.md` and the U1 evidence record. No release,
+production signing, deployment or installation is authorized for this phase.
+
 ## Native physical observation continuation
 
 The dormant Windows raw/low-level observer and bounded physical hold reconciliation

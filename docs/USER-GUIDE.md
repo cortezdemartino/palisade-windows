@@ -1,5 +1,18 @@
 # Windows client guide
 
+## Updates and release notes (development candidate)
+
+Open Device settings, then **Updates & What's New**. **Check now** checks the
+official stable release. When authenticated editorial notes exist, select a
+version under Release history and expand Release details. Publication dates,
+categories and compatibility information come from that signed document.
+Previously verified notes remain available offline. Missing or invalid notes are
+shown as unavailable; an unsigned release description is never substituted.
+
+This candidate still opens Update Manager for installation. The desktop-owned
+installer handoff is being implemented in U1. This guide does not imply it has
+already passed an installed upgrade or been released.
+
 ## Installation
 
 1. Download the current installer from the project's GitHub Releases page.

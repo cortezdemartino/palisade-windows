@@ -2,13 +2,16 @@
 const { readFileSync } = require('node:fs');
 const path = require('node:path');
 const { verifyEnvelope, verifyDownloadedFile } = require('../src/updates/release.cjs');
+const { verifyNotes, NOTES_ASSET } = require('../src/updates/notes.cjs');
 async function main() {
   const directory = process.argv[2] || 'out';
   const key = readFileSync(path.join(__dirname, '../assets/update-public-key.pem'));
   const legacy = verifyEnvelope(JSON.parse(readFileSync(path.join(directory, 'release.json'))), key);
   const modern = verifyEnvelope(JSON.parse(readFileSync(path.join(directory, 'release-v2.json'))), key);
   const transitions = JSON.parse(readFileSync(path.join(__dirname, '../assets/update-key-transitions.json'), 'utf8'));
-  const current = verifyEnvelope(JSON.parse(readFileSync(path.join(directory, 'release-v3.json'))), key, transitions);
+  const currentEnvelope = JSON.parse(readFileSync(path.join(directory, 'release-v3.json')));
+  const current = verifyEnvelope(currentEnvelope, key, transitions);
+  verifyNotes(JSON.parse(readFileSync(path.join(directory, NOTES_ASSET))), currentEnvelope, key, transitions);
   if (legacy.schema !== 1 || modern.schema !== 2 || modern.version !== require('../package.json').version ||
       current.schema !== 3 || legacy.version !== modern.version || current.version !== modern.version ||
       legacy.sha512 !== modern.sha512 || current.sha512 !== modern.sha512 || current.sha256 !== modern.sha256 ||

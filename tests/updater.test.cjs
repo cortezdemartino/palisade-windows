@@ -24,6 +24,10 @@ async function harness({ response = 0, fail = false, release = null, networkFail
     setTimeout: (fn, delay) => timer(timers, fn, delay), setInterval: (fn, delay) => timer(intervals, fn, delay),
     clearTimeout: entry => { if(entry) entry.active = false; }, clearInterval: entry => { if(entry) entry.active = false; }, module: { exports: {} }, process: { platform: 'win32', resourcesPath: 'C:\\Apps\\Palisade\\resources', execPath: 'C:\\Apps\\Palisade\\Palisade.exe' },
     require: name => {
+      if (name === './notes-history.cjs') return { createNotesHistory: () => ({
+        load: async () => [], snapshot: () => [], fetchFor: async () => { throw Error('No signed notes fixture'); },
+        fetchVersion: async () => { throw Error('No signed notes fixture'); },
+      }) };
       if (name === 'electron') return { app, powerMonitor, dialog: { showMessageBox: async (...args) => { prompts.push(args.at(-1)); return { response }; } } };
       if (name === 'node:fs/promises') return promises;
       if (name === 'node:fs') return fakeFs;
@@ -169,10 +173,11 @@ test('concurrent checks are coalesced and shutdown aborts an in-flight request',
   assert.equal(h.timers.filter(timer => timer.active).length, 0);
 });
 
-test('manual check offers release notes and Later never opens the manager', async () => {
+test('manual check refuses unsigned release prose and Later never opens the manager', async () => {
   const h = await harness({ response: 1, release: { version: '0.2.4', releaseNotes: 'Release changes' } });
   await h.controller.check(true);
-  assert.equal(h.prompts[0].detail, 'Release changes'); assert.equal(h.calls.length, 0);
+  assert.match(h.prompts[0].detail, /Verified release notes are unavailable/);
+  assert.doesNotMatch(h.prompts[0].detail, /Release changes/); assert.equal(h.calls.length, 0);
   assert.equal(h.quit(), 0);
 });
 

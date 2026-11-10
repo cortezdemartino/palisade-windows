@@ -12,6 +12,25 @@ const {
 } = require('../src/updates/release.cjs');
 const { downloadInstaller } = require('../src/updates/downloader.cjs');
 
+test('download cancellation reaches transport, streamed writes and final publication', async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), 'palisade-cancel-'));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  for (const timing of ['before', 'stream', 'final']) {
+    const abort = new AbortController();
+    if (timing === 'before') abort.abort();
+    const fetchFn = async (_url, { signal }) => {
+      assert.equal(signal.aborted, false);
+      return { ok: true, headers: new Map(), body: (async function* () {
+        if (timing === 'stream') { yield goodContent.subarray(0, 2); abort.abort(); yield goodContent.subarray(2); }
+        else yield goodContent;
+      })() };
+    };
+    await assert.rejects(downloadInstaller(modern, directory, fetchFn,
+      () => { if (timing === 'final') abort.abort(); }, { signal: abort.signal }));
+    await assert.rejects(readFile(path.join(directory, modern.filename)), { code: 'ENOENT' });
+  }
+});
+
 const { privateKey, publicKey } = generateKeyPairSync('ed25519');
 const goodContent = Buffer.from('trusted installer content');
 const sha512 = createHash('sha512').update(goodContent).digest('base64');

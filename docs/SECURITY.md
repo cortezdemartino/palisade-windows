@@ -1,5 +1,12 @@
 # Security model
 
+U1 authenticates human-readable notes with a separate Ed25519 domain and exact v3
+payload digest. History is display-only, bounded and reverified; current updates
+retain the full packaged signing-key history. Neither cache files nor unsigned
+GitHub descriptions grant installation authority. Both interfaces render plain
+text. [Format and recovery](RELEASE-NOTES-FORMAT.md). The native updater handoff
+is still under development; the legacy PowerShell helper remains excluded.
+
 Native input components bind held state to the exact authorized gate/grant owner; remote UP and `release-all` cannot release another owner's input. Independent fenced teardown retains the combined write-ahead cleanup mirror. [Release-authority evidence](evidence/2026-11-08-release-authority.md) distinguishes fake-sink tests from real OS acceptance. Cooperative local-priority host/helper input remains Planned; overlapping physical holds and nonterminal yield must be qualified before activation.
 
 Application exit and update-manager launch share a cleanup barrier. Registered holders revoke before waits; incomplete cleanup retains ownership and prevents manager launch/app exit. A retry cannot reopen old authority, and no timeout kills the last cleanup holder. The live native coordinator must register actual child-exit proof before admitting input; current fake-holder/real-Electron tests do not qualify physical input cleanup. See [the full delivery gates](ASSIST-RELEASE-PLAN.md) and [lifecycle ownership](ASSIST-NATIVE-GUARDIAN.md#application-exit-and-update-ownership).

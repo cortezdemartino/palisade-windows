@@ -60,6 +60,8 @@ jobs:
         run: npm run package:win
       - name: Verify packaged controls and permission boundaries
         run: |
+          npm run verify:update-package
+          if ($LASTEXITCODE -ne 0) { throw 'Packaged update source verification failed.' }
           npm run verify:assist-package
           if ($LASTEXITCODE -ne 0) { throw 'Packaged native integrity verification failed.' }
           $env:PALISADE_WINDOW_SMOKE_ASAR = (Resolve-Path out/win-unpacked/resources/app.asar).Path

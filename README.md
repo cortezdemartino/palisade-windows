@@ -1,5 +1,10 @@
 # Palisade for Windows
 
+The U1 development candidate adds authenticated release summaries and offline
+history to local **Updates & What's New** settings. The published Manager pin is
+unchanged; the desktop-owned installer handoff is still under development.
+See [release-note format and signing](docs/RELEASE-NOTES-FORMAT.md).
+
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
 
 **Windows 10/11, x64.** Download the current desktop version from [Releases](https://github.com/cortezdemartino/palisade-windows/releases). Assist screen sharing and remote control remain disabled. The client is under active development and has not undergone an independent security audit.

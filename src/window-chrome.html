@@ -88,7 +88,7 @@
     <nav class="settings-tabs" aria-label="Settings sections">
       <button class="tab selected" data-section="general" aria-pressed="true">General</button>
       <button class="tab" data-section="permissions" aria-pressed="false">Permissions</button>
-      <button class="tab" data-section="about" aria-pressed="false">About &amp; updates</button>
+      <button class="tab" data-section="about" aria-pressed="false">Updates &amp; What's New</button>
     </nav>
     <div id="section-general" class="settings-section">
       <label class="setting"><span>Keep running in the tray<small>Stay available when minimized or closed.</small></span><input id="tray-setting" type="checkbox"></label>
@@ -104,6 +104,10 @@
     </div>
     <div id="section-about" class="settings-section" hidden>
       <div class="setting"><span>Stable updates<small id="update-status"></small></span><div class="update-actions"><button class="action" id="check-updates">Check now</button><button class="action" id="open-updates">Open Update Manager</button></div></div>
+      <p class="hint">Latest available version: <span id="latest-version">Not checked</span></p>
+      <p id="notes-status" class="hint" role="status" aria-live="polite"></p>
+      <label class="release-selector">Release history<select id="release-version" aria-label="Choose release notes"><option value="">No verified notes cached</option></select></label>
+      <article id="release-notes" aria-label="Verified release notes"></article>
       <div class="setting"><span>Reload Palisade<small>Reload the page if the connection is interrupted.</small></span><button class="action" id="reload-client">Reload</button></div>
       <div class="setting"><span>Support diagnostics<small>Copy app and system versions, tray and login settings, and update status. No account or message data.</small></span><button class="action" id="copy-diagnostics">Copy</button></div>
       <p class="hint">Checks run at startup, every six hours, and after an overdue wake. Signed updates keep this device’s local session and application data. The manager asks before closing Palisade.</p>

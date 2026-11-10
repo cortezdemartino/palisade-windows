@@ -17,7 +17,11 @@ const deadline = setTimeout(() => { syncFs.writeFileSync(resultFile, JSON.string
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const deviceActions = [];
-  const desktop = createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.4', loginAvailable: true }), onDeviceAction: action => deviceActions.push(action), partition: 'tabler-controls-smoke', icon: undefined });
+  const desktop = createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.4', loginAvailable: true,
+    latestVersion: '0.3.0', notesStatus: 'Signed release-note display fixture.', releaseHistory: [{ version: '0.3.0',
+      publishedAt: '2026-11-10T00:00:00.000Z', locale: 'en', title: "What's New in Palisade 0.3.0", summary: 'A bounded local display fixture.',
+      sections: [{ title: 'Fixed', items: ['Text only: <img src=x onerror=alert(1)>'] }], compatibility: ['Windows x64.'] }] }),
+    onDeviceAction: action => deviceActions.push(action), partition: 'tabler-controls-smoke', icon: undefined });
   owner = desktop.window;
   const remote = desktop.contents;
   const controls = owner.contentView.children[1].webContents;
@@ -64,6 +68,12 @@ app.whenReady().then(async () => {
   await pause(100);
   assert.equal(deviceActions.at(-1), 'notification-settings');
   await controls.executeJavaScript("document.querySelector('[data-section=about]').click()");
+  assert.equal(await controls.executeJavaScript("document.getElementById('latest-version').textContent"), '0.3.0');
+  assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes h2').textContent"), "What's New in Palisade 0.3.0");
+  assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes img') === null"), true);
+  assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes li').textContent"), 'Text only: <img src=x onerror=alert(1)>');
+  await controls.executeJavaScript("document.querySelector('#release-notes details summary').click()");
+  assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes details').open"), true);
   await controls.executeJavaScript("document.getElementById('check-updates').click()");
   await pause(100); assert.equal(deviceActions.at(-1), 'check-updates');
   await controls.executeJavaScript("document.getElementById('copy-diagnostics').click()");

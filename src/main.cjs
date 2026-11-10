@@ -130,7 +130,8 @@ function createMainWindow(profile) {
   const icon = nativeImage.createFromPath(ICON);
   const desktop = createDesktopWindow({ partition: PARTITION, icon,
     onSettings: () => ({ keepRunningInTray, launchOnLogin: app.getLoginItemSettings().openAtLogin,
-      loginAvailable: app.isPackaged, version: app.getVersion(), updateStatus, notificationStatus }),
+      loginAvailable: app.isPackaged, version: app.getVersion(), updateStatus, notificationStatus,
+      ...updaterController?.notesState?.() }),
     onDeviceAction: (action) => {
       try {
       if (action === 'tray-on' || action === 'tray-off') trayPreferenceItem().click({ checked: action === 'tray-on' });

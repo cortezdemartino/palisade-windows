@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "version": "0.0.0",
+  "locale": "en",
+  "title": "",
+  "summary": "Replace this text with a concise, reviewed summary of implemented changes.",
+  "sections": [
+    { "category": "fixed", "items": ["Replace this text with a user-visible change verified for this release."] }
+  ],
+  "compatibility": []
+}

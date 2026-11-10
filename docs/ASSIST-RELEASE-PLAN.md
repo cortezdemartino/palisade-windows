@@ -1,5 +1,10 @@
 # Complete Windows Assist delivery plan
 
+Current owner priority is U1. Its signed changelog work preserves this plan, the
+existing Assist quiescence barrier and all release gates. It does not enable Assist
+or qualify the native endpoint. Routine updates still use Manager until the
+independently verified desktop installer handoff is finished.
+
 COOP-1 now includes a dormant raw/low-level native observation adapter and bounded
 physical hold reconciliation. [Evidence](evidence/2026-11-10-physical-observation.md).
 It supplies observations only: baseline qualification, delivery arbitration, native

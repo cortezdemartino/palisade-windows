@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased U1 source candidate
+
+- Added authenticated release summaries, expandable details and offline history
+  to local Updates & What's New settings.
+- Added the same changelog format and modern metadata verification to the
+  maintained Manager source; its published binary and desktop pin are unchanged.
+- Native desktop-owned installer handoff remains under development. Assist stays
+  disabled. No installed-upgrade acceptance or production release is claimed.
+
 ## 0.3.3
 
 - Repair Windows Start/Search registration and give the running window explicit taskbar relaunch identity.

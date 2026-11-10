@@ -11,14 +11,17 @@ async function fixture(run) {
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'palisade-signing-test-'));
   const secrets = await fs.mkdtemp(path.join(os.tmpdir(), 'palisade-test-keys-'));
   try {
-    for (const folder of ['scripts', 'src/updates', 'assets', 'out']) {
+    for (const folder of ['scripts', 'src/updates', 'assets', 'out', 'release-notes']) {
       await fs.mkdir(path.join(directory, folder), { recursive: true });
     }
     for (const file of ['scripts/sign-release.cjs', 'scripts/verify-release.cjs', 'scripts/signing-key.cjs',
-      'scripts/authorize-update-key.cjs', 'src/updates/key-trust.cjs', 'src/updates/release.cjs']) {
+      'scripts/authorize-update-key.cjs', 'scripts/release-notes.cjs', 'src/updates/notes.cjs',
+      'src/updates/key-trust.cjs', 'src/updates/release.cjs']) {
       await fs.copyFile(path.join(__dirname, '..', file), path.join(directory, file));
     }
     await fs.writeFile(path.join(directory, 'package.json'), JSON.stringify({ version: '0.2.2' }));
+    await fs.writeFile(path.join(directory, 'release-notes/0.2.2.json'), JSON.stringify({ schema: 1, version: '0.2.2',
+      locale: 'en', title: '', summary: 'Disposable release fixture.', sections: [], compatibility: [] }));
     const root = generateKeyPairSync('ed25519');
     const rootFile = path.join(secrets, 'original.pem');
     await fs.writeFile(rootFile, root.privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });
@@ -46,6 +49,14 @@ test('release CLI verifies all formats; missing credentials, in-repository keys 
     assert.equal(signed.status, 0, signed.stderr);
     const verified = invoke('verify-release.cjs', ['out']);
     assert.equal(verified.status, 0, verified.stderr);
+    const notesFile = path.join(directory, 'out/release-notes-v1.json');
+    const originalNotes = await fs.readFile(notesFile, 'utf8');
+    const tampered = JSON.parse(originalNotes); tampered.payload.summary = 'Tampered editorial text.';
+    await fs.writeFile(notesFile, JSON.stringify(tampered));
+    assert.notEqual(invoke('verify-release.cjs', ['out']).status, 0);
+    await fs.rm(notesFile);
+    assert.notEqual(invoke('verify-release.cjs', ['out']).status, 0);
+    await fs.writeFile(notesFile, originalNotes);
     await fs.appendFile(installer, 'tampering');
     assert.notEqual(invoke('verify-release.cjs', ['out']).status, 0);
     await fs.writeFile(path.join(directory, 'assets/update-public-key.pem'), generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'pem' }));

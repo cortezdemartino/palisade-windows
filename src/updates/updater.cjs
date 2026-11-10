@@ -6,6 +6,7 @@ const RETRY_DELAY = 15 * 60 * 1000;
 const path = require('node:path');
 const fs = require('node:fs/promises');
 const { spawn } = require('node:child_process');
+const { createNotesHistory } = require('./notes-history.cjs');
 
 // The client verifies release metadata. Downloads and installation stay in the manager.
 function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = () => {}, fetchFn = globalThis.fetch, now = Date.now, beforeManager } = {}) {
@@ -13,6 +14,8 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
   let managerBusy = false, checking = false, started = false, stopped = false;
   let intervalTimer, retryTimer, request;
   let lastAttempt = null, failures = 0, notifiedVersion = null;
+  let notesHistory, latestVersion = '', notesStatus = 'Release notes have not been checked.';
+  const notesState = () => ({ latestVersion, notesStatus, releaseHistory: notesHistory?.snapshot() || [] });
   const supported = () => app.isPackaged && process.platform === 'win32';
   function notify(options) {
     const win = getWindow();
@@ -86,11 +89,26 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
         fs.readFile(path.join(root, 'update-public-key.pem'), 'utf8'),
         fs.readFile(path.join(root, 'update-key-transitions.json'), 'utf8'),
       ]);
+      if (!notesHistory) {
+        notesHistory = createNotesHistory({ directory: path.join(app.getPath('userData'), 'updates'),
+          root: key, transitions: JSON.parse(history), fetchFn });
+        await notesHistory.load();
+      }
       const manifest = await fetchRelease((url, options = {}) => fetchFn(url, {
         ...options, signal: AbortSignal.any([currentRequest.signal, options.signal].filter(Boolean)),
       }), key, app.getVersion(), JSON.parse(history));
       if (stopped || currentRequest.signal.aborted) return;
       failures = 0;
+      latestVersion = manifest?.version || app.getVersion();
+      try {
+        if (manifest?.signedEnvelope) await notesHistory.fetchFor(manifest.signedEnvelope, currentRequest.signal);
+        else if (!manifest) await notesHistory.fetchVersion(app.getVersion(), currentRequest.signal);
+        notesStatus = notesHistory.snapshot().some((note) => note.version === latestVersion)
+          ? 'Signed release notes. Cached notes are available offline.' : 'Release notes are unavailable for this version.';
+      } catch {
+        notesStatus = 'Release notes are unavailable or could not be verified. Cached signed notes remain available.';
+      }
+      if (stopped || currentRequest.signal.aborted) return;
       if (!manifest) {
         onStatus('Updates: up to date');
         if (manual) await notify({ type: 'info', message: 'Palisade is up to date.', buttons: ['OK'] });
@@ -100,7 +118,8 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
       if (manual) {
         const answer = await notify({ type: 'info', title: 'Palisade update available',
           message: 'Palisade ' + manifest.version + ' is available.',
-          detail: (manifest.releaseNotes || 'A signed stable release is available.').slice(0, 6000),
+          detail: notesHistory.snapshot().find((note) => note.version === manifest.version)?.summary ||
+            'A signed stable release is available. Verified release notes are unavailable.',
           buttons: ['Open update manager', 'Later'], defaultId: 1, cancelId: 1 });
         if (answer.response === 0 && !stopped) await openManager();
       } else if (notifiedVersion !== manifest.version) {
@@ -143,7 +162,7 @@ function createUpdateController(getWindow, onStatus = () => {}, { onAvailable = 
     app.once('will-quit', stop);
     void check();
   }
-  return { check, openManager, start, stop };
+  return { check, openManager, start, stop, notesState };
 
 }
 module.exports = { createUpdateController };

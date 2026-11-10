@@ -107,6 +107,15 @@ test('local preload exposes only fixed controls and strips Electron events from 
   assert.equal(received.length, 1); assert.equal(received[0].length, 1); assert.equal(received[0][0].maximized, true);
   assert.equal(received[0][0].settingsOpen, false);
   assert.equal(received[0][0].version, '');
+  const note = { version: '0.4.0', publishedAt: '2026-11-10T00:00:00.000Z', locale: 'en', title: 'Release', summary: 'Summary.',
+    sections: [{ title: 'Fixed', items: ['A fix.'] }], compatibility: [], privatePath: 'C:\\private\\file' };
+  ipcRenderer.emit('palisade:window-state', {}, { maximized: false, releaseHistory: [note] });
+  assert.equal(received.at(-1)[0].releaseHistory[0].summary, 'Summary.');
+  assert.equal(received.at(-1)[0].releaseHistory[0].privatePath, undefined);
+  ipcRenderer.emit('palisade:window-state', {}, { maximized: false, releaseHistory: Array(13).fill(note) });
+  assert.equal(received.at(-1)[0].releaseHistory.length, 0);
+  ipcRenderer.emit('palisade:window-state', {}, { maximized: false, releaseHistory: [{ ...note, summary: 'x'.repeat(601) }] });
+  assert.equal(received.at(-1)[0].releaseHistory.length, 0);
   bridge.setTray(false); bridge.setLogin(true); bridge.testNotification(); bridge.openUpdates();
   assert.equal(sent.slice(-4).map(args => args[1]).join(','), 'tray-off,login-on,notification-test,updates');
   unsubscribe(); assert.equal(ipcRenderer.listenerCount('palisade:window-state'), 0);

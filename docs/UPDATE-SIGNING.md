@@ -1,5 +1,11 @@
 # Update signing and key recovery
 
+U1 also requires a separately signed `release-notes-v1.json` sidecar referencing
+the exact v3 installer payload. The release verifier refuses missing or invalid
+notes before publication. Author and validate the version-matched draft before
+packaging; see [the format and editorial workflow](RELEASE-NOTES-FORMAT.md).
+No installer manifest schema, root key or installed transition floor is replaced.
+
 ## Current trust and test-client bootstrap
 
 On October 17, 2026, the keys embedded in the existing `v0.2.0` and `v0.2.1` GitHub tags were inspected. Both contain public-key fingerprint:

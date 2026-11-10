@@ -39,3 +39,11 @@ button.tab.selected { color: #b9d8ff; background: #22354c; }
 #settings-feedback { min-height: 16px; margin: 12px 0 0; color: #a9cfff; font-size: 11px; }
 
 .update-actions { display: flex; flex-direction: column; gap: 6px; flex-shrink: 0; }
+.release-selector { display: grid; gap: 6px; margin-top: 16px; }
+.release-selector select { padding: 8px; color: #e2e8f0; background: #1c2633; border: 1px solid #435065; border-radius: 5px; font: inherit; }
+#release-notes { overflow-wrap: anywhere; }
+#release-notes h2 { font-size: 15px; margin: 16px 0 4px; }
+#release-notes h3 { font-size: 13px; margin-bottom: 4px; }
+#release-notes time { color: #9aa8ba; font-size: 11px; }
+#release-notes li { margin: 6px 0; }
+#release-notes details summary { cursor: pointer; color: #b9d8ff; padding: 8px 0; }

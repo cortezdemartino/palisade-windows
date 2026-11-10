@@ -1,5 +1,11 @@
 # Validation
 
+## November 10 U1 signed changelog
+
+The signed-notes foundation passed desktop/Manager unit, isolated real Electron UI
+and directory/installer packaging checks. It is not native-updater completion or an
+installed upgrade. [Evidence and remaining work](evidence/2026-11-10-u1-notes.md).
+
 ## November 10 native physical observation
 
 The dormant native observer candidate passed formatting/strict Clippy and 193 Rust

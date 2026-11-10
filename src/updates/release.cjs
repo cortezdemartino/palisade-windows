@@ -2,7 +2,7 @@
 
 const { createHash, createPublicKey, verify, timingSafeEqual } = require('node:crypto');
 const { createReadStream } = require('node:fs');
-const { stat } = require('node:fs/promises');
+const { stat, open } = require('node:fs/promises');
 const { resolveTrust, requireTrustedPrefix } = require('./key-trust.cjs');
 
 const OWNER = 'cortezdemartino';
@@ -135,9 +135,26 @@ async function readLimited(response, maximum) {
   return JSON.parse(Buffer.concat(parts).toString('utf8'));
 }
 
+async function readJsonFileLimited(filename, maximum) {
+  const file = await open(filename, 'r');
+  try {
+    const details = await file.stat();
+    if (!details.isFile() || details.size > maximum) throw new Error('Metadata file is too large or invalid.');
+    const buffer = Buffer.alloc(maximum + 1);
+    let offset = 0;
+    while (offset < buffer.length) {
+      const { bytesRead } = await file.read(buffer, offset, buffer.length - offset, offset);
+      if (!bytesRead) break;
+      offset += bytesRead;
+    }
+    if (offset > maximum) throw new Error('Metadata file is too large.');
+    return JSON.parse(buffer.subarray(0, offset).toString('utf8'));
+  } finally { await file.close(); }
+}
+
 function releaseAssetUrl(version, filename) {
   parseVersion(version);
-  if (!['release.json', 'release-v2.json', 'release-v3.json', `Palisade-Setup-${version}-x64.exe`].includes(filename)) {
+  if (!['release.json', 'release-v2.json', 'release-v3.json', 'release-notes-v1.json', `Palisade-Setup-${version}-x64.exe`].includes(filename)) {
     throw new Error('Unrecognized release asset.');
   }
   return `${RELEASE_BASE}v${version}/${filename}`;
@@ -160,7 +177,12 @@ async function fetchAsset(url, { fetchFn = fetch, signal = AbortSignal.timeout(3
       target = new URL(location, target).href;
       continue;
     }
-    if (!response.ok) throw new Error(`Release asset HTTP ${response.status}.`);
+    if (!response.ok) {
+      const error = new Error(`Release asset HTTP ${response.status}.`);
+      error.status = response.status;
+      await response.body?.cancel?.();
+      throw error;
+    }
     return response;
   }
   throw new Error('Too many GitHub release redirects.');
@@ -190,7 +212,7 @@ async function findLatestRelease(fetchFn = fetch, details = false) {
 }
 
 async function fetchRelease(fetchFn, publicKeyPem, installedVersion, installedTransitions = []) {
-  const { version, notes } = await findLatestRelease(fetchFn, true);
+  const { version } = await findLatestRelease(fetchFn, true);
   if (compareVersions(version, installedVersion) <= 0) return null;
   const response = await fetchAsset(releaseAssetUrl(version, 'release-v3.json'), { fetchFn });
   const envelope = await readLimited(response, MANIFEST_BYTES_LIMIT);
@@ -199,7 +221,8 @@ async function fetchRelease(fetchFn, publicKeyPem, installedVersion, installedTr
   if (payload.version !== version || compareVersions(payload.version, installedVersion) <= 0) {
     throw new Error('Signed manifest version differs from the GitHub release.');
   }
-  Object.defineProperty(payload, 'releaseNotes', { value: notes });
+  // Carry the signed envelope for notes/staging. GitHub prose is never trusted release information.
+  Object.defineProperty(payload, 'signedEnvelope', { value: envelope });
   return payload;
 }
 
@@ -221,6 +244,6 @@ async function verifyDownloadedFile(filename, manifest) {
 
 module.exports = {
   RELEASES_API, RELEASE_BASE, MAX_INSTALLER_BYTES, compareVersions, normalisePayload,
-  signedBytes, verifyEnvelope, readLimited, releaseAssetUrl, fetchAsset, findLatestRelease,
+  signedBytes, verifyEnvelope, readLimited, readJsonFileLimited, releaseAssetUrl, fetchAsset, findLatestRelease,
   fetchRelease, verifyDownloadedFile,
 };

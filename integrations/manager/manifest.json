@@ -1,0 +1,42 @@
+{
+  "sourceVersion": "1.0.1",
+  "package": "@onyxops/palisade-installer",
+  "shared": [
+    {
+      "path": "src/updates/release.cjs",
+      "baseSha256": "e8408f040cb5e489ca592ed8920bd77f18c4ecc20935ef08d7e0b68dc4639bf3",
+      "sha256": "47221c96183a6740e5180fdedd2878726aba3bc49c5a7746c157d91e6e105799"
+    },
+    {
+      "path": "src/updates/key-trust.cjs",
+      "baseSha256": null,
+      "sha256": "83cf7922a0dda564b194abe9a6e5be8c659bf6d794ad8bd7d41c63bee381e389"
+    },
+    {
+      "path": "src/updates/notes.cjs",
+      "baseSha256": null,
+      "sha256": "39476863a1b1393257a00ab6352f5a5ace45e41c60b4ce2fcd9674ba66fcb653"
+    },
+    {
+      "path": "src/updates/notes-history.cjs",
+      "baseSha256": null,
+      "sha256": "e623225c8c740d6aa76173e68438e1e59de6fc9b7b5ca626ac0d546fbc0e1b5d"
+    },
+    {
+      "path": "src/updates/downloader.cjs",
+      "baseSha256": null,
+      "sha256": "8c9c17608f7c601d35f618433730743a7e3d6dfa6c7d7fccf2a76f3a52a6ba3e"
+    },
+    {
+      "path": "assets/update-key-transitions.json",
+      "baseSha256": null,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "path": "tests/release-notes.test.cjs",
+      "baseSha256": null,
+      "sha256": "80af1e8a02ff3da946e7059bd74be74f0787312b7be4a7ef94e213e6435f207c"
+    }
+  ],
+  "schema": 1
+}

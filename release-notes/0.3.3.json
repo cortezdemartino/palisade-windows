@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "version": "0.3.3",
+  "locale": "en",
+  "title": "",
+  "summary": "Development candidate with authenticated release notes in local desktop settings. This candidate has not been released.",
+  "sections": [
+    { "category": "new", "items": ["View signed release summaries, details and cached release history in device settings."] },
+    { "category": "security", "items": ["Release notes are authenticated separately and tied to the exact signed installer manifest. Unverified release descriptions are not shown as trusted notes."] },
+    { "category": "limitations", "items": ["Assist remains disabled and has not passed physical-device acceptance.", "The desktop-owned installer handoff is still under development. Routine installation currently uses the existing Update Manager."] }
+  ],
+  "compatibility": ["Windows x64. Existing account sessions and local application data are retained."]
+}

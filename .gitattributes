@@ -1,0 +1,9 @@
+# Shared validators and integration digests must be byte-identical across checkouts.
+src/updates/release.cjs text eol=lf
+src/updates/key-trust.cjs text eol=lf
+src/updates/notes.cjs text eol=lf
+src/updates/notes-history.cjs text eol=lf
+src/updates/downloader.cjs text eol=lf
+assets/update-key-transitions.json text eol=lf
+tests/release-notes.test.cjs text eol=lf
+integrations/manager/** -text

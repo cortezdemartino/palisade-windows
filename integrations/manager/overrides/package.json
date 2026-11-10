@@ -1,0 +1,79 @@
+{
+  "name": "@onyxops/palisade-installer",
+  "version": "1.0.1",
+  "private": true,
+  "description": "Palisade Installer & Update Manager",
+  "author": "Onyx Operations Group",
+  "license": "Apache-2.0",
+  "main": "src/main.cjs",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test tests/*.test.cjs",
+    "check": "node scripts/check.cjs",
+    "test:smoke": "electron scripts/smoke.cjs",
+    "build": "npm run check && node scripts/package.cjs && node scripts/checksum.cjs",
+    "package:dir": "electron-builder --win dir --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "org.onyxops.palisade.installer",
+    "productName": "Palisade Installer",
+    "copyright": "Copyright © 2026 Onyx Operations Group",
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "LICENSE",
+      "NOTICE",
+      "THIRD-PARTY-NOTICES.md",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "offline",
+        "to": "offline",
+        "filter": [
+          "release.json",
+          "release-v2.json",
+          "release-v3.json",
+          "release-notes-v1.json",
+          "Palisade-Setup-*-x64.exe"
+        ]
+      }
+    ],
+    "asar": true,
+    "electronFuses": {
+      "runAsNode": false,
+      "enableCookieEncryption": true,
+      "enableNodeOptionsEnvironmentVariable": false,
+      "enableNodeCliInspectArguments": false,
+      "enableEmbeddedAsarIntegrityValidation": true,
+      "onlyLoadAppFromAsar": true,
+      "grantFileProtocolExtraPrivileges": false
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "portable": {
+      "artifactName": "Palisade-Installer-${version}-${arch}.${ext}",
+      "requestExecutionLevel": "user"
+    }
+  }
+}

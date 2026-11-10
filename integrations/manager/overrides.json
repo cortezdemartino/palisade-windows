@@ -1,0 +1,57 @@
+[
+  {
+    "path": "src/updates/service.cjs",
+    "baseSha256": "c27e10ea38a15b19f43c9bdbd5781f0d55bd53f1feccf9fb27cf1b35cde126fa",
+    "sha256": "5c9243fe8d97c9e9f43c6cd089ebafd27933ce4612fea761376ee2af94cfef17"
+  },
+  {
+    "path": "src/main.cjs",
+    "baseSha256": "09d89e8c101a90d8bca658b63115ca8c8d18ea8688e5ee0e330ff6c756f190a2",
+    "sha256": "20ed487fc393fe862ada6d21562a0b1b2d6ad96da6d5bc1c3df505b824c62261"
+  },
+  {
+    "path": "src/ui/renderer.js",
+    "baseSha256": "1a75ce7197d60cb56939b8ab6d6dc5424963c8c7c2ecc3a682b3bfc58cceb208",
+    "sha256": "906f9452990c902490361657908b5d39e95ea30e094d1978a5595e6fbb9f6c3f"
+  },
+  {
+    "path": "src/ui/index.html",
+    "baseSha256": "6ab9eb5eb9ed9c24cde5f582b658396bae1920df95106bbbd71993ec22bfcf4a",
+    "sha256": "908cb19efb3ed4ef87d42446c101eeedab032fb4f4d22b6ea297d70937a20b7c"
+  },
+  {
+    "path": "package.json",
+    "baseSha256": "c1639bb34b34318068d417bffd063405a3b16a4d16b7f365c9ee5492f5713872",
+    "sha256": "fcc75a2e7d065cc252af1d20475fe06bdd5c9d00d3715589e35b9ba61614dfb0"
+  },
+  {
+    "path": "tests/manager.test.cjs",
+    "baseSha256": "da895bd8837fb6d7bf2d58e7e3ec66cbfbde71ed29e6e907cc28bc36e10319cc",
+    "sha256": "7bc96758dad33a7c391d15c625467b5aca0409a5e432e45024b7f578bf4d2e58"
+  },
+  {
+    "path": "tests/release.test.cjs",
+    "baseSha256": "a1ca38d809575ad079b2dc8e5c617a109f7fc43f326e2bcc3db1e6136ed2089a",
+    "sha256": "c16d26fb85613ce0ca4f19b10d0cd641236dd2def4b862ac775174549ae2e0b0"
+  },
+  {
+    "path": "tests/u1-service.test.cjs",
+    "baseSha256": null,
+    "sha256": "f4c91c74963ea87d64a33bf877312e783bf9186c4d076c688714125646a8f8d7"
+  },
+  {
+    "path": "scripts/verify-package.cjs",
+    "baseSha256": "08b9ac1ffc2a74a8f4fd98f9a47b4fd7ddd0331ee2b2e4144682cdd3dc6f5ade",
+    "sha256": "259b73ff57f1b9976920a6e266d6e9c9742743f00a39c874b1f1f4e4d057532d"
+  },
+  {
+    "path": "scripts/notes-smoke.cjs",
+    "baseSha256": null,
+    "sha256": "e2b0c28491e72e60ed40d8f14ee10e68cc4997d55a3a80d8c7965762491e4a15"
+  },
+  {
+    "path": "U1-RELEASE-NOTES.md",
+    "baseSha256": null,
+    "sha256": "135ecd3007f4319d701f4f465967b609f8749ca4bae10ad175790f0ed93f4164"
+  }
+]
