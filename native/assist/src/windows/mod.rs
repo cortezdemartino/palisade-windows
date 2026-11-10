@@ -1,5 +1,6 @@
 pub mod activity;
 pub mod consent;
+pub mod custody_probe;
 pub mod enrollment;
 pub mod files;
 pub mod https;

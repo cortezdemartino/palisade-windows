@@ -15,6 +15,46 @@ The new direct application-owned monitor launches its fixed coordinator with ato
 
 Connecting StreamRuntime requires positive executor-generation release receipts as well as actual process exit. The monitor cannot infer held-input release from a clean channel, job zero, or exit125 after a guardian crash. The next implementation must register every cleanup holder before input admission and retain unresolved generations after either owner fails.
 
+### Monitor custody model and no-input qualification
+
+`custody.rs` records process/cleanup evidence, separate from SessionGate and the
+executor's held-input ledger. A launch retains at most 128 generation records,
+including completed tombstones. Tickets bind launch nonce, session, slot, execution
+and a fresh nonce. Reservation precedes creation; Armed is recorded before any ARM
+write. Lost/partial ARM cannot be canceled into an unarmed success. Sealing closes
+admission permanently. A known-entry result never attests unrelated descendants.
+
+```mermaid
+stateDiagram-v2
+    Reserved --> Spawning
+    Reserved --> NeverStarted: cancel before creation
+    Spawning --> NeverStarted: positive no-child failure
+    Spawning --> Bound: retain exact process handle
+    Bound --> ArmedPending: before ARM write
+    Bound --> ExitPending: canceled without ARM
+    ArmedPending --> ReleasePending: Stop or owner loss
+    ReleasePending --> ExitPending: positive owned-state evidence
+    ExitPending --> Complete: actual exit and required mirror evidence
+```
+
+For an armed generation, completion requires actual child exit and either a
+positive mirror receipt from the fenced coordinator, or actual coordinator exit
+plus a positive child receipt. A child receipt alone, process exit alone, empty job
+or both owners dying without receipts is insufficient. An ambiguous launch after
+CreateProcess retains its exact child owner; Stop signals and both input pipes close
+on bootstrap/query failures. No timeout kills cleanup holders.
+
+The current `windows/custody_probe.rs` adapter launches only fixed no-authority
+actors. Its monitor owns ARM-write/receipt-read; its child alone receives
+ARM-read/receipt-write. The coordinator receives neither. Receipt ordering, ticket,
+mode and EOF are checked before completion. Ordinary stdout is separate from the
+receipt pipe; the blocked-output fixture observes kernel pipe occupancy while the
+child is alive. Probe mode has no hooks, injection, identity, resource or filesystem
+broker. Even in an all-feature build, a probe completion cannot match native mode.
+The probe's mirror settlement is synthetic. The normal child/mirror receipt wire,
+native owned-intent semantics and all-process/resource completion are still Planned.
+[Verification and reproduction](evidence/2026-11-09-monitor-custody.md).
+
 ## M4G-WEB-6 release ownership
 
 The current inactive executor keeps per-gate/grant held-input ownership derived from validated native permits, alongside its combined write-ahead cleanup ledger. V2 `release-all` accepts the carried mouse or keyboard grant and releases only its owner's scope; ordinary UP and repeats cannot take another owner's holds. Releases bypass ordinary input rate tokens while retaining current authority and replay checks. Independent terminal fence/release still clears all endpoint-owned input. [Evidence](evidence/2026-11-08-release-authority.md).

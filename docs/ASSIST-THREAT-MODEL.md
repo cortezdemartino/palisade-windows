@@ -1,5 +1,15 @@
 # Windows Assist threat model
 
+Monitor custody now has a bounded, launch/generation-bound evidence model and
+dedicated no-input Windows qualification. Armed is recorded before ARM I/O; every
+created child remains retained even when bootstrap/binding fails. Invalid ready or
+release frames are sticky failures, and ordinary stdout cannot stand in for the
+dedicated receipt. Probe and native completion modes are distinct. The tested
+adapter cannot execute native input, and its synthetic mirror settlement cannot
+prove normal owned-key cleanup. Actual native child/mirror wiring, protected UI,
+physical overlap and integrated review remain open.
+[Custody evidence](evidence/2026-11-09-monitor-custody.md).
+
 The direct process monitor now atomically assigns its coordinator to a private non-killing/no-breakaway job and restricts inheritance to private pipes plus reduced-rights job/stop handles. A pre-launch scope guard and immediate coordinator-death stop precede descendant waits. Exact job zero is combined with a launch-bound channel proof and normal coordinator exit; a crash never becomes success solely because the job is empty. Both negotiated scopes remain non-authorizing. Positive executor/mirror release receipts are still required for input authority. A real stop-event-only descendant crash fixture catches the former stop-after-job-wait deadlock. [Evidence and limitations](evidence/2026-11-08-process-monitor.md).
 
 Open integration requirement: native-sensitive dialogs and file drops must be protected from active remote input. The native coordinator must fence/reap/release old input before enabling approvals and hold a guard across the entire UI lifetime, including source selection/settings; replacement controllers/signing/warmup are refused. Trusted browser events and remotely produced drops are not host consent. Use an app-owned drop surface so the hosted page receives no file objects/contents before independent local per-file confirmation. Held Enter/Space/buttons, queued input, overlapping dialogs and cleanup-only UP events require real adversarial acceptance. This guard is Planned, not supplied by the application-wide quit barrier or existing fake consent tests.

@@ -21,6 +21,7 @@ pub struct ImageManifest {
 }
 pub struct VerifiedImage {
     path: PathBuf,
+    digest: [u8; 32],
     _file: File,
     _parents: ParentGuard,
 }
@@ -59,8 +60,8 @@ impl VerifiedImage {
             }
             hash.update(&bytes[..count]);
         }
-        let actual = hash
-            .finalize()
+        let digest: [u8; 32] = hash.finalize().into();
+        let actual = digest
             .iter()
             .map(|b| format!("{b:02x}"))
             .collect::<String>();
@@ -69,11 +70,15 @@ impl VerifiedImage {
         }
         Ok(Self {
             path,
+            digest,
             _file: file,
             _parents: parents,
         })
     }
     pub(crate) fn path(&self) -> &Path {
         &self.path
+    }
+    pub(crate) fn digest(&self) -> [u8; 32] {
+        self.digest
     }
 }

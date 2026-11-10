@@ -29,6 +29,20 @@ pub struct TreeChild {
     pub output: File,
     pub error: File,
 }
+pub(crate) struct LaunchFailure {
+    pub error: &'static str,
+    pub child: Option<TreeChild>,
+}
+impl From<&'static str> for LaunchFailure {
+    fn from(error: &'static str) -> Self {
+        Self { error, child: None }
+    }
+}
+impl std::fmt::Debug for LaunchFailure {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.error)
+    }
+}
 pub struct StopEvent(OwnedHandle);
 impl StopEvent {
     pub fn new() -> Result<Self, &'static str> {
@@ -139,6 +153,9 @@ impl InheritedTree {
     }
 }
 impl TreeChild {
+    pub(crate) fn into_parts(self) -> (OwnedHandle, File, File, File) {
+        (self.process, self.input, self.output, self.error)
+    }
     pub fn process_handle(&self) -> BorrowedHandle<'_> {
         self.process.as_handle()
     }
@@ -265,6 +282,26 @@ impl ProcessTree {
     ) -> Result<TreeChild, &'static str> {
         self.launch_inner(image.path().as_os_str(), args, extra, None)
     }
+    #[cfg(test)]
+    pub(crate) fn launch_custody_fixture(
+        &mut self,
+        executor: bool,
+        extra: &[BorrowedHandle<'_>],
+    ) -> Result<TreeChild, LaunchFailure> {
+        let fixture = if executor {
+            "windows::custody_probe::tests::executor_fixture"
+        } else {
+            "windows::custody_probe::tests::coordinator_fixture"
+        };
+        self.launch_tracked(
+            std::env::current_exe()
+                .map_err(|_| "fixture-image")?
+                .as_os_str(),
+            &["--exact".into(), fixture.into(), "--nocapture".into()],
+            extra,
+            None,
+        )
+    }
     fn launch_inner(
         &mut self,
         image: &std::ffi::OsStr,
@@ -272,8 +309,26 @@ impl ProcessTree {
         extra: &[BorrowedHandle<'_>],
         environment: Option<&[u16]>,
     ) -> Result<TreeChild, &'static str> {
+        self.launch_tracked(image, args, extra, environment)
+            .map_err(|failure| failure.error)
+    }
+    pub(crate) fn launch_custody(
+        &mut self,
+        image: &VerifiedImage,
+        args: &[OsString],
+        extra: &[BorrowedHandle<'_>],
+    ) -> Result<TreeChild, LaunchFailure> {
+        self.launch_tracked(image.path().as_os_str(), args, extra, None)
+    }
+    fn launch_tracked(
+        &mut self,
+        image: &std::ffi::OsStr,
+        args: &[OsString],
+        extra: &[BorrowedHandle<'_>],
+        environment: Option<&[u16]>,
+    ) -> Result<TreeChild, LaunchFailure> {
         if self.admission_closed || args.len() > 16 || extra.len() > 8 {
-            return Err("tree-admission-closed");
+            return Err("tree-admission-closed".into());
         }
         self.check_policy()?;
         let (child_in, parent_in) = pipe()?;
@@ -282,7 +337,7 @@ impl ProcessTree {
         for handle in [&parent_in, &parent_out, &parent_error] {
             if unsafe { SetHandleInformation(handle.as_raw_handle(), HANDLE_FLAG_INHERIT, 0) } == 0
             {
-                return Err("tree-pipe");
+                return Err("tree-pipe".into());
             }
         }
         let mut inherited = vec![
@@ -299,7 +354,7 @@ impl ProcessTree {
                 || flags & HANDLE_FLAG_INHERIT == 0
                 || inherited.contains(&handle)
             {
-                return Err("tree-inherit");
+                return Err("tree-inherit".into());
             }
             inherited.push(handle);
         }
@@ -322,7 +377,7 @@ impl ProcessTree {
             command.extend(quote(arg)?);
         }
         if command.len() >= 32767 {
-            return Err("tree-command");
+            return Err("tree-command".into());
         }
         command.push(0);
         let mut startup: STARTUPINFOEXW = unsafe { zeroed() };
@@ -350,21 +405,29 @@ impl ProcessTree {
             )
         } == 0
         {
-            return Err("tree-launch");
+            return Err("tree-launch".into());
         }
         // No kill-on-drop or kill-on-job-close: descendants retain cleanup.
         let process = unsafe { OwnedHandle::from_raw_handle(info.hProcess) };
         let _thread = unsafe { OwnedHandle::from_raw_handle(info.hThread) };
         self.launched = true;
-        if !self.contains(process.as_handle())? {
-            return Err("tree-membership");
-        }
-        Ok(TreeChild {
+        let child = TreeChild {
             process,
             input: parent_in.into(),
             output: parent_out.into(),
             error: parent_error.into(),
-        })
+        };
+        match self.contains(child.process.as_handle()) {
+            Ok(true) => Ok(child),
+            Ok(false) => Err(LaunchFailure {
+                error: "tree-membership",
+                child: Some(child),
+            }),
+            Err(error) => Err(LaunchFailure {
+                error,
+                child: Some(child),
+            }),
+        }
     }
 }
 fn wide(value: &std::ffi::OsStr) -> Result<Vec<u16>, &'static str> {
@@ -415,6 +478,9 @@ fn pipe() -> Result<(OwnedHandle, OwnedHandle), &'static str> {
             OwnedHandle::from_raw_handle(write),
         )
     })
+}
+pub(crate) fn custody_pipe() -> Result<(OwnedHandle, OwnedHandle), &'static str> {
+    pipe()
 }
 struct Attributes {
     storage: Vec<usize>,

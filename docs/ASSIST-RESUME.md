@@ -1,5 +1,17 @@
 # Assist continuation checkpoint
 
+## Monitor custody continuation
+
+The monitor custody model and real no-input process adapter now retain executor
+ownership through ARM ambiguity, bootstrap/query errors, coordinator death and
+blocked ordinary output. Dedicated child receipts, exact retained process handles
+and settled mirror evidence are separate requirements. Probe receipts cannot
+satisfy native cleanup. [Evidence and next integration](evidence/2026-11-09-monitor-custody.md).
+The normal input child/mirror wire, sealed launch bootstrap and persistent runtime
+owner remain unfinished; do not widen private v1/v2 scope or advertise localYield.
+The queued COOP-1 attachment repeats the earlier contract. Preserve the newer frozen
+`01ae585` manifest v3, all nine fixture families and all 30 acceptance cases.
+
 ## Independent grant admission continuation
 
 Current-view admission now uses the immutable constructor generation floor rather

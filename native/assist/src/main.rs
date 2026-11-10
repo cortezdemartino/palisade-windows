@@ -68,6 +68,29 @@ fn run() -> Result<(), &'static str> {
 fn run() -> Result<(), &'static str> {
     use palisade_assist_guardian::windows::{lifecycle::NativeStop, parent::Parent};
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.len() == 2 && args[0] == "--custody-coordinator-probe" {
+        return palisade_assist_guardian::windows::custody_probe::run_coordinator_probe(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+        );
+    }
+    if args.len() == 5 && args[0] == "--custody-monitor-probe" {
+        return palisade_assist_guardian::windows::custody_probe::run_monitor_probe(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            palisade_assist_guardian::windows::image::ImageManifest {
+                filename: "Palisade-Assist.exe".into(),
+                protocol: "palisade.assist.guardian".into(),
+                version: 1,
+                size: args[2].parse().map_err(|_| "helper-integrity")?,
+                sha256: args[3].clone(),
+            },
+            &args[4],
+        );
+    }
+    if args.len() == 2 && args[0] == "--custody-executor-probe" {
+        return palisade_assist_guardian::windows::custody_probe::run_probe(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+        );
+    }
     if args.len() == 2 && args[0] == "--tree-stop-probe" {
         return palisade_assist_guardian::windows::process_monitor::stop_probe(
             args[1].parse().map_err(|_| "invalid-parent")?,

@@ -1,5 +1,14 @@
 # Complete Windows Assist delivery plan
 
+Current custody milestone: a bounded monitor ledger retains exact executor
+generations, ARM ambiguity and positive release/exit evidence. Its real Windows
+adapter is deliberately no-input, and its receipts cannot authorize native
+completion. [Evidence](evidence/2026-11-09-monitor-custody.md). Next, attach the normal
+executor's fenced owned-intent and mirror cleanup to this ownership model, then
+complete the sealed launch owner and persistent session/runtime dispatch. Production
+main remains disconnected. Frozen web `01ae585` and all 30 cases remain canonical;
+the repeated COOP-1 queue does not roll back the manifest or qualify physical input.
+
 Session cancellation is now isolated under the launch emergency stop, including
 direct file-dialog checks and refusal of gate results completed after Stop.
 [Evidence](evidence/2026-11-09-session-cancellation.md). The observer correction
