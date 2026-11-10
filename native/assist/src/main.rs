@@ -138,7 +138,7 @@ fn run() -> Result<(), &'static str> {
         );
     }
     if (args.len() == 3 && args[0] == "--executor-probe")
-        || (args.len() == 4 && args[0] == "--executor")
+        || (args.len() == 5 && args[0] == "--executor")
     {
         return palisade_assist_guardian::windows::process_input::run_child(
             args[1].parse().map_err(|_| "invalid-parent")?,
@@ -146,6 +146,9 @@ fn run() -> Result<(), &'static str> {
             args[0] == "--executor-probe",
             args.get(3)
                 .map(|v| v.parse().map_err(|_| "invalid-owner"))
+                .transpose()?,
+            args.get(4)
+                .map(|v| v.parse().map_err(|_| "invalid-stop"))
                 .transpose()?,
         );
     }

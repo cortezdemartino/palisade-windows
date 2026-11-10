@@ -1,5 +1,11 @@
 # Complete Windows Assist delivery plan
 
+Normal executor Stop now has an independent per-generation kernel event and direct
+creator/event checks before primitives; EOF-only fencing is insufficient for queued
+steps. [Evidence](evidence/2026-11-09-executor-stop-event.md). This remains a dormant
+component. Monitor-owned normal channels/receipts, persistent runtime, protected UI,
+cooperative physical arbitration and complete resources still require implementation.
+
 Current custody milestone: a bounded monitor ledger retains exact executor
 generations, ARM ambiguity and positive release/exit evidence. Its real Windows
 adapter is deliberately no-input, and its receipts cannot authorize native

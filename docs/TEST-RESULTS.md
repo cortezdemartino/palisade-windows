@@ -1,5 +1,28 @@
 # Validation
 
+## November 9 custody and normal executor fencing
+
+Custody checkpoint `718348fd7dc4fbb907da7bda897fe09da0500c3a` passed full exact-SHA
+[Windows CI42727476589](https://github.com/cortezdemartino/palisade-windows/actions/runs/42727476589).
+It passed 168 Rust tests per configuration, 202 app tests, 29 no-input process groups
+per configuration, audits, NSIS/integrity and packaged desktop/capture/peer checks.
+[Scope and artifact hashes](evidence/2026-11-09-monitor-custody.md).
+
+The normal no-kill correction `a8bf3fa15602f6310fe5d60fffc6d83eb9817a07` passed
+172 Rust tests per configuration and the same app/process/package integrity checks
+locally. It retains the child through startup failure, returns pending without
+blocking the gate and refuses mirror UP before actual child exit.
+Full exact-SHA [CI42728803272](https://github.com/cortezdemartino/palisade-windows/actions/runs/42728803272)
+also passed, including the packaged desktop/capture/peer checks.
+[Evidence](evidence/2026-11-09-nonkilling-input-fence.md).
+
+The next direct-event candidate passes 175 Rust tests per configuration, including
+an actual no-authority child observing Stop without pipe EOF or atomic relay and
+wait-only observer-rights negatives. [Current evidence](evidence/2026-11-09-executor-stop-event.md).
+These remain component tests. Real input, protected desktop, cooperative overlap,
+native consent, complete resources and real-service cross-client acceptance are
+Not Verified. Full Assist implementation and integration remain unfinished.
+
 ## November 9 independent grant admission
 
 The initial-view/resource-binding candidate passed 147 Rust tests per configuration,

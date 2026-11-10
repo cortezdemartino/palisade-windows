@@ -1,5 +1,18 @@
 # Assist continuation checkpoint
 
+## Direct executor stop continuation
+
+Normal input now requires a creator-owned per-generation stop event. It is retained
+before spawn, signaled before pipe closure, duplicated with wait-only rights from
+the exact validated creator and checked directly at dequeue/primitive boundaries.
+This closes the buffered-step gap left by EOF-only fencing. It does not establish
+physical delivery arbitration or monitor Native cleanup proof.
+The new event currently fires from fence/Drop; urgent global/session revokers must
+still signal the final child safety plane independently of the ordinary worker.
+[Evidence](evidence/2026-11-09-executor-stop-event.md). Continue the normal monitor
+channel, single terminal child receipt owner and retained mirror acknowledgement,
+then the persistent launch/session runtime. Keep `localYield` unadvertised.
+
 ## Monitor custody continuation
 
 `718348fd7dc4fbb907da7bda897fe09da0500c3a` pushed the custody milestone.

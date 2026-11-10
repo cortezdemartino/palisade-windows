@@ -26,6 +26,48 @@ impl Drop for Parent {
     }
 }
 impl Parent {
+    /// Duplicate an exact creator-owned stop object with wait-only rights.
+    /// Reopening for DUP_HANDLE is corroborated against the retained process
+    /// object, never just its reported PID. The child cannot signal/reset it.
+    pub(crate) fn duplicate_wait(
+        &self,
+        raw: usize,
+    ) -> Result<std::os::windows::io::OwnedHandle, &'static str> {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle};
+        if raw == 0 || raw == usize::MAX || !self.alive() {
+            return Err("parent-stop-handle");
+        }
+        let process = unsafe { OpenProcess(PROCESS_DUP_HANDLE, 0, self.pid()) };
+        if process.is_null() {
+            return Err("parent-stop-handle");
+        }
+        let process = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(process) };
+        if unsafe { CompareObjectHandles(self.0, process.as_raw_handle()) } == 0 {
+            return Err("parent-stop-binding");
+        }
+        let mut observer = ptr::null_mut();
+        if unsafe {
+            DuplicateHandle(
+                process.as_raw_handle(),
+                raw as HANDLE,
+                GetCurrentProcess(),
+                &mut observer,
+                SYNCHRONIZATION_SYNCHRONIZE,
+                0,
+                0,
+            )
+        } == 0
+        {
+            return Err("parent-stop-handle");
+        }
+        let observer = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(observer) };
+        if !self.alive()
+            || unsafe { WaitForSingleObject(observer.as_raw_handle(), 0) } != WAIT_TIMEOUT
+        {
+            return Err("parent-stopped");
+        }
+        Ok(observer)
+    }
     pub(crate) fn wait_handle(&self) -> Result<std::os::windows::io::OwnedHandle, &'static str> {
         use std::os::windows::io::FromRawHandle;
         let mut handle = ptr::null_mut();
@@ -240,6 +282,38 @@ pub(crate) fn same_user_for_query(process: HANDLE, probe: bool) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn stop_observer_is_exact_wait_only_noninheritable_and_refuses_stopped_objects() {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle};
+        let parent = Parent(unsafe {
+            OpenProcess(
+                PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+                0,
+                GetCurrentProcessId(),
+            )
+        });
+        assert!(!parent.0.is_null());
+        let raw = unsafe { CreateEventW(ptr::null(), 1, 0, ptr::null()) };
+        assert!(!raw.is_null());
+        let event = unsafe { std::os::windows::io::OwnedHandle::from_raw_handle(raw) };
+        let observer = parent.duplicate_wait(raw as usize).unwrap();
+        let mut flags = 0;
+        assert_ne!(
+            unsafe { GetHandleInformation(observer.as_raw_handle(), &mut flags) },
+            0
+        );
+        assert_eq!(flags & HANDLE_FLAG_INHERIT, 0);
+        assert_eq!(unsafe { SetEvent(observer.as_raw_handle()) }, 0);
+        assert_eq!(unsafe { ResetEvent(observer.as_raw_handle()) }, 0);
+        assert_ne!(unsafe { SetEvent(event.as_raw_handle()) }, 0);
+        assert_eq!(
+            unsafe { WaitForSingleObject(observer.as_raw_handle(), 0) },
+            WAIT_OBJECT_0
+        );
+        assert!(parent.duplicate_wait(raw as usize).is_err());
+        assert!(parent.duplicate_wait(0).is_err());
+        assert!(parent.duplicate_wait(usize::MAX).is_err());
+    }
     #[test]
     fn elevated_tokens_are_refused_in_normal_mode_without_exception() {
         for own in [false, true] {

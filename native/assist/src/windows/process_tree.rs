@@ -45,6 +45,9 @@ impl std::fmt::Debug for LaunchFailure {
 }
 pub struct StopEvent(OwnedHandle);
 impl StopEvent {
+    pub(crate) fn raw(&self) -> usize {
+        self.0.as_raw_handle() as usize
+    }
     pub fn new() -> Result<Self, &'static str> {
         let raw = unsafe { CreateEventW(ptr::null(), 1, 0, ptr::null()) };
         if raw.is_null() {

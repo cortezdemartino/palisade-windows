@@ -10,6 +10,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    os::windows::io::{AsRawHandle, OwnedHandle},
     process::{Child, ChildStdin, Command, Stdio},
     sync::{
         Arc, Mutex,
@@ -18,7 +19,32 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use windows_sys::Win32::System::SystemInformation::GetTickCount64;
+use windows_sys::Win32::{
+    Foundation::WAIT_TIMEOUT,
+    System::{SystemInformation::GetTickCount64, Threading::WaitForSingleObject},
+};
+struct ExecutorWitness {
+    parent: OwnedHandle,
+    stop: OwnedHandle,
+}
+impl ExecutorWitness {
+    fn retain(parent: &Parent, raw: usize) -> Result<Self, &'static str> {
+        let witness = Self {
+            parent: parent.wait_handle()?,
+            stop: parent.duplicate_wait(raw)?,
+        };
+        if witness.stopped() {
+            return Err("executor-stopped");
+        }
+        Ok(witness)
+    }
+    fn stopped(&self) -> bool {
+        unsafe {
+            WaitForSingleObject(self.parent.as_raw_handle(), 0) != WAIT_TIMEOUT
+                || WaitForSingleObject(self.stop.as_raw_handle(), 0) != WAIT_TIMEOUT
+        }
+    }
+}
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct Step {
@@ -53,22 +79,29 @@ struct ExecutorProcess {
     pipe: Option<ChildStdin>,
     fenced: bool,
     reaped: bool,
+    stop: Option<Arc<super::process_tree::StopEvent>>,
 }
 impl ExecutorProcess {
-    fn new(mut child: Child) -> Self {
+    fn new(mut child: Child, stop: Option<Arc<super::process_tree::StopEvent>>) -> Self {
         Self {
             pipe: child.stdin.take(),
             child,
             fenced: false,
             reaped: false,
+            stop,
         }
     }
-    fn close_admission(&mut self) {
+    fn close_admission(&mut self) -> Result<(), &'static str> {
         self.fenced = true;
+        // Signal before closing/draining ordinary I/O. A buffered Step cannot
+        // regain authority while its old timestamp is still otherwise valid.
+        // Even signal failure must close stdin and retain/query the child.
+        let signaled = self.stop.as_ref().map_or(Ok(()), |stop| stop.revoke());
         drop(self.pipe.take());
+        signaled
     }
     fn fence(&mut self) -> Result<(), &'static str> {
-        self.close_admission();
+        let signaled = self.close_admission();
         if !self.reaped {
             // Dispatch may hold SessionGate. Do not wait there for protected-
             // desktop cleanup or block independently authorized resources.
@@ -78,6 +111,7 @@ impl ExecutorProcess {
                 .map_err(|_| "executor-stop")?
                 .is_none()
             {
+                signaled?;
                 return Err("executor-cleanup-pending");
             }
             self.reaped = true;
@@ -87,7 +121,7 @@ impl ExecutorProcess {
 }
 impl Drop for ExecutorProcess {
     fn drop(&mut self) {
-        self.close_admission();
+        let _ = self.close_admission();
         while !self.reaped {
             if self.child.wait().is_ok() {
                 self.reaped = true;
@@ -110,6 +144,11 @@ impl ProcessInput {
             return Err("native-input-disabled");
         }
         let verified = super::image::VerifiedImage::open(manifest)?;
+        let stop = if probe {
+            None
+        } else {
+            Some(Arc::new(super::process_tree::StopEvent::new()?))
+        };
         let mut command = Command::new(verified.path());
         command.args([
             if probe {
@@ -122,6 +161,12 @@ impl ProcessInput {
         ]);
         if !probe {
             command.arg(owner.raw().to_string());
+            command.arg(
+                stop.as_ref()
+                    .ok_or("executor-stop-required")?
+                    .raw()
+                    .to_string(),
+            );
         }
         let child = command
             .stdin(Stdio::piped())
@@ -129,12 +174,20 @@ impl ProcessInput {
             .stderr(Stdio::null())
             .spawn()
             .map_err(|_| "executor-start")?;
-        Self::from_child(child, tag, probe)
+        Self::from_child(child, tag, probe, stop)
     }
-    fn from_child(child: Child, tag: usize, probe: bool) -> Result<Self, &'static str> {
+    fn from_child(
+        child: Child,
+        tag: usize,
+        probe: bool,
+        stop: Option<Arc<super::process_tree::StopEvent>>,
+    ) -> Result<Self, &'static str> {
         // Establish the retained owner before any pipe extraction, reader setup
         // or startup result can return an error after CreateProcess succeeded.
-        let mut process = ExecutorProcess::new(child);
+        let mut process = ExecutorProcess::new(child, stop);
+        if !probe && process.stop.is_none() {
+            return Err("executor-stop-required");
+        }
         if process.pipe.is_none() {
             return Err("executor-pipe");
         }
@@ -288,11 +341,25 @@ pub fn run_child(
     tag: usize,
     probe: bool,
     owner_handle: Option<usize>,
+    stop_handle: Option<usize>,
 ) -> Result<(), &'static str> {
     if !probe && !cfg!(feature = "native-input") {
         return Err("native-input-disabled");
     }
     let parent = Parent::validate_executor(parent_pid, probe)?;
+    // Normal mode has no old-arity/EOF-only fallback. Observe the exact native
+    // stop and creator before ownership joining, hooks, readiness or any DOWN.
+    let witness = if probe {
+        None
+    } else {
+        if owner_handle == stop_handle {
+            return Err("executor-stop-binding");
+        }
+        Some(Arc::new(ExecutorWitness::retain(
+            &parent,
+            stop_handle.ok_or("executor-stop-required")?,
+        )?))
+    };
     // Retain the guardian's exact ownership object through any cleanup retry.
     // No input, hooks or readiness acknowledgment precedes successful joining.
     let _owner = if probe {
@@ -331,10 +398,12 @@ pub fn run_child(
         source.clone(),
         heartbeat.clone(),
     );
+    let watch_witness = witness.clone();
     std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(10));
             if !parent.alive()
+                || watch_witness.as_ref().is_some_and(|w| w.stopped())
                 || watch_time
                     .lock()
                     .map(|t| t.elapsed() >= Duration::from_secs(2))
@@ -372,6 +441,10 @@ pub fn run_child(
         stop.store(true, Ordering::SeqCst);
         return Err("local-input-held");
     }
+    if stop.load(Ordering::SeqCst) || witness.as_ref().is_some_and(|w| w.stopped()) {
+        stop.store(true, Ordering::SeqCst);
+        return Err("revoked");
+    }
     let mut sequence = 0u32;
     let mut output = std::io::stdout().lock();
     write_frame(
@@ -388,7 +461,8 @@ pub fn run_child(
     let outcome = (|| {
         loop {
             let bytes = receive.recv_timeout(Duration::from_millis(25));
-            if stop.load(Ordering::SeqCst) {
+            if stop.load(Ordering::SeqCst) || witness.as_ref().is_some_and(|w| w.stopped()) {
+                stop.store(true, Ordering::SeqCst);
                 return Err("revoked");
             }
             let bytes = match bytes {
@@ -427,7 +501,11 @@ pub fn run_child(
                 input.lock().map_err(|_| "executor-failed")?.step(
                     &request.source,
                     request.action.as_ref().ok_or("invalid-message")?,
-                    || !stop.load(Ordering::SeqCst) && uptime() < request.expires,
+                    || {
+                        !stop.load(Ordering::SeqCst)
+                            && witness.as_ref().is_none_or(|w| !w.stopped())
+                            && uptime() < request.expires
+                    },
                 )
             };
             write_frame(

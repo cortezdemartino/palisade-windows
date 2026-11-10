@@ -2,11 +2,96 @@ use super::*;
 use std::{fs, os::windows::process::CommandExt, path::PathBuf, sync::atomic::AtomicU64, thread};
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
+fn fixture_files() -> Fixture {
+    let root = std::env::temp_dir().join(format!(
+        "palisade-input-fence-{}-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos(),
+        NEXT.fetch_add(1, Ordering::SeqCst)
+    ));
+    fs::create_dir(&root).unwrap();
+    Fixture {
+        ready: root.join("ready"),
+        released: root.join("released"),
+        allow: root.join("allow"),
+        directory: root,
+    }
+}
 struct Fixture {
     directory: PathBuf,
     ready: PathBuf,
     released: PathBuf,
     allow: PathBuf,
+}
+
+#[test]
+fn witness_process_fixture() {
+    let Some(pid) = std::env::var_os("PALISADE_INPUT_WITNESS_PARENT") else {
+        return;
+    };
+    let parent = Parent::validate_executor(pid.to_str().unwrap().parse().unwrap(), true).unwrap();
+    let witness = ExecutorWitness::retain(
+        &parent,
+        std::env::var("PALISADE_INPUT_WITNESS_HANDLE")
+            .unwrap()
+            .parse()
+            .unwrap(),
+    )
+    .unwrap();
+    let ready = std::env::var_os("PALISADE_INPUT_WITNESS_READY").unwrap();
+    let finished = std::env::var_os("PALISADE_INPUT_WITNESS_FINISHED").unwrap();
+    fs::write(ready, "ready").unwrap();
+    let until = Instant::now() + Duration::from_secs(8);
+    while !witness.stopped() {
+        assert!(Instant::now() < until, "direct stop not observed");
+        thread::sleep(Duration::from_millis(5));
+    }
+    fs::write(finished, "direct-native-stop").unwrap();
+}
+
+#[test]
+fn created_child_observes_native_stop_without_pipe_eof_or_boolean_propagation() {
+    let files = fixture_files();
+    let stop = Arc::new(super::super::process_tree::StopEvent::new().unwrap());
+    let child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "windows::process_input::tests::witness_process_fixture",
+            "--nocapture",
+        ])
+        .env(
+            "PALISADE_INPUT_WITNESS_PARENT",
+            std::process::id().to_string(),
+        )
+        .env("PALISADE_INPUT_WITNESS_HANDLE", stop.raw().to_string())
+        .env("PALISADE_INPUT_WITNESS_READY", &files.ready)
+        .env("PALISADE_INPUT_WITNESS_FINISHED", &files.released)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW)
+        .spawn()
+        .unwrap();
+    let mut owner = ExecutorProcess::new(child, Some(stop.clone()));
+    let until = Instant::now() + Duration::from_secs(10);
+    while !files.ready.exists() {
+        assert!(owner.child.try_wait().unwrap().is_none());
+        assert!(Instant::now() < until);
+        thread::sleep(Duration::from_millis(5));
+    }
+    stop.revoke().unwrap();
+    // Keep stdin open throughout the actual child exit. No reader, renderer
+    // event or mirrored AtomicBool relays this stop to its retained witness.
+    assert!(owner.pipe.is_some());
+    assert!(owner.child.wait().unwrap().success());
+    owner.reaped = true;
+    assert_eq!(
+        fs::read_to_string(&files.released).unwrap(),
+        "direct-native-stop"
+    );
 }
 impl Drop for Fixture {
     fn drop(&mut self) {
@@ -19,24 +104,7 @@ impl Drop for Fixture {
 // A fixed BCL-only process, with no hooks, native input or arbitrary commands.
 // It records that EOF cleanup ran, so a forced kill cannot pass these tests.
 fn fixture(mode: &str, stdout: bool) -> (Child, Fixture) {
-    let root = std::env::temp_dir().join(format!(
-        "palisade-input-fence-{}-{}-{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos(),
-        NEXT.fetch_add(1, Ordering::SeqCst)
-    ));
-    // Exclusive directory creation refuses a stale/colliding fixture rather
-    // than accepting old readiness or EOF-cleanup marker files as evidence.
-    fs::create_dir(&root).unwrap();
-    let files = Fixture {
-        ready: root.join("ready"),
-        released: root.join("released"),
-        allow: root.join("allow"),
-        directory: root,
-    };
+    let files = fixture_files();
     let script = r#"
 $ErrorActionPreference = 'Stop'
 $mode = $env:PALISADE_FENCE_TEST_MODE
@@ -106,7 +174,9 @@ fn source() -> Source {
 #[test]
 fn fence_is_nonblocking_and_mirror_release_requires_actual_child_exit() {
     let (child, files) = fixture("gated", true);
-    let mut input = ProcessInput::from_child(child, 123, true).unwrap();
+    let stop = Arc::new(super::super::process_tree::StopEvent::new().unwrap());
+    let observer = stop.reader().unwrap();
+    let mut input = ProcessInput::from_child(child, 123, true, Some(stop)).unwrap();
     let up = Action::Key {
         code: "ShiftLeft".into(),
         down: false,
@@ -119,6 +189,10 @@ fn fence_is_nonblocking_and_mirror_release_requires_actual_child_exit() {
         })
         .unwrap();
     assert_eq!(input.fence(), Err("executor-cleanup-pending"));
+    assert_ne!(
+        unsafe { WaitForSingleObject(observer.as_raw_handle(), 0) },
+        WAIT_TIMEOUT
+    );
     assert!(input.process.fenced);
     assert!(!input.process.reaped);
     assert!(input.process.pipe.is_none());
@@ -165,7 +239,7 @@ fn fence_is_nonblocking_and_mirror_release_requires_actual_child_exit() {
 fn malformed_or_denied_startup_retains_child_until_eof_cleanup_exits() {
     for mode in ["denied", "wrong", "malformed"] {
         let (child, files) = fixture(mode, true);
-        assert!(ProcessInput::from_child(child, 123, true).is_err());
+        assert!(ProcessInput::from_child(child, 123, true, None).is_err());
         assert_eq!(
             fs::read_to_string(&files.released).unwrap(),
             "released-after-eof",
@@ -178,7 +252,7 @@ fn malformed_or_denied_startup_retains_child_until_eof_cleanup_exits() {
 fn silent_startup_timeout_and_missing_output_do_not_kill_the_created_child() {
     for (mode, output) in [("silent", true), ("quiet", false)] {
         let (child, files) = fixture(mode, output);
-        assert!(ProcessInput::from_child(child, 123, true).is_err());
+        assert!(ProcessInput::from_child(child, 123, true, None).is_err());
         assert_eq!(
             fs::read_to_string(&files.released).unwrap(),
             "released-after-eof",
@@ -190,7 +264,7 @@ fn silent_startup_timeout_and_missing_output_do_not_kill_the_created_child() {
 #[test]
 fn dropping_a_live_owner_closes_ordinary_input_and_retains_exit_ownership() {
     let (child, files) = fixture("ready", true);
-    let input = ProcessInput::from_child(child, 123, true).unwrap();
+    let input = ProcessInput::from_child(child, 123, true, None).unwrap();
     assert!(!files.released.exists());
     drop(input);
     assert_eq!(
