@@ -2,6 +2,14 @@
 
 ## Monitor custody continuation
 
+`718348fd7dc4fbb907da7bda897fe09da0500c3a` pushed the custody milestone.
+Normal ProcessInput is now being corrected to close/poll instead of kill: retain
+startup failures, distinguish admission fencing from actual reaping, and refuse
+mirror UP until confirmed exit. This does not attach the normal child to custody.
+[Fence evidence](evidence/2026-11-09-nonkilling-input-fence.md). The next normal
+channel must retain monitor/coordinator witnesses and child/mirror receipts; never
+replace that missing proof with an exit status or the probe's synthetic mirror.
+
 The monitor custody model and real no-input process adapter now retain executor
 ownership through ARM ambiguity, bootstrap/query errors, coordinator death and
 blocked ordinary output. Dedicated child receipts, exact retained process handles

@@ -55,6 +55,13 @@ The probe's mirror settlement is synthetic. The normal child/mirror receipt wire
 native owned-intent semantics and all-process/resource completion are still Planned.
 [Verification and reproduction](evidence/2026-11-09-monitor-custody.md).
 
+The existing normal ProcessInput fence no longer kills its child. It closes step
+admission and stdin, then polls the retained exact process without blocking
+SessionGate. Mirror UP is refused until actual child exit is observed. Pending
+cleanup retries outside the gate; startup failures and Drop retain the process
+through EOF/watchdog cleanup, including protected-desktop release retries.
+This fixes local fencing but does not supply monitor custody or a Native receipt.
+
 ## M4G-WEB-6 release ownership
 
 The current inactive executor keeps per-gate/grant held-input ownership derived from validated native permits, alongside its combined write-ahead cleanup ledger. V2 `release-all` accepts the carried mouse or keyboard grant and releases only its owner's scope; ordinary UP and repeats cannot take another owner's holds. Releases bypass ordinary input rate tokens while retaining current authority and replay checks. Independent terminal fence/release still clears all endpoint-owned input. [Evidence](evidence/2026-11-08-release-authority.md).

@@ -38,14 +38,66 @@ fn uptime() -> u64 {
     unsafe { GetTickCount64() }
 }
 pub struct ProcessInput {
-    child: Child,
-    pipe: ChildStdin,
+    process: ExecutorProcess,
     replies: mpsc::Receiver<Result<Ack, &'static str>>,
     sequence: u32,
     cleanup: WindowsBackend,
-    fenced: bool,
     probe: bool,
     mirror: Ledger,
+}
+/// Retain the exact created process through startup failure and terminal fencing.
+/// EOF revokes ordinary work; the child's independent watchdog/cleanup path owns
+/// release retries. Never kill that last release holder to make a wait succeed.
+struct ExecutorProcess {
+    child: Child,
+    pipe: Option<ChildStdin>,
+    fenced: bool,
+    reaped: bool,
+}
+impl ExecutorProcess {
+    fn new(mut child: Child) -> Self {
+        Self {
+            pipe: child.stdin.take(),
+            child,
+            fenced: false,
+            reaped: false,
+        }
+    }
+    fn close_admission(&mut self) {
+        self.fenced = true;
+        drop(self.pipe.take());
+    }
+    fn fence(&mut self) -> Result<(), &'static str> {
+        self.close_admission();
+        if !self.reaped {
+            // Dispatch may hold SessionGate. Do not wait there for protected-
+            // desktop cleanup or block independently authorized resources.
+            if self
+                .child
+                .try_wait()
+                .map_err(|_| "executor-stop")?
+                .is_none()
+            {
+                return Err("executor-cleanup-pending");
+            }
+            self.reaped = true;
+        }
+        Ok(())
+    }
+}
+impl Drop for ExecutorProcess {
+    fn drop(&mut self) {
+        self.close_admission();
+        while !self.reaped {
+            if self.child.wait().is_ok() {
+                self.reaped = true;
+                break;
+            }
+            // A query/wait failure is not release or exit proof. Keep the exact
+            // handle and let an independent Stop path remain effective.
+            std::thread::sleep(Duration::from_millis(100));
+        }
+    }
 }
 impl ProcessInput {
     pub fn spawn(
@@ -58,24 +110,35 @@ impl ProcessInput {
             return Err("native-input-disabled");
         }
         let verified = super::image::VerifiedImage::open(manifest)?;
-        let mut child = Command::new(verified.path())
-            .args([
-                if probe {
-                    "--executor-probe"
-                } else {
-                    "--executor"
-                },
-                &std::process::id().to_string(),
-                &tag.to_string(),
-                &owner.raw().to_string(),
-            ])
+        let mut command = Command::new(verified.path());
+        command.args([
+            if probe {
+                "--executor-probe"
+            } else {
+                "--executor"
+            },
+            &std::process::id().to_string(),
+            &tag.to_string(),
+        ]);
+        if !probe {
+            command.arg(owner.raw().to_string());
+        }
+        let child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .map_err(|_| "executor-start")?;
-        let pipe = child.stdin.take().ok_or("executor-pipe")?;
-        let output = child.stdout.take().ok_or("executor-pipe")?;
+        Self::from_child(child, tag, probe)
+    }
+    fn from_child(child: Child, tag: usize, probe: bool) -> Result<Self, &'static str> {
+        // Establish the retained owner before any pipe extraction, reader setup
+        // or startup result can return an error after CreateProcess succeeded.
+        let mut process = ExecutorProcess::new(child);
+        if process.pipe.is_none() {
+            return Err("executor-pipe");
+        }
+        let output = process.child.stdout.take().ok_or("executor-pipe")?;
         let (send, replies) = mpsc::sync_channel(1);
         std::thread::spawn(move || {
             let mut output = output;
@@ -96,48 +159,28 @@ impl ProcessInput {
             .recv_timeout(Duration::from_secs(3))
             .map_err(|_| "executor-start")
             .and_then(|reply| reply);
-        let ready = match ready {
-            Ok(ready) => ready,
-            Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(error);
-            }
-        };
+        let ready = ready?;
         if ready.sequence != u32::MAX || !ready.accepted {
-            let _ = child.kill();
-            let _ = child.wait();
             return Err("executor-start");
         }
         Ok(Self {
-            child,
-            pipe,
+            process,
             replies,
             sequence: 0,
             cleanup: WindowsBackend::new(tag),
-            fenced: false,
             probe,
             mirror: Ledger::default(),
         })
     }
     fn terminate(&mut self) -> Result<(), &'static str> {
-        if !self.fenced {
-            if self
-                .child
-                .try_wait()
-                .map_err(|_| "executor-stop")?
-                .is_none()
-            {
-                self.child.kill().map_err(|_| "executor-stop")?;
-            }
-            self.child.wait().map_err(|_| "executor-stop")?;
-            self.fenced = true;
-        }
-        Ok(())
+        self.process.fence()
     }
 }
 impl ProcessInput {
     fn transmit(&mut self, source: &Source, action: Option<Action>) -> Result<(), &'static str> {
+        if self.process.fenced {
+            return Err("revoked");
+        }
         let request = Step {
             sequence: self.sequence,
             expires: uptime().checked_add(75).ok_or("clock-invalid")?,
@@ -146,7 +189,7 @@ impl ProcessInput {
         };
         self.sequence = self.sequence.checked_add(1).ok_or("sequence-exhausted")?;
         write_frame(
-            &mut self.pipe,
+            self.process.pipe.as_mut().ok_or("executor-pipe")?,
             &serde_json::to_vec(&request).map_err(|_| "invalid-message")?,
         )
         .map_err(|_| "executor-pipe")?;
@@ -168,7 +211,7 @@ impl Backend for ProcessInput {
         !self.probe
     }
     fn heartbeat(&mut self, source: &Source) -> Result<(), &'static str> {
-        if self.fenced {
+        if self.process.fenced {
             return Err("revoked");
         }
         self.transmit(source, None)
@@ -198,7 +241,10 @@ impl Backend for ProcessInput {
         Ok(())
     }
     fn apply(&mut self, source: &Source, action: &Action) -> Result<(), &'static str> {
-        if self.fenced {
+        if self.process.fenced {
+            if !self.process.reaped {
+                return Err("executor-cleanup-pending");
+            }
             if !matches!(
                 action,
                 Action::Key { down: false, .. }
@@ -414,3 +460,6 @@ pub fn run_child(
     }
     outcome
 }
+
+#[cfg(test)]
+mod tests;
