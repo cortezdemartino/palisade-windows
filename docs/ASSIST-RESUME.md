@@ -8,6 +8,11 @@ The subsequent version-offer conformance fix preserves all canonical safe intege
 local native verification is now 205 tests per configuration. Both that initial
 source checkpoint and `d476476` documentation checkpoint passed exact-SHA CI.
 Check issue #1 for the final correction's CI outcome before claiming final success.
+Public native hello now also permits same-document reconnect without resetting
+identity/enrollment/replay state; the private seal remains once-only. Its native,
+process, installer and packaged fixture checks passed locally. The prior bounds
+checkpoint `e08cc42` passed exact-SHA CI42989273929; verify the latest hello
+correction separately through the run linked from issue #1.
 Electron now owns a private-v3 persistent native monitor/coordinator and canonical
 enrollment dispatcher behind an explicit isolated qualification build. Public
 desktop builds remain inactive. Real compiled-helper and isolated Electron

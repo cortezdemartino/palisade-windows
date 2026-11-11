@@ -18,6 +18,8 @@ test('actual persistent endpoint negotiates canonical v1 through monitor/coordin
   try {
     assert.deepEqual(await channel.request(canonical('hello', { versions: [Number.MAX_SAFE_INTEGER, 1] }), 3),
       { version: 1, features: { capture: false, clipboard: false, files: false, input: false } });
+    assert.deepEqual(await channel.request(canonical('hello', { versions: [1] }), 3),
+      { version: 1, features: { capture: false, clipboard: false, files: false, input: false } });
     const status = await channel.request(canonical('status'), 3);
     assert.deepEqual(status, { endpoint: { enrolled: false, endpointId: null, pin: 'none' },
       capture: { operation: null, state: 'idle', trackSid: null }, controller: { session: null, state: 'idle' } });

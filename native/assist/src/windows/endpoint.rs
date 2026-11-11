@@ -81,9 +81,9 @@ impl Endpoint {
             if !versions.contains(&1) {
                 return Err(Error::UnsupportedVersion);
             }
-            if self.negotiated {
-                return Err(Error::StaleOperation);
-            }
+            // Public hello is descriptive and idempotent for the same owned
+            // document. Reconnecting a web client never replaces the signer,
+            // enrollment or replay tombstones. The private seal remains once-only.
             self.negotiated = true;
             return Ok(
                 json!({"version":1,"features":{"capture":false,"clipboard":false,"files":false,"input":false}}),
@@ -247,12 +247,7 @@ mod tests {
             }
         ));
         assert!(matches!(e.dispatch(0, hello()), Answer::Ok { .. }));
-        assert!(matches!(
-            e.dispatch(0, hello()),
-            Answer::Error {
-                code: Error::StaleOperation
-            }
-        ));
+        assert!(matches!(e.dispatch(0, hello()), Answer::Ok { .. }));
         assert!(matches!(
             e.dispatch(1, Operation::Status {}),
             Answer::Error { .. }

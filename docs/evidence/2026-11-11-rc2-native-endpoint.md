@@ -172,6 +172,15 @@ New boundary tests and actual monitor/coordinator hello with
 configuration; both 33-group process suites, final NSIS, packaged integrity and
 actual isolated Electron/native crash checks were rerun successfully. Independent
 source review cleared this correction within the same inactive scope.
-This correction triggers a further exact-SHA Windows build; issue #1 records its
-terminal outcome so a pending run is never represented as passed.
+The bounds correction `e08cc425f506e4bdf2b3457645222e1610977e03` passed
+[42989273929](https://github.com/cortezdemartino/palisade-windows/actions/runs/42989273929).
+
+Same-document public hello is also idempotent, allowing the web client to reconnect
+without replacing the operational key, confirmed enrollment or replay history.
+The private process seal stays once-only; new-document and terminal requests are
+still refused. Both complete native/process configurations, a fresh NSIS package,
+packaged integrity and the real isolated Electron/native crash fixture passed
+after this correction. Independent source review cleared this limited change.
+Its final exact-SHA Windows build is recorded in issue #1; a pending run must
+never be represented as passed.
 No release tag, signing workflow, publication, deployment or installation ran.
