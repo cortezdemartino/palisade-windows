@@ -1,13 +1,15 @@
 # Release notes
 
-## Unreleased U1 source candidate
+## 0.3.4 (development candidate)
 
 - Added authenticated release summaries, expandable details and offline history
   to local Updates & What's New settings.
 - Added the same changelog format and modern metadata verification to the
   maintained Manager source; its published binary and desktop pin are unchanged.
-- Native desktop-owned installer handoff remains under development. Assist stays
-  disabled. No installed-upgrade acceptance or production release is claimed.
+- Added background checks and downloads, progress, pause and restart options.
+  The native helper verifies the signed installer and waits for a safe exit.
+- Changed the installer to refuse changes while a Palisade process is running.
+- Installed-upgrade testing is pending. Assist remains disabled.
 
 ## 0.3.3
 

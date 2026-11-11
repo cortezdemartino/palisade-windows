@@ -1,9 +1,9 @@
 # Native updater boundary
 
-Status: an inactive library foundation under `native/update`, not an installed
-updater. There is no apply command or connection from the desktop yet. Existing
-routine updates still use Manager. This document records implemented boundaries
-and the remaining handoff requirements, without claiming installation acceptance.
+The v0.3.4 development candidate stages updates from the desktop. It uses a
+small Windows helper for offline verification and installation after a safe
+exit. Update Manager is available for manual repair. See the
+[installed-upgrade procedure](U1-INSTALLED-UPGRADE.md) for the remaining qualification.
 
 ## Implemented trust
 
@@ -18,8 +18,8 @@ cycles. Native signing bytes are tested against the actual JavaScript signer.
 
 Only verification can construct `VerifiedRelease`; its payload is immutable to
 callers. Installer hashing accepts that verified type, not an arbitrary payload.
-The eventual apply path must keep the returned file handle protected from writes
-and deletion until installer execution finishes.
+The apply path keeps the file handle protected from writes and deletion until
+Windows signals exit of the exact installer process.
 
 ## Private staging and directory roles
 
@@ -49,7 +49,9 @@ This is a normal user-mode system call, not a driver. The helper rejects reparse
 points and hardlinks, and retains deny-write/delete sharing on verified files.
 Stage paths are immutable in the API. Installation/staging overlap is detected in
 both directions by retained directory file identities, including pathname aliases.
-The eventual command dispatcher must refuse any overlap before readiness.
+The dispatcher refuses overlap before stage verification or readiness. At most
+three UUID directories may exist. Discard opens files relative to the validated
+directory and refuses nested directories, reparse points and hardlinks.
 
 Handle-relative reads bind the verified data object; they do not turn Windows
 pathname-based process creation or NSIS destination writes into handle-based
@@ -58,7 +60,7 @@ explicit hostile-owner exclusion rather than claiming stronger protection.
 
 ## Parent and installation binding
 
-The inactive parent authenticator checks the OS-reported creator PID, retains its
+The parent authenticator checks the OS-reported creator PID, retains its
 exact process handle, rejects PID reuse through creation times, requires the same
 unelevated user and nonzero interactive Windows session, checks private pipe owner
 PIDs, and validates the Palisade image's product/company and compiled version.
@@ -78,19 +80,47 @@ the authenticated x64 application package; their exact bytes and x64 asset ident
 remain covered by the signed release and release-build checks. Do not mistake
 bootstrap machine type for the packaged application's architecture.
 
-## Unfinished handoff and qualification
+## Desktop handoff
 
-Implement the fixed stage/apply commands, bounded private handshake, one-shot
-commit, exact-parent exit wait, concurrent-apply exclusion, scope-preserving NSIS
-execution, installed-version confirmation, relaunch and failure receipts. Do not
-pass `--force-run`, accept arbitrary executable paths or use the old PowerShell
-helper. Preserve Windows security dialogs and UAC.
+Electron checks the bundled helper against an integrity record inside the protected
+ASAR. It starts the helper with private pipes and a fixed command. The native
+helper chooses the cache path. The desktop records the UUID, target and canonical
+release digest before downloading, and publishes the installer only after both
+hashes and size match. Native inspection checks them again, including the PE
+product identity. A downloaded stage can be reverified offline for display.
 
-The desktop coordinator must revalidate current release metadata, preserve the
-shared Assist cleanup/profile barrier, and never launch the apply helper before
-that barrier succeeds. Cancellation must stop before apply is committed; after
-that point report installation in progress rather than imply it was canceled.
+At a requested restart the desktop re-fetches the current signed release and
+matches the exact digest. It waits for the shared Assist cleanup barrier and
+profile save before starting the verified staged copy of the helper. A matching
+ready message permits a one-shot commit on the private pipe. The desktop exits
+after the acknowledgement. The helper waits on the retained parent process
+handle, re-verifies the held installer, adds its Internet zone information and
+launches it with a fixed NSIS scope and destination. Windows approval and
+publisher checks still apply.
 
-Actual successful installed-parent authentication, NSIS upgrades, UAC cancellation,
-crash recovery, relaunch and profile preservation are Not Verified. No installer
-has run, and no production signing, deployment or publication is authorized in U1.
+The helper and installer share a product-wide exclusion object across Windows
+sessions. The installer holds it through exit and consumes a one-use permit
+before proceeding. The installer refuses when a Palisade process is running.
+The desktop checks for this exclusion before starting a window or admitting
+Assist. If the helper integrity or status check fails, built-in installation
+and Assist capture are unavailable for that launch.
+
+The helper checks the installed executable version after a successful exit and
+reopens Palisade. The next launch confirms the version that actually runs. Local
+receipts support diagnosis and carry no installation authority. When a receipt
+is lost or a restart is interrupted, the desktop re-verifies saved bytes and
+requires a fresh restart authorization. Once commit has been sent, an
+unconfirmed acknowledgement is reported as uncertain.
+
+## Recovery and qualification
+
+A failed NSIS run can leave mixed application files. Use the official Update
+Manager to inspect and repair the installation without clearing the profile.
+If Windows reports launch success without an installer process handle, the
+helper keeps the verified files and exclusion until Windows restarts. The
+published v0.3.3 installer and uninstaller predate the no-force policy. The
+first manual upgrade from that version is a separate compatibility case.
+
+Successful installed-parent authentication, an actual NSIS upgrade, UAC
+cancellation, post-install relaunch and authenticated profile preservation
+remain Not Verified on an installed test system.

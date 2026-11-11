@@ -36,7 +36,11 @@ jobs:
           npm run test:assist-process
           if ($LASTEXITCODE -ne 0) { throw 'Native process verification failed.' }
       - name: Verify native update trust and staging
-        run: npm run test:update-native
+        run: |
+          npm run test:update-native
+          if ($LASTEXITCODE -ne 0) { throw 'Native update verification failed.' }
+          npm run test:update-policy
+          if ($LASTEXITCODE -ne 0) { throw 'Installer exclusion policy failed.' }
       - name: Audit locked native dependencies
         run: |
           cargo install cargo-audit --locked --version 0.22.2

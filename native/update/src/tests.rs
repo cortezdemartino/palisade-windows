@@ -62,6 +62,28 @@ fn payload() -> Payload {
         published_at: "2026-11-10T00:00:00.000Z".into(),
         download_url: "https://github.com/cortezdemartino/palisade-windows/releases/download/v0.3.4/Palisade-Setup-0.3.4-x64.exe".into() }
 }
+
+pub(crate) fn authorized_bytes(data: &[u8]) -> VerifiedRelease {
+    let key = key();
+    let mut value = payload();
+    value.size = data.len() as u64;
+    value.sha256 = to_hex(Sha256::digest(data).as_ref());
+    value.sha512 = STANDARD.encode(Sha512::digest(data));
+    verify_with(&envelope(&value, &key, &[]), &pem(&key), &[], "0.3.3").unwrap()
+}
+
+#[test]
+fn canceled_hashing_cannot_produce_installer_readiness() {
+    let release = authorized_bytes(b"fixture");
+    let count = std::cell::Cell::new(0);
+    assert_eq!(
+        verify_installer_while(&mut Cursor::new(b"fixture"), &release, || {
+            count.set(count.get() + 1);
+            count.get() == 1
+        }),
+        Err("operation-canceled")
+    );
+}
 fn envelope(payload: &Payload, key: &SigningKey, transitions: &[Delegation]) -> Vec<u8> {
     serde_json::to_vec(&serde_json::json!({ "payload": payload, "transitions": transitions,
         "signature": STANDARD.encode(key.sign(&signed("PALISADE-DESKTOP-RELEASE-V3", payload).unwrap()).to_bytes()) })).unwrap()

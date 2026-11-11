@@ -103,14 +103,27 @@
       <p class="hint">This panel does not grant Windows permissions or change your account settings.</p>
     </div>
     <div id="section-about" class="settings-section" hidden>
-      <div class="setting"><span>Stable updates<small id="update-status"></small></span><div class="update-actions"><button class="action" id="check-updates">Check now</button><button class="action" id="open-updates">Open Update Manager</button></div></div>
+      <div class="setting"><span>Stable updates<small id="update-status" role="status" aria-live="polite"></small></span><button class="action" id="check-updates">Check now</button></div>
       <p class="hint">Latest available version: <span id="latest-version">Not checked</span></p>
+      <p class="hint">Last successful check: <time id="last-update-check">Never</time></p>
+      <progress id="update-progress" max="100" value="0" aria-label="Update download progress" hidden></progress>
+      <div class="update-actions" aria-label="Update actions">
+        <button class="action" id="update-download" hidden>Download</button>
+        <button class="action" id="update-restart" hidden>Restart to update</button>
+        <button class="action" id="update-cancel" hidden>Cancel</button>
+        <button class="action" id="update-snooze">Pause for 24 hours</button>
+        <button class="action" id="open-updates">Open Update Manager</button>
+      </div>
+      <p class="hint" id="update-unavailable" hidden>Built-in installation is unavailable. Use Update Manager for repair.</p>
+      <label class="setting"><span>Check automatically<small>Check on launch and every six hours.</small></span><input id="update-auto-check" type="checkbox"></label>
+      <label class="setting"><span>Download in the background</span><input id="update-auto-download" type="checkbox"></label>
+      <label class="setting"><span>Install and reopen when I quit<small>Applies a ready update when assistance is inactive.</small></span><input id="update-install-on-quit" type="checkbox"></label>
+      <details id="update-history"><summary>Installation history</summary><ul id="update-history-list"></ul></details>
       <p id="notes-status" class="hint" role="status" aria-live="polite"></p>
       <label class="release-selector">Release history<select id="release-version" aria-label="Choose release notes"><option value="">No verified notes cached</option></select></label>
       <article id="release-notes" aria-label="Verified release notes"></article>
       <div class="setting"><span>Reload Palisade<small>Reload the page if the connection is interrupted.</small></span><button class="action" id="reload-client">Reload</button></div>
       <div class="setting"><span>Support diagnostics<small>Copy app and system versions, tray and login settings, and update status. No account or message data.</small></span><button class="action" id="copy-diagnostics">Copy</button></div>
-      <p class="hint">Checks run at startup, every six hours, and after an overdue wake. Signed updates keep this device’s local session and application data. The manager asks before closing Palisade.</p>
     </div>
     <p id="settings-feedback" role="status" aria-live="polite"></p>
     <footer>Version <span id="device-version"></span></footer>

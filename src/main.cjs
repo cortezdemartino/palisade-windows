@@ -5,6 +5,7 @@ const path = require('node:path');
 const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
 const { appDetails, ensureAppRegistration } = require('./windows-app-registration.cjs');
 const { createUpdateController } = require('./updates/updater.cjs');
+const { createNativeHelper } = require('./updates/native-helper.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
 const { installSessionPolicy } = require('./session-policy.cjs');
 const { installAssistBridge } = require('./assist/bridge.cjs');
@@ -30,9 +31,11 @@ let mainContents = null;
 let assistCapture = null;
 let assistBridge = null;
 let refreshDeviceSettings = null;
+let showDeviceSettings = null;
 const activeNotifications = new Set();
 let tray = null;
 let keepRunningInTray = false;
+let desktopSettings;
 let quitting = false;
 let exitWaiting = false;
 let lastExternalPromptAt = 0;
@@ -68,7 +71,10 @@ if (!app.requestSingleInstanceLock()) {
   });
 
   installQuitBarrier(app, {
-    prepare: prepareForExit,
+    prepare: async reason => {
+      await updaterController?.onQuit();
+      await prepareForExit(reason);
+    },
     onApproved: () => { exitWaiting = false; quitting = true; },
     onWaiting: () => {
       exitWaiting = true;
@@ -92,7 +98,22 @@ if (!app.requestSingleInstanceLock()) {
     webContents.on('will-attach-webview', (event) => event.preventDefault());
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
+    let native;
+    if (app.isPackaged && process.platform === 'win32') {
+      const helper = createNativeHelper({ resources: process.resourcesPath, version: app.getVersion() });
+      try {
+        const status = await helper.status();
+        if (status.state === 'updating') {
+          // Leave promptly so the installer's running-client check can succeed.
+          app.quit();
+          return;
+        }
+        native = helper;
+      } catch {
+        updateStatus = 'Updates: built-in updater unavailable. Use Update Manager to repair.';
+      }
+    }
     void ensureAppRegistration({ packaged: app.isPackaged, shell, appData: app.getPath('appData') }).catch(() => {
       notificationStatus = 'Windows app registration could not be repaired. Run the official installer to repair it.';
       refreshDeviceSettings?.();
@@ -102,17 +123,19 @@ if (!app.requestSingleInstanceLock()) {
       refreshDeviceSettings?.();
       return false;
     });
-    keepRunningInTray = loadSettings(app.getPath('userData')).keepRunningInTray;
+    if (quitting) return;
+    desktopSettings = loadSettings(app.getPath('userData'));
+    keepRunningInTray = desktopSettings.keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
-    createMainWindow(profile);
+    createMainWindow(profile, Boolean(native) || !app.isPackaged);
     createTray();
     updaterController = createUpdateController(() => window, (status) => {
+      const changed = updateStatus !== status;
       updateStatus = status;
-      updateTrayMenu();
-      createApplicationMenu();
+      if (changed) { updateTrayMenu(); createApplicationMenu(); }
       refreshDeviceSettings?.();
-    }, { beforeManager: prepareForExit, onAvailable: (manifest, openManager) => notifyDesktop(
-      'Palisade ' + manifest.version + ' is available. Open the update manager to install it.', openManager) });
+    }, { native, beforeManager: prepareForExit, preferences: () => desktopSettings, canInstallOnQuit: () => !assistCapture?.busy(),
+      onAvailable: (manifest) => notifyDesktop('Palisade ' + manifest.version + ' is available.', openUpdateSettings) });
     createApplicationMenu();
     updaterController.start();
   });
@@ -126,7 +149,7 @@ if (!app.requestSingleInstanceLock()) {
   });
 }
 
-function createMainWindow(profile) {
+function createMainWindow(profile, startupVerified) {
   const icon = nativeImage.createFromPath(ICON);
   const desktop = createDesktopWindow({ partition: PARTITION, icon,
     onSettings: () => ({ keepRunningInTray, launchOnLogin: app.getLoginItemSettings().openAtLogin,
@@ -150,17 +173,30 @@ function createMainWindow(profile) {
       } else if (action === 'reload-client') mainContents?.reload();
       else if (action === 'updates') void updaterController?.openManager();
       else if (action === 'check-updates') void updaterController?.check(true);
+      else if (action === 'update-download') void updaterController?.downloadUpdate();
+      else if (action === 'update-restart') void updaterController?.restart();
+      else if (action === 'update-cancel') updaterController?.cancel();
+      else if (action === 'update-snooze' || action === 'update-resume') {
+        desktopSettings = saveSettings(app.getPath('userData'), { snoozeUntil: action === 'update-snooze' ? Date.now() + 24 * 60 * 60 * 1000 : 0 });
+        updaterController?.settingsChanged();
+      } else if (/^update-(auto-check|auto-download|install-on-quit)-(on|off)$/.test(action)) {
+        const [key, value] = action.slice(7).match(/(.+)-(on|off)$/).slice(1);
+        const field = { 'auto-check': 'autoCheck', 'auto-download': 'autoDownload', 'install-on-quit': 'installOnQuit' }[key];
+        desktopSettings = saveSettings(app.getPath('userData'), { [field]: value === 'on' });
+        updaterController?.settingsChanged();
+      }
       } catch {
         void dialog.showMessageBox(window, { type: 'error', message: 'The device setting could not be applied. Try again.', buttons: ['OK'] });
       }
     },
   });
   refreshDeviceSettings = desktop.refreshSettings;
+  showDeviceSettings = desktop.showSettings;
   window = desktop.window;
   const identity = appDetails({ packaged: app.isPackaged });
   if (identity) window.setAppDetails(identity);
   const contents = mainContents = desktop.contents;
-  assistCapture = createCaptureController({ enabled: captureEnabled, getContents: () => contents, getWindow: () => window,
+  assistCapture = createCaptureController({ enabled: captureEnabled && startupVerified, getContents: () => contents, getWindow: () => window,
     enumerate: options => desktopCapturer.getSources(options), choose: chooseSource, onState: () => updateTrayMenu(),
     revoke: () => { if (!contents.isDestroyed()) { contents.forcefullyCrashRenderer(); contents.reload(); } } });
   installSessionPolicy(profile, () => mainContents);
@@ -253,6 +289,11 @@ async function askToOpenExternal(value) {
   }
 }
 
+function openUpdateSettings() {
+  openWindow();
+  showDeviceSettings?.('about');
+}
+
 function openWindow() {
   if (!window) return;
   if (window.isMinimized()) window.restore();
@@ -295,7 +336,7 @@ function trayPreferenceItem() {
   checked: keepRunningInTray,
   click: (item) => {
     try {
-      saveSettings(app.getPath('userData'), { keepRunningInTray: item.checked });
+      desktopSettings = saveSettings(app.getPath('userData'), { keepRunningInTray: item.checked });
       keepRunningInTray = item.checked;
     } catch {
       void dialog.showMessageBox({ type: 'error', message: 'Could not save desktop settings.', buttons: ['OK'] });
@@ -317,6 +358,7 @@ function updateTrayMenu() {
       { type: 'separator' },
       { label: 'Send test notification', click: () => notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.') },
       { label: updateStatus, enabled: false },
+      { label: "Updates & What's New", click: openUpdateSettings },
       {
         label: 'Check for Updates', click: () => void updaterController?.check(true),
       },
@@ -341,6 +383,7 @@ function createApplicationMenu() {
         label: 'Palisade',
         submenu: [
           { label: updateStatus, enabled: false },
+          { label: "Updates & What's New", click: openUpdateSettings },
           { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => mainContents?.reload() },
           { label: 'Check for Updates', click: () => void updaterController?.check(true) },
           { label: 'Open Update Manager', click: () => void updaterController?.openManager() },

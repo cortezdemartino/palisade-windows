@@ -1,18 +1,27 @@
 'use strict';
-const fs = require('node:fs');
 const path = require('node:path');
+const { readState, writeState } = require('./updates/state-file.cjs');
 
-const DEFAULTS = Object.freeze({ keepRunningInTray: true });
+const DEFAULTS = Object.freeze({
+  keepRunningInTray: true, autoCheck: true, autoDownload: true, installOnQuit: false, snoozeUntil: 0,
+});
+function normalize(value) {
+  const result = { ...DEFAULTS };
+  for (const name of ['keepRunningInTray', 'autoCheck', 'autoDownload', 'installOnQuit']) {
+    if (typeof value?.[name] === 'boolean') result[name] = value[name];
+  }
+  if (Number.isSafeInteger(value?.snoozeUntil) && value.snoozeUntil > Date.now() &&
+      value.snoozeUntil <= Date.now() + 24 * 60 * 60 * 1000) result.snoozeUntil = value.snoozeUntil;
+  return result;
+}
 function loadSettings(directory) {
   try {
-    const value = JSON.parse(fs.readFileSync(path.join(directory, 'desktop-settings.json'), 'utf8'));
-    return { keepRunningInTray: typeof value?.keepRunningInTray === 'boolean' ? value.keepRunningInTray : DEFAULTS.keepRunningInTray };
+    return normalize(readState(path.join(directory, 'desktop-settings.json'), 4096));
   } catch { return { ...DEFAULTS }; }
 }
 function saveSettings(directory, value) {
-  fs.mkdirSync(directory, { recursive: true });
-  const filename = path.join(directory, 'desktop-settings.json');
-  fs.writeFileSync(`${filename}.tmp`, JSON.stringify({ keepRunningInTray: value.keepRunningInTray === true }));
-  fs.renameSync(`${filename}.tmp`, filename);
+  const settings = normalize({ ...loadSettings(directory), ...value });
+  writeState(path.join(directory, 'desktop-settings.json'), settings);
+  return settings;
 }
 module.exports = { loadSettings, saveSettings };

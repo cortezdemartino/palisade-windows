@@ -75,8 +75,9 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
     controls.setBounds({ x: Math.max(0, width - panelWidth - CONTROLS_RIGHT_INSET), y: 4, width: panelWidth, height: settingsOpen ? Math.min(560, height - 8) : CONTROLS_HEIGHT });
     controls.setVisible(!window.isFullScreen());
   };
-  const publishState = () => {
-    if (!controls.webContents.isDestroyed()) controls.webContents.send(STATE_CHANNEL, { ...onSettings(window), maximized: window.isMaximized(), settingsOpen });
+  const publishState = (openTo) => {
+    if (!controls.webContents.isDestroyed()) controls.webContents.send(STATE_CHANNEL, { ...onSettings(window),
+      maximized: window.isMaximized(), settingsOpen, settingsOpenTo: openTo === 'about' ? 'about' : '' });
   };
   const onControl = (event, action) => {
     // No commands are accepted from the remote page, subframes, or a navigated local view.
@@ -84,7 +85,10 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
         event.senderFrame !== controls.webContents.mainFrame || event.senderFrame?.url !== controlsUrl ||
         controls.webContents.getURL() !== controlsUrl) return;
     if (action === 'settings') { settingsOpen = !settingsOpen; layout(); publishState(); }
-    else if (['tray-on', 'tray-off', 'login-on', 'login-off', 'notification-test', 'updates', 'notification-settings', 'microphone-settings', 'copy-diagnostics', 'reload-client', 'check-updates'].includes(action)) {
+    else if (['tray-on', 'tray-off', 'login-on', 'login-off', 'notification-test', 'updates', 'notification-settings',
+      'microphone-settings', 'copy-diagnostics', 'reload-client', 'check-updates', 'update-download', 'update-restart',
+      'update-cancel', 'update-snooze', 'update-resume', 'update-auto-check-on', 'update-auto-check-off',
+      'update-auto-download-on', 'update-auto-download-off', 'update-install-on-quit-on', 'update-install-on-quit-off'].includes(action)) {
       onDeviceAction(action); publishState();
     }
     else if (action === 'minimize') window.minimize();
@@ -109,6 +113,7 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
   // Only the local empty strip is draggable; hosted page elements remain interactive.
   void window.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent('<!doctype html><meta http-equiv="Content-Security-Policy" content="default-src &#39;none&#39;; style-src &#39;unsafe-inline&#39;"><style>html{margin:0;width:100%;height:36px;background:#0d0f14}body{margin:0;width:calc(100% - ' + (CONTROLS_WIDTH + CONTROLS_RIGHT_INSET) + 'px);height:36px;app-region:drag;-webkit-app-region:drag}</style>'));
   void controls.webContents.loadURL(controlsUrl);
-  return { window, contents: view.webContents, refreshSettings: publishState };
+  return { window, contents: view.webContents, refreshSettings: publishState,
+    showSettings: (section) => { settingsOpen = true; layout(); publishState(section); controls.webContents.focus(); } };
 }
 module.exports = { createDesktopWindow, CONTROLS_WIDTH, CONTROLS_HEIGHT, installControlsProtocol };

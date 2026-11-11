@@ -1,8 +1,8 @@
 # Palisade for Windows
 
-The U1 development candidate adds authenticated release summaries and offline
-history to local **Updates & What's New** settings. The published Manager pin is
-unchanged; the desktop-owned installer handoff is still under development.
+The v0.3.4 development candidate adds built-in downloads, restart controls and
+signed release notes in local **Updates & What's New** settings. Installed
+upgrade qualification is pending.
 See [release-note format and signing](docs/RELEASE-NOTES-FORMAT.md).
 
 Palisade's Windows desktop client runs the existing Palisade service in a restricted Electron window. Messaging, workspaces and encryption use the deployed Palisade application and the Matrix SDK. The Windows client handles desktop integration, application permissions and installer updates.
@@ -39,14 +39,16 @@ npm run test:assist-native
 npm run build:assist
 npm run test:assist-process
 npm run test:assist-capture
+npm run test:update-native
+npm run test:update-policy
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.3.3-x64.exe`. Local builds do not receive an official update manifest. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.3.4-x64.exe`. Official release manifests require the separately held release signing key.
 
 ## Updates
 
-The installed app checks for updates immediately when ready and every six hours. **Check for updates** is also available in the application menu and tray menu. The client verifies available release metadata using its pinned public key. Confirmed installation opens the bundled update manager, which downloads and verifies the installer before installation. Polling itself never downloads or installs.
+The candidate checks for updates on launch, every six hours and after an overdue wake. It downloads verified releases in the background by default. Use **Check now** or **Restart to update** in **Updates & What's New**. Update Manager remains available for manual repair. Published versions through v0.3.3 use their existing update flow.
 
 The signing key is separate from Windows Authenticode. A GitHub account is not required to download updates from this public repository. If signature or integrity checks fail, the current version remains installed.
 

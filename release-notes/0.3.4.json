@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "version": "0.3.4",
+  "locale": "en",
+  "title": "",
+  "summary": "Palisade adds built-in update downloads, restart controls and signed release notes in Device settings.",
+  "sections": [
+    { "category": "new", "items": ["Check for updates, see download progress, pause automatic updates and choose when to restart.", "Browse verified release summaries and details while offline."] },
+    { "category": "security", "items": ["Palisade verifies the release signature and both installer checksums before an update can run."] },
+    { "category": "limitations", "items": ["This development build still needs a complete upgrade test on an installed Windows client.", "Assist remains disabled."] }
+  ],
+  "compatibility": ["Windows 10 and 11 on x64. Update Manager remains available for manual repair."]
+}

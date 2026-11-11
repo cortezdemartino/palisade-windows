@@ -25,6 +25,14 @@ contextBridge.exposeInMainWorld('desktopControls', {
   reloadClient: () => ipcRenderer.send('palisade:window-control', 'reload-client'),
   checkForUpdates: () => ipcRenderer.send('palisade:window-control', 'check-updates'),
   openUpdates: () => ipcRenderer.send('palisade:window-control', 'updates'),
+  downloadUpdate: () => ipcRenderer.send('palisade:window-control', 'update-download'),
+  restartForUpdate: () => ipcRenderer.send('palisade:window-control', 'update-restart'),
+  cancelUpdate: () => ipcRenderer.send('palisade:window-control', 'update-cancel'),
+  setUpdatesPaused: (paused) => { if (typeof paused === 'boolean') ipcRenderer.send('palisade:window-control', paused ? 'update-snooze' : 'update-resume'); },
+  setUpdatePreference: (name, enabled) => {
+    if (['auto-check', 'auto-download', 'install-on-quit'].includes(name) && typeof enabled === 'boolean')
+      ipcRenderer.send('palisade:window-control', 'update-' + name + (enabled ? '-on' : '-off'));
+  },
   minimize: () => ipcRenderer.send('palisade:window-control', 'minimize'),
   maximize: () => ipcRenderer.send('palisade:window-control', 'maximize'),
   close: () => ipcRenderer.send('palisade:window-control', 'close'),
@@ -38,7 +46,20 @@ contextBridge.exposeInMainWorld('desktopControls', {
         updateStatus: typeof state.updateStatus === 'string' ? state.updateStatus.slice(0, 160) : '',
         latestVersion: typeof state.latestVersion === 'string' ? state.latestVersion.slice(0, 64) : '',
         notesStatus: typeof state.notesStatus === 'string' ? state.notesStatus.slice(0, 200) : '',
-        releaseHistory: boundedNotes(state.releaseHistory) });
+        releaseHistory: boundedNotes(state.releaseHistory), settingsOpenTo: state.settingsOpenTo === 'about' ? 'about' : '',
+        updaterAvailable: state.updaterAvailable === true, updateBusy: state.updateBusy === true,
+        updatePhase: typeof state.updatePhase === 'string' ? state.updatePhase.slice(0, 32) : '',
+        updateProgress: Number.isInteger(state.updateProgress) && state.updateProgress >= 0 && state.updateProgress <= 100 ? state.updateProgress : 0,
+        updateCancelable: state.updateCancelable === true, updateCanDownload: state.updateCanDownload === true,
+        updateCanRestart: state.updateCanRestart === true, autoCheck: state.autoCheck === true,
+        autoDownload: state.autoDownload === true, installOnQuit: state.installOnQuit === true,
+        updatesPaused: state.updatesPaused === true,
+        lastUpdateCheck: Number.isSafeInteger(state.lastUpdateCheck) && state.lastUpdateCheck > 0 &&
+          state.lastUpdateCheck <= 8640000000000000 ? state.lastUpdateCheck : 0,
+        updateHistory: Array.isArray(state.updateHistory) ? state.updateHistory.slice(0, 12).filter(item =>
+          typeof item?.version === 'string' && item.version.length <= 64 && Number.isSafeInteger(item.at) &&
+          item.at > 0 && item.at <= 8640000000000000 && ['installed', 'interrupted'].includes(item.result))
+          .map(item => ({ version: item.version, at: item.at, result: item.result })) : [] });
     };
     ipcRenderer.on('palisade:window-state', listener);
     return () => ipcRenderer.removeListener('palisade:window-state', listener);

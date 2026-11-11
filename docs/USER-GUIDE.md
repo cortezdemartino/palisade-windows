@@ -9,9 +9,8 @@ categories and compatibility information come from that signed document.
 Previously verified notes remain available offline. Missing or invalid notes are
 shown as unavailable; an unsigned release description is never substituted.
 
-This candidate still opens Update Manager for installation. The desktop-owned
-installer handoff is being implemented in U1. This guide does not imply it has
-already passed an installed upgrade or been released.
+The v0.3.4 development candidate shows the last check, download progress and
+installation history here. It still needs an installed Windows upgrade test.
 
 ## Installation
 
@@ -28,7 +27,21 @@ An old development entry named Electron can incorrectly share Palisade's identit
 
 ## Updating
 
-Choose **Open Update Manager** from the application or tray menu. After confirmation, Palisade finishes exit preparation, saves profile storage and opens its bundled manager outside the installation folder. It then exits so the manager can update or repair the installation. Cancel leaves Palisade running. Installed clients check signed stable releases at startup, every six hours, and after waking if overdue. Failures retry after fifteen minutes with backoff up to six hours. **Check for Updates** in the application or tray menu, or **Check now** in device settings, checks immediately. New releases produce a native notification and visible status; installation remains a confirmed manager action.
+The v0.3.4 candidate checks signed stable releases on launch, every six hours
+and after waking if overdue. It checks again after network failures with a
+longer delay between attempts. Select **Check now** to check immediately.
+Background downloads are enabled by default. Use **Pause for 24 hours** to
+postpone checks and downloads, or **Cancel** to stop the current download.
+
+When a download is ready, choose **Restart to update** after saving your work
+and finishing any calls. Palisade verifies the release again and waits for
+assistance cleanup and profile saving. **Install and reopen when I quit** is
+optional and applies only to a ready update when assistance is inactive.
+Published clients through v0.3.3 still use Update Manager.
+
+Use **Open Update Manager** from the application, tray menu or Settings to
+inspect or repair an installation. Palisade confirms before closing and
+opens the bundled manager after its exit preparation succeeds.
 
 If exit preparation is still pending, Palisade stays open. **Quit pending: stopping assistance** in the menu/tray means cleanup is still running; Palisade exits automatically when it completes. A failure shows a keep-open message so you can retry Quit or the update action afterward. The update manager is not opened while preparation is incomplete. Exit preparation never automatically resumes assistance permissions. Full Assist remains unavailable in this development checkpoint as described below.
 

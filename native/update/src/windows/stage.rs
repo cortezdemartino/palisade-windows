@@ -19,6 +19,7 @@ use windows_sys::Win32::{
 };
 
 type Result<T> = std::result::Result<T, &'static str>;
+use windows_sys::Wdk::Storage::FileSystem::{FILE_CREATE, FILE_OPEN, FILE_OVERWRITE_IF};
 pub(crate) fn wide(path: &Path) -> Vec<u16> {
     path.as_os_str().encode_wide().chain(Some(0)).collect()
 }
@@ -164,6 +165,9 @@ pub(crate) fn lock_regular(path: &Path) -> Result<File> {
 struct User {
     _token: Handle,
     words: Vec<usize>,
+}
+pub(crate) fn user_sid() -> Result<String> {
+    User::current()?.text()
 }
 impl User {
     fn current() -> Result<Self> {
@@ -409,6 +413,19 @@ impl Stage {
     pub fn open(id: &str) -> Result<Self> {
         Self::open_at(&known_root()?, id)
     }
+    pub fn open_existing(id: &str) -> Result<Option<Self>> {
+        if !crate::stage_id(id) {
+            return Err("stage-id");
+        }
+        let root = known_root()?;
+        // An absent stage is already discarded. All existing stages must pass
+        // the same handle, reparse and ownership checks as an inspect operation.
+        match std::fs::symlink_metadata(root.join(id)) {
+            Ok(_) => Self::open_at(&root, id).map(Some),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(_) => Err("stage-directory-open"),
+        }
+    }
     fn create_at(root: &Path, id: &str) -> Result<Self> {
         if !crate::stage_id(id) {
             return Err("stage-id");
@@ -419,6 +436,14 @@ impl Stage {
         create_private(root, &user, true)?;
         let root_hold = Directories::seal(root)?;
         private(root_hold.last()?, &user)?;
+        if std::fs::read_dir(root)
+            .map_err(|_| "stage-list")?
+            .take(4)
+            .count()
+            >= 3
+        {
+            return Err("stage-quota");
+        }
         let path = root.join(id);
         create_private(&path, &user, false)?;
         let directories = Directories::seal(&path)?;
@@ -449,72 +474,219 @@ impl Stage {
         })
     }
     pub fn locked_file(&self, name: &str) -> Result<File> {
-        if name.is_empty()
-            || name.chars().any(char::is_control)
-            || name.contains(['/', '\\', ':'])
-            || name.starts_with('.')
-            || name.ends_with(['.', ' '])
-        {
-            return Err("stage-filename");
-        }
-        use windows_sys::{
-            Wdk::{
-                Foundation::OBJECT_ATTRIBUTES,
-                Storage::FileSystem::{
-                    FILE_NON_DIRECTORY_FILE, FILE_OPEN, FILE_OPEN_REPARSE_POINT,
-                    FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
-                },
-            },
-            Win32::{Foundation::UNICODE_STRING, System::IO::IO_STATUS_BLOCK},
-        };
-        let mut words: Vec<u16> = name.encode_utf16().collect();
-        if words.len() > 255 {
-            return Err("stage-filename");
-        }
-        let mut unicode = UNICODE_STRING {
-            Length: (words.len() * 2) as u16,
-            MaximumLength: (words.len() * 2) as u16,
-            Buffer: words.as_mut_ptr(),
-        };
-        let attributes = OBJECT_ATTRIBUTES {
-            Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
-            RootDirectory: self._directories.last()?.as_raw_handle(),
-            ObjectName: &mut unicode,
-            Attributes: OBJ_CASE_INSENSITIVE,
-            SecurityDescriptor: ptr::null_mut(),
-            SecurityQualityOfService: ptr::null_mut(),
-        };
-        let mut status: IO_STATUS_BLOCK = unsafe { zeroed() };
-        let mut raw = ptr::null_mut();
-        // Documented user-mode NtCreateFile binds one filename to the retained directory;
-        // verified-file access never re-traverses ancestor pathnames. No driver is used.
-        if unsafe {
-            NtCreateFile(
-                &mut raw,
-                FILE_GENERIC_READ | READ_CONTROL,
-                &attributes,
-                &mut status,
-                ptr::null(),
-                FILE_ATTRIBUTE_NORMAL,
-                FILE_SHARE_READ,
-                FILE_OPEN,
-                FILE_OPEN_REPARSE_POINT | FILE_NON_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT,
-                ptr::null(),
-                0,
-            )
-        } < 0
-        {
-            return Err("stage-file-open");
-        }
-        let file = unsafe { File::from_raw_handle(raw) };
-        let info = information(&file)?;
-        if info.dwFileAttributes & (FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_DIRECTORY) != 0
-            || info.nNumberOfLinks != 1
-        {
-            return Err("stage-file-reparse");
-        }
-        Ok(file)
+        check_name(name)?;
+        self.open_relative(
+            name,
+            FILE_GENERIC_READ | READ_CONTROL,
+            FILE_OPEN,
+            FILE_SHARE_READ,
+        )
     }
+    pub fn create_new(&self, name: &str) -> Result<File> {
+        check_name(name)?;
+        if std::fs::read_dir(&self.path)
+            .map_err(|_| "stage-list")?
+            .take(65)
+            .count()
+            >= 64
+        {
+            return Err("stage-file-quota");
+        }
+        self.open_relative(name, FILE_GENERIC_READ | FILE_GENERIC_WRITE, FILE_CREATE, 0)
+    }
+    /// Shallow, handle-bound deletion only. Never traverse a nested directory or reparse point.
+    pub fn discard(self) -> Result<()> {
+        let entries = std::fs::read_dir(&self.path)
+            .map_err(|_| "stage-list")?
+            .take(65)
+            .collect::<std::io::Result<Vec<_>>>()
+            .map_err(|_| "stage-list")?;
+        if entries.len() > 64 {
+            return Err("stage-file-quota");
+        }
+        let mut files = Vec::new();
+        for entry in entries {
+            let name = entry
+                .file_name()
+                .into_string()
+                .map_err(|_| "stage-filename")?;
+            check_name(&name)?;
+            files.push(self.open_relative(&name, DELETE | SYNCHRONIZE, FILE_OPEN, 0)?);
+        }
+        // All entries have first been checked and exclusively opened. Partial failure remains retryable.
+        for file in files {
+            dispose(&file)?;
+        }
+        let Stage {
+            path,
+            _directories,
+            _root,
+            _anchor,
+        } = self;
+        drop(_directories);
+        let name = path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .ok_or("stage-id")?;
+        let directory = relative(
+            _root.last()?,
+            name,
+            DELETE | SYNCHRONIZE,
+            FILE_OPEN,
+            0,
+            true,
+        )?;
+        dispose(&directory)?;
+        drop(directory);
+        drop(_root);
+        drop(_anchor);
+        Ok(())
+    }
+    pub fn mark_internet(&self, release: &crate::VerifiedRelease) -> Result<()> {
+        use std::io::Write;
+        let payload = release.payload();
+        let mut file = self.open_relative(
+            &format!("{}:Zone.Identifier", payload.filename),
+            FILE_GENERIC_WRITE,
+            FILE_OVERWRITE_IF,
+            FILE_SHARE_READ,
+        )?;
+        file.write_all(
+            format!(
+                "[ZoneTransfer]\r\nZoneId=3\r\nHostUrl={}\r\n",
+                payload.download_url
+            )
+            .as_bytes(),
+        )
+        .map_err(|_| "zone-write")?;
+        file.sync_all().map_err(|_| "zone-write")
+    }
+    fn open_relative(
+        &self,
+        name: &str,
+        access: u32,
+        disposition: u32,
+        sharing: u32,
+    ) -> Result<File> {
+        relative(
+            self._directories.last()?,
+            name,
+            access,
+            disposition,
+            sharing,
+            false,
+        )
+    }
+}
+
+fn dispose(file: &File) -> Result<()> {
+    let info = FILE_DISPOSITION_INFO { DeleteFile: true };
+    if unsafe {
+        SetFileInformationByHandle(
+            file.as_raw_handle(),
+            FileDispositionInfo,
+            (&info as *const FILE_DISPOSITION_INFO).cast(),
+            size_of::<FILE_DISPOSITION_INFO>() as u32,
+        )
+    } == 0
+    {
+        return Err("stage-delete");
+    }
+    Ok(())
+}
+
+fn relative(
+    directory: &File,
+    name: &str,
+    access: u32,
+    disposition: u32,
+    sharing: u32,
+    is_directory: bool,
+) -> Result<File> {
+    if name.is_empty()
+        || name.chars().any(char::is_control)
+        || name.contains(['/', '\\'])
+        || name.starts_with('.')
+        || name.ends_with(['.', ' '])
+    {
+        return Err("stage-filename");
+    }
+    use windows_sys::{
+        Wdk::{
+            Foundation::OBJECT_ATTRIBUTES,
+            Storage::FileSystem::{
+                FILE_DIRECTORY_FILE, FILE_NON_DIRECTORY_FILE, FILE_OPEN_REPARSE_POINT,
+                FILE_SYNCHRONOUS_IO_NONALERT, NtCreateFile,
+            },
+        },
+        Win32::{Foundation::UNICODE_STRING, System::IO::IO_STATUS_BLOCK},
+    };
+    let mut words: Vec<u16> = name.encode_utf16().collect();
+    if words.len() > 255 {
+        return Err("stage-filename");
+    }
+    let mut unicode = UNICODE_STRING {
+        Length: (words.len() * 2) as u16,
+        MaximumLength: (words.len() * 2) as u16,
+        Buffer: words.as_mut_ptr(),
+    };
+    let attributes = OBJECT_ATTRIBUTES {
+        Length: size_of::<OBJECT_ATTRIBUTES>() as u32,
+        RootDirectory: directory.as_raw_handle(),
+        ObjectName: &mut unicode,
+        Attributes: OBJ_CASE_INSENSITIVE,
+        SecurityDescriptor: ptr::null_mut(),
+        SecurityQualityOfService: ptr::null_mut(),
+    };
+    let mut status: IO_STATUS_BLOCK = unsafe { zeroed() };
+    let mut raw = ptr::null_mut();
+    // Documented user-mode NtCreateFile binds one filename to the retained directory;
+    // verified-file access never re-traverses ancestor pathnames. No driver is used.
+    if unsafe {
+        NtCreateFile(
+            &mut raw,
+            access | FILE_READ_ATTRIBUTES,
+            &attributes,
+            &mut status,
+            ptr::null(),
+            FILE_ATTRIBUTE_NORMAL,
+            sharing,
+            disposition,
+            FILE_OPEN_REPARSE_POINT
+                | if is_directory {
+                    FILE_DIRECTORY_FILE
+                } else {
+                    FILE_NON_DIRECTORY_FILE
+                }
+                | FILE_SYNCHRONOUS_IO_NONALERT,
+            ptr::null(),
+            0,
+        )
+    } < 0
+    {
+        return Err("stage-file-open");
+    }
+    let file = unsafe { File::from_raw_handle(raw) };
+    let info = information(&file)?;
+    if info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        || (info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY != 0) != is_directory
+        || (!is_directory && info.nNumberOfLinks != 1)
+    {
+        return Err("stage-file-reparse");
+    }
+    Ok(file)
+}
+
+fn check_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || name.contains(['/', '\\', ':'])
+        || name.chars().any(char::is_control)
+        || name.starts_with('.')
+        || name.ends_with(['.', ' '])
+    {
+        return Err("stage-filename");
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -541,6 +713,30 @@ pub(crate) mod tests {
         let root = std::env::temp_dir().join(format!("palisade-update-test-{name}"));
         std::fs::create_dir(&root).unwrap();
         root
+    }
+    #[test]
+    fn quota_and_shallow_discard_preserve_unrelated_paths() {
+        let base = fixture();
+        let root = base.join("Updates-v1");
+        let ids = [
+            "77e14877-832f-44bc-9e92-b27eb6ba77ad",
+            "77e14877-832f-44bc-9e92-b27eb6ba77ae",
+            "77e14877-832f-44bc-9e92-b27eb6ba77af",
+        ];
+        for id in ids {
+            drop(Stage::create_at(&root, id).unwrap());
+        }
+        assert!(Stage::create_at(&root, "77e14877-832f-44bc-9e92-b27eb6ba77aa").is_err());
+        let stage = Stage::open_at(&root, ids[0]).unwrap();
+        std::fs::write(stage.path().join("download.partial"), b"incomplete").unwrap();
+        stage.discard().unwrap();
+        assert!(!root.join(ids[0]).exists());
+        assert!(root.join(ids[1]).exists());
+        let stage = Stage::create_at(&root, ids[0]).unwrap();
+        std::fs::create_dir(stage.path().join("unexpected")).unwrap();
+        assert!(stage.discard().is_err());
+        assert!(root.join(ids[0]).join("unexpected").exists());
+        std::fs::remove_dir_all(base).unwrap();
     }
     #[test]
     fn private_staging_refuses_reuse_and_holds_file_and_directory_identity() {
@@ -655,6 +851,31 @@ pub(crate) mod tests {
         for length in 0..ace.len() {
             assert!(allowed_sid(&ace[..length]).is_err());
         }
+    }
+
+    #[test]
+    fn exclusive_stage_publication_and_internet_zone_preserve_the_locked_installer_bytes() {
+        use std::io::Write;
+        let base = fixture();
+        let root = base.join("Updates-v1");
+        let stage = Stage::create_at(&root, "77e14877-832f-44bc-9e92-b27eb6ba77ad").unwrap();
+        let release = crate::tests::authorized_bytes(b"fixture");
+        let name = &release.payload().filename;
+        let mut file = stage.create_new(name).unwrap();
+        file.write_all(b"fixture").unwrap();
+        file.sync_all().unwrap();
+        drop(file);
+        assert!(stage.create_new(name).is_err());
+        let mut locked = stage.locked_file(name).unwrap();
+        stage.mark_internet(&release).unwrap();
+        assert!(crate::verify_installer(&mut locked, &release).is_ok());
+        let zone =
+            std::fs::read_to_string(stage.path().join(format!("{name}:Zone.Identifier"))).unwrap();
+        assert!(zone.contains("ZoneId=3\r\n"));
+        assert!(zone.contains(&release.payload().download_url));
+        drop(locked);
+        drop(stage);
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

@@ -98,7 +98,7 @@ test('local preload exposes only fixed controls and strips Electron events from 
   ipcRenderer.send = (...args) => sent.push(args);
   const context = { require: () => ({ ipcRenderer, contextBridge: { exposeInMainWorld: (name, value) => { assert.equal(name, 'desktopControls'); bridge = value; } } }) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/window-controls-preload.cjs'), 'utf8'), context);
-  assert.equal(Object.keys(bridge).sort().join(','), 'checkForUpdates,close,copyDiagnostics,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,setLogin,setTray,settings,testNotification');
+  assert.equal(Object.keys(bridge).sort().join(','), 'cancelUpdate,checkForUpdates,close,copyDiagnostics,downloadUpdate,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,restartForUpdate,setLogin,setTray,setUpdatePreference,setUpdatesPaused,settings,testNotification');
   bridge.minimize(); bridge.maximize(); bridge.close();
   assert.equal(sent.map((args) => args[1]).join(','), 'minimize,maximize,close');
   const received = []; const unsubscribe = bridge.onState((...args) => received.push(args));
@@ -151,7 +151,8 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './assist/build-policy.cjs') return require('../src/assist/build-policy.cjs');
     if (name === './assist/lifecycle.cjs') return require('../src/assist/lifecycle.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
-    if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {} }) };
+    if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {}, onQuit() {} }) };
+    if (name === './updates/native-helper.cjs') return { createNativeHelper: () => ({ status: async () => ({ state: 'idle' }) }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');
     return require(name);
   } };

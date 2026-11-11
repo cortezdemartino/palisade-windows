@@ -1,7 +1,7 @@
 {
   "name": "@palisade/desktop",
   "private": true,
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "Windows desktop client for Palisade",
   "author": "Onyx Operations Group",
   "license": "Apache-2.0",
@@ -20,6 +20,8 @@
     "verify:update-package": "node scripts/verify-update-package.cjs",
     "test:window-controls": "node scripts/test-window-controls.cjs",
     "build:assist": "node scripts/build-assist.cjs",
+    "build:update": "node scripts/build-update.cjs",
+    "test:update-policy": "node scripts/test-nsis-policy.cjs",
     "test:assist-native": "cargo fmt --check --manifest-path native/assist/Cargo.toml && cargo clippy --locked --manifest-path native/assist/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --locked --manifest-path native/assist/Cargo.toml && cargo test --locked --manifest-path native/assist/Cargo.toml --all-features",
     "test:update-native": "cargo fmt --check --manifest-path native/update/Cargo.toml && cargo clippy --locked --manifest-path native/update/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --locked --manifest-path native/update/Cargo.toml && cargo test --locked --manifest-path native/update/Cargo.toml --all-features",
     "test:assist-process": "node --test tests/assist-guardian-process.native.cjs tests/assist-live-process.native.cjs tests/assist-custody-process.native.cjs && node scripts/test-assist-features.cjs",
@@ -47,8 +49,7 @@
       "assets/update-key-transitions.json",
       "package.json",
       "THIRD-PARTY-NOTICES.md",
-      "!src/updates/install.ps1",
-      "!src/updates/downloader.cjs"
+      "!src/updates/install.ps1"
     ],
     "asar": true,
     "electronFuses": {
@@ -70,6 +71,7 @@
         }
       ],
       "icon": "assets/icon.ico",
+      "signExts": ["!Palisade-Update.exe", "!Palisade-Assist.exe"],
       "verifyUpdateCodeSignature": false
     },
     "nsis": {
@@ -87,9 +89,24 @@
     "beforePack": "scripts/before-pack.cjs",
     "extraResources": [
       {
+        "from": ".update",
+        "to": "update",
+        "filter": [
+          "Palisade-Update.exe",
+          "THIRD-PARTY-NOTICES.txt",
+          "RUST-COPYRIGHT.html",
+          "licenses/**/*"
+        ]
+      },
+      {
         "from": ".assist",
         "to": "assist",
-        "filter": ["Palisade-Assist.exe", "THIRD-PARTY-NOTICES.txt", "RUST-COPYRIGHT.html", "licenses/**/*"]
+        "filter": [
+          "Palisade-Assist.exe",
+          "THIRD-PARTY-NOTICES.txt",
+          "RUST-COPYRIGHT.html",
+          "licenses/**/*"
+        ]
       },
       {
         "from": ".manager/Palisade-Manager.exe",

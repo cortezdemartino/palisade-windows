@@ -2,7 +2,7 @@
 
 ## Scope and layout
 
-Desktop controls occupy a separate 36-pixel strip above the hosted page, with no title text. The strip provides window dragging and disappears in fullscreen. The gear before the window buttons opens a local panel. General contains the saved tray preference, Windows login registration and notification test. Permissions opens the fixed Windows notification and microphone settings pages and explains the client's permission boundaries. About & updates provides the installed version, signed update manager, page reload and a copyable diagnostic summary.
+Desktop controls occupy a separate 36-pixel strip above the hosted page, with no title text. The strip provides window dragging and disappears in fullscreen. The gear before the window buttons opens a local panel. General contains the saved tray preference, Windows login registration and notification test. Permissions opens the fixed Windows notification and microphone settings pages and explains the client's permission boundaries. Updates & What's New provides the installed version, update progress, installation history, signed release notes and manual recovery through Update Manager.
 
 Settings apply immediately. Login remains disabled by default. Existing tray choices, installation identity and the persistent Palisade browser partition are preserved. Notification delivery remains subject to Windows and conversation preferences. The panel never claims to override operating system permissions.
 
@@ -10,7 +10,7 @@ Settings apply immediately. Login remains disabled by default. Existing tray cho
 
 The hosted website has no privileged device-settings bridge. Only the isolated local controls view can issue the fixed actions. The local protocol serves a fixed allowlist of interface files from the application archive. Navigation, subframe commands, arbitrary URLs and arbitrary file requests are denied. Diagnostics contain app/runtime versions, architecture, tray/login choices and update status, excluding account identifiers, paths, message contents and credentials. No profile clearing or destructive reset action is offered.
 
-The update action waits for application exit preparation before copying or launching the manager. Failed preparation leaves Palisade open and postpones the update. A pending quit appears in the application/tray menu and may produce a desktop notification; closing to tray still respects the saved preference. No native Assist setting is enabled by this lifecycle change.
+The candidate checks and downloads in the background by default. The user can change those preferences, pause for 24 hours, or cancel the current download. Restart is confirmed by default. Installing when quitting is optional. Both a native update and the manual Manager action wait for application exit preparation. Failed preparation leaves Palisade open and postpones the handoff. A pending quit appears in the application or tray menu.
 
 ## Verification
 

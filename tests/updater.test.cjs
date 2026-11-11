@@ -5,9 +5,13 @@ const vm = require('node:vm');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { EventEmitter } = require('node:events');
-async function harness({ response = 0, fail = false, release = null, networkFail = false, pending = false, packaged = true, realTransport, publicKey, beforeManager = async () => {}, copyWait } = {}) {
+async function harness({ response = 0, fail = false, release = null, networkFail = false, pending = false, packaged = true,
+  realTransport, publicKey, beforeManager = async () => {}, copyWait, native, download, stage, prefs = {},
+  canInstallOnQuit } = {}) {
   const calls = [], prompts = [], statuses = [];
   let quit = 0, clock = 0, networkCalls = 0;
+  let record = { stage, history: [], lastCheck: 0 };
+  const journal = { get: () => structuredClone(record), set: (patch) => { record = { ...record, ...patch }; } };
   const timers = [], intervals = [], offers = [], signals = [];
   const powerMonitor = new EventEmitter();
   const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -20,7 +24,7 @@ async function harness({ response = 0, fail = false, release = null, networkFail
     rm: async (...args) => { calls.push(['cleanup', ...args]); }
   };
   const timer = (list, fn, delay) => { const entry = { fn, delay, active: true, unref() {} }; list.push(entry); return entry; };
-  const context = { __dirname: 'C:\\Apps\\Palisade\\resources\\app.asar\\src\\updates', AbortController, AbortSignal,
+  const context = { __dirname: 'C:\\Apps\\Palisade\\resources\\app.asar\\src\\updates', AbortController, AbortSignal, Buffer,
     setTimeout: (fn, delay) => timer(timers, fn, delay), setInterval: (fn, delay) => timer(intervals, fn, delay),
     clearTimeout: entry => { if(entry) entry.active = false; }, clearInterval: entry => { if(entry) entry.active = false; }, module: { exports: {} }, process: { platform: 'win32', resourcesPath: 'C:\\Apps\\Palisade\\resources', execPath: 'C:\\Apps\\Palisade\\Palisade.exe' },
     require: name => {
@@ -32,12 +36,16 @@ async function harness({ response = 0, fail = false, release = null, networkFail
       if (name === 'node:fs/promises') return promises;
       if (name === 'node:fs') return fakeFs;
       if (name === 'node:path') return path.win32;
+      if (name === 'node:crypto') return require(name);
+      if (name === './downloader.cjs') return require('../src/updates/downloader.cjs');
+      if (name === './journal.cjs') return require('../src/updates/journal.cjs');
+      if (name === '../settings.cjs') return require('../src/settings.cjs');
       if (name === 'node:child_process') return { spawn: (...args) => {
         calls.push(['spawn', ...args]); const child = new EventEmitter(); child.unref = () => calls.push(['unref']);
         process.nextTick(() => child.emit('spawn')); return child;
       } };
       if (name === './release.cjs' && realTransport) return require('../src/updates/release.cjs');
-      if (name === './release.cjs') return { fetchRelease: async (fetchFn, key, version, history) => {
+      if (name === './release.cjs') return { ...require('../src/updates/release.cjs'), fetchRelease: async (fetchFn, key, version, history) => {
         assert.equal(key, 'test-public-key'); assert.equal(version, '0.2.3'); assert.equal(history.length, 0);
         await fetchFn('https://api.github.com/releases', { signal: AbortSignal.timeout(10000) });
         return release;
@@ -46,8 +54,10 @@ async function harness({ response = 0, fail = false, release = null, networkFail
     } };
   vm.runInNewContext(await fs.readFile(path.join(__dirname, '../src/updates/updater.cjs'), 'utf8'), context);
   const controller = context.module.exports.createUpdateController(() => null, value => statuses.push(value), { now: () => clock,
-    beforeManager,
-    onAvailable: (manifest, openManager) => offers.push({ manifest, openManager }),
+    beforeManager, native, journal, download, canInstallOnQuit,
+    preferences: () => ({ autoCheck: true, autoDownload: true, snoozeUntil: 0, ...prefs }),
+    persistManifest: async (dir, envelope) => { calls.push(['write-manifest', dir, envelope]); },
+    onAvailable: manifest => offers.push({ manifest }),
     fetchFn: realTransport || (async (_url, { signal }) => {
       networkCalls++; signals.push(signal);
       if (networkFail) throw new Error('offline');
@@ -56,11 +66,12 @@ async function harness({ response = 0, fail = false, release = null, networkFail
     }),
   });
   return { controller, calls, prompts, statuses, quit: () => quit, offers, timers, intervals, app, powerMonitor, signals,
-    networkCalls: () => networkCalls, setClock: value => { clock = value; }, settle,
+    networkCalls: () => networkCalls, setClock: value => { clock = value; }, settle, journal,
+    setRelease: value => { release = value; },
     runTimer: async delay => { const timer = timers.find(entry => entry.active && entry.delay === delay); assert.ok(timer); timer.active = false; timer.fn(); await settle(); },
   };
 }
-test('client delegates updates to a copied manager outside its installation and exits after launch', async () => {
+test('explicit repair opens the copied Manager outside the installation after confirmation', async () => {
   const h = await harness(); await h.controller.openManager();
   const copy = h.calls.find(x => x[0] === 'copy');
   assert.equal(copy[1], 'C:\\Apps\\Palisade\\resources\\manager\\Palisade-Manager.exe');
@@ -134,17 +145,18 @@ test('startup checks immediately and polls every six hours without duplicate sch
   assert.equal(h.intervals[0].delay, 21600000);
   assert.equal(h.timers.length, 0);
   await h.settle(); assert.equal(h.networkCalls(), 1);
+  h.setClock(21600000);
   h.intervals[0].fn(); await h.settle(); assert.equal(h.networkCalls(), 2);
   assert.equal(h.prompts.length, 0); assert.equal(h.calls.length, 0);
   assert.match(h.statuses.at(-1), /up to date/); h.controller.stop();
 });
 
-test('verified offers notify once per version without launching or downloading an installer', async () => {
+test('verified offers notify once without invoking the repair Manager', async () => {
   const h = await harness({ release: { version: '0.2.4' } });
   await h.controller.check(); await h.controller.check();
   assert.equal(h.offers.length, 1); assert.equal(h.prompts.length, 0); assert.equal(h.calls.length, 0);
   assert.match(h.statuses.at(-1), /0.2.4 available/);
-  h.offers[0].openManager(); await h.settle(); assert.equal(h.quit(), 1);
+  assert.equal(h.quit(), 0);
 });
 
 test('network or verification failures retry with backoff and never announce an update', async () => {
@@ -152,7 +164,7 @@ test('network or verification failures retry with backoff and never announce an 
   await h.settle(); assert.equal(h.offers.length, 0); assert.equal(h.prompts.length, 0);
   await h.runTimer(900000); assert.equal(h.networkCalls(), 2);
   assert.ok(h.timers.some(timer => timer.active && timer.delay === 1800000));
-  assert.match(h.statuses.at(-1), /failed/); assert.equal(h.calls.length, 0); h.controller.stop();
+  assert.match(h.statuses.at(-1), /could not verify/); assert.equal(h.calls.length, 0); h.controller.stop();
 });
 
 test('resume checks only when overdue and stops scheduling on shutdown', async () => {
@@ -173,11 +185,11 @@ test('concurrent checks are coalesced and shutdown aborts an in-flight request',
   assert.equal(h.timers.filter(timer => timer.active).length, 0);
 });
 
-test('manual check refuses unsigned release prose and Later never opens the manager', async () => {
+test('manual check displays update availability without using unsigned prose or opening Manager', async () => {
   const h = await harness({ response: 1, release: { version: '0.2.4', releaseNotes: 'Release changes' } });
   await h.controller.check(true);
-  assert.match(h.prompts[0].detail, /Verified release notes are unavailable/);
-  assert.doesNotMatch(h.prompts[0].detail, /Release changes/); assert.equal(h.calls.length, 0);
+  assert.equal(h.prompts.length, 0);
+  assert.doesNotMatch(h.controller.notesState().notesStatus, /Release changes/); assert.equal(h.calls.length, 0);
   assert.equal(h.quit(), 0);
 });
 
@@ -207,7 +219,107 @@ test('polling announces only a genuinely signed newer stable release and rejects
     };
     const h = await harness({ realTransport: transport, publicKey: key }); await h.controller.check();
     assert.equal(h.offers.length, mode === 'valid' ? 1 : 0, mode);
-    if (mode === 'tampered' || mode === 'prerelease') assert.match(h.statuses.at(-1), /failed/);
+    if (mode === 'tampered' || mode === 'prerelease') assert.match(h.statuses.at(-1), /could not verify/);
     assert.equal(h.calls.length, 0);
+  }
+});
+
+function releaseFixture(version = '0.2.4') {
+  const { normalisePayload, signedBytes, releaseAssetUrl } = require('../src/updates/release.cjs');
+  const { createHash } = require('node:crypto');
+  const filename = 'Palisade-Setup-' + version + '-x64.exe';
+  const manifest = normalisePayload({ schema: 3, channel: 'stable', version, filename, size: 12,
+    sha256: 'd'.repeat(64), sha512: Buffer.alloc(64).toString('base64'),
+    downloadUrl: releaseAssetUrl(version, filename), publishedAt: '2026-10-17T12:00:00.000Z' });
+  Object.defineProperty(manifest, 'signedEnvelope', { value: { payload: manifest, signature: 'fixture', transitions: [] } });
+  const digest = createHash('sha256').update(signedBytes(manifest)).digest('hex');
+  return { manifest, digest };
+}
+
+async function nativeHarness(options = {}) {
+  const { manifest, digest } = releaseFixture();
+  const activity = [];
+  const native = {
+    stage: async id => { activity.push('stage'); return { directory: 'C:\\Fixture\\' + id }; },
+    inspect: async id => {
+      activity.push('inspect');
+      return { stage: id, version: manifest.version, releaseSha256: digest, directory: 'C:\\Fixture\\' + id };
+    },
+    discard: async id => { activity.push('discard:' + id); },
+    apply: async (_receipt, _nonce, { onCommit }) => { activity.push('apply'); onCommit(); },
+  };
+  const h = await harness({ native, release: manifest, beforeManager: async () => { activity.push('quiesce'); },
+    download: async (_manifest, _directory, _transport, progress) => { activity.push('download'); progress(6, 12); progress(12, 12); },
+    ...options });
+  return { ...h, activity, manifest, digest };
+}
+
+test('background stage and explicit safe restart use the native helper and never open Manager', async () => {
+  const h = await nativeHarness();
+  await h.controller.check();
+  await h.settle();
+  assert.equal(h.controller.notesState().updatePhase, 'staged');
+  assert.equal(h.controller.notesState().updateProgress, 100);
+  assert.deepEqual(h.activity, ['stage', 'download', 'inspect']);
+  assert.equal(h.quit(), 0);
+  assert.equal(await h.controller.restart(), true);
+  assert.deepEqual(h.activity, ['stage', 'download', 'inspect', 'inspect', 'quiesce', 'apply']);
+  assert.equal(h.journal.get().stage.phase, 'handoff');
+  assert.equal(h.quit(), 1);
+  assert.equal(h.calls.some(call => call[0] === 'spawn'), false);
+});
+
+test('changed signed release, denied restart and failed cleanup never start the helper', async () => {
+  for (const mode of ['changed', 'denied', 'cleanup']) {
+    const h = await nativeHarness({ response: mode === 'denied' ? 1 : 0,
+      beforeManager: async () => { if (mode === 'cleanup') throw Error('Retained child'); } });
+    await h.controller.check(); await h.settle();
+    if (mode === 'changed') h.setRelease(releaseFixture('0.2.5').manifest);
+    assert.equal(await h.controller.restart(), false, mode);
+    assert.equal(h.activity.includes('apply'), false, mode);
+    assert.equal(h.quit(), 0, mode);
+    if (mode === 'cleanup') assert.equal(h.controller.notesState().updatePhase, 'deferred');
+  }
+});
+
+test('cancellation clears the interrupted download and allows a later manual retry', async () => {
+  let attempts = 0;
+  const h = await nativeHarness({ prefs: { autoDownload: false }, download: async (_release, _path, _fetch, _progress, { signal }) => {
+    if (++attempts === 1) await new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }));
+  } });
+  await h.controller.check();
+  const downloading = h.controller.downloadUpdate();
+  await h.settle();
+  assert.equal(await h.controller.downloadUpdate(), false);
+  h.controller.cancel();
+  assert.equal(await downloading, false);
+  assert.equal(h.controller.notesState().updatePhase, 'canceled');
+  assert.equal(h.journal.get().stage, null);
+  assert.equal(await h.controller.downloadUpdate(), true);
+  assert.equal(h.controller.notesState().updatePhase, 'staged');
+});
+
+test('offline recovery re-verifies the saved installer and an opted-in quit still requires fresh metadata', async () => {
+  const { manifest, digest } = releaseFixture();
+  const stage = { id: '75a9d45c-7191-4ddd-824f-142177570ec3', from: '0.2.3', version: manifest.version,
+    releaseSha256: digest, phase: 'handoff', nonce: 'a'.repeat(64) };
+  const h = await nativeHarness({ stage, networkFail: true, prefs: { autoCheck: false, installOnQuit: true } });
+  h.controller.start(); await h.settle();
+  assert.equal(h.controller.notesState().updatePhase, 'recovered');
+  assert.equal(h.controller.notesState().updateHistory[0].result, 'interrupted');
+  assert.deepEqual(h.activity, ['inspect']);
+  await h.controller.onQuit();
+  assert.deepEqual(h.activity, ['inspect']);
+  assert.equal(h.quit(), 0);
+  h.controller.stop();
+});
+
+test('install on quit requires opt-in, a ready release and no active assistance', async () => {
+  for (const [optedIn, safe, applies] of [[false, true, false], [true, false, false], [true, true, true]]) {
+    const h = await nativeHarness({ prefs: { installOnQuit: optedIn }, canInstallOnQuit: () => safe });
+    await h.controller.check(); await h.settle();
+    await h.controller.onQuit();
+    assert.equal(h.activity.includes('apply'), applies);
+    assert.equal(h.quit(), 0, 'The shared quit handler retains ownership of the exit.');
   }
 });

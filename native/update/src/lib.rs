@@ -40,6 +40,11 @@ impl VerifiedRelease {
     pub fn payload(&self) -> &Payload {
         &self.payload
     }
+    pub fn digest(&self) -> Result<String> {
+        Ok(to_hex(
+            Sha256::digest(signed("PALISADE-DESKTOP-RELEASE-V3", &self.payload)?).as_ref(),
+        ))
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -312,6 +317,14 @@ pub fn verify_packaged(bytes: &[u8]) -> Result<VerifiedRelease> {
 
 /// Caller must retain its deny-write/deny-delete native handle until installer completion.
 pub fn verify_installer(file: &mut (impl Read + Seek), release: &VerifiedRelease) -> Result<()> {
+    verify_installer_while(file, release, || true)
+}
+
+pub(crate) fn verify_installer_while(
+    file: &mut (impl Read + Seek),
+    release: &VerifiedRelease,
+    live: impl Fn() -> bool,
+) -> Result<()> {
     let payload = release.payload();
     validate(payload)?;
     file.seek(SeekFrom::Start(0))
@@ -321,6 +334,9 @@ pub fn verify_installer(file: &mut (impl Read + Seek), release: &VerifiedRelease
     let mut size = 0u64;
     let mut buffer = [0; 64 * 1024];
     loop {
+        if !live() {
+            return Err("operation-canceled");
+        }
         let count = file.read(&mut buffer).map_err(|_| "installer-read")?;
         if count == 0 {
             break;
@@ -331,6 +347,9 @@ pub fn verify_installer(file: &mut (impl Read + Seek), release: &VerifiedRelease
         }
         sha256.update(&buffer[..count]);
         sha512.update(&buffer[..count]);
+    }
+    if !live() {
+        return Err("operation-canceled");
     }
     if size != payload.size
         || to_hex(sha256.finalize().as_ref()) != payload.sha256

@@ -17,10 +17,12 @@ const deadline = setTimeout(() => { syncFs.writeFileSync(resultFile, JSON.string
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 app.whenReady().then(async () => {
   const deviceActions = [];
+  let updateState = { updaterAvailable: true, updatePhase: 'staged', updateCanRestart: true,
+    lastUpdateCheck: Date.parse('2026-11-10T00:00:00.000Z'), autoCheck: true, autoDownload: true };
   const desktop = createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.4', loginAvailable: true,
     latestVersion: '0.3.0', notesStatus: 'Signed release-note display fixture.', releaseHistory: [{ version: '0.3.0',
       publishedAt: '2026-11-10T00:00:00.000Z', locale: 'en', title: "What's New in Palisade 0.3.0", summary: 'A bounded local display fixture.',
-      sections: [{ title: 'Fixed', items: ['Text only: <img src=x onerror=alert(1)>'] }], compatibility: ['Windows x64.'] }] }),
+      sections: [{ title: 'Fixed', items: ['Text only: <img src=x onerror=alert(1)>'] }], compatibility: ['Windows x64.'] }], ...updateState }),
     onDeviceAction: action => deviceActions.push(action), partition: 'tabler-controls-smoke', icon: undefined });
   owner = desktop.window;
   const remote = desktop.contents;
@@ -76,6 +78,17 @@ app.whenReady().then(async () => {
   assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes details').open"), true);
   await controls.executeJavaScript("document.getElementById('check-updates').click()");
   await pause(100); assert.equal(deviceActions.at(-1), 'check-updates');
+  assert.equal(await controls.executeJavaScript("document.getElementById('update-restart').hidden"), false);
+  await controls.executeJavaScript("document.getElementById('update-restart').click()");
+  await pause(100); assert.equal(deviceActions.at(-1), 'update-restart');
+  updateState = { ...updateState, updatePhase: 'downloading', updateCanRestart: false,
+    updateBusy: true, updateCancelable: true, updateProgress: 35 };
+  desktop.refreshSettings();
+  await pause(100);
+  assert.equal(await controls.executeJavaScript("document.getElementById('update-progress').value"), 35);
+  assert.equal(await controls.executeJavaScript("document.getElementById('update-restart').hidden"), true);
+  await controls.executeJavaScript("document.getElementById('update-cancel').click()");
+  await pause(100); assert.equal(deviceActions.at(-1), 'update-cancel');
   await controls.executeJavaScript("document.getElementById('copy-diagnostics').click()");
   await pause(100);
   assert.equal(deviceActions.at(-1), 'copy-diagnostics');

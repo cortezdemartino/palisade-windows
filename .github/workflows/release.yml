@@ -56,6 +56,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Native process verification failed.' }
           npm run test:update-native
           if ($LASTEXITCODE -ne 0) { throw 'Native update verification failed.' }
+          npm run test:update-policy
+          if ($LASTEXITCODE -ne 0) { throw 'Installer exclusion policy failed.' }
           cargo install cargo-audit --locked --version 0.22.2
           if ($LASTEXITCODE -ne 0) { throw 'Native audit tool unavailable.' }
           cargo audit --file native/assist/Cargo.lock --deny warnings

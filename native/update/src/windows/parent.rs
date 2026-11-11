@@ -35,7 +35,7 @@ pub struct Parent {
     image_lock: Option<File>,
     directory: PathBuf,
     directories: Directories,
-    scope: Scope,
+    scope: Option<Scope>,
 }
 
 fn token_info(process: HANDLE, kind: TOKEN_INFORMATION_CLASS) -> Result<Vec<usize>> {
@@ -292,6 +292,12 @@ pub(crate) fn private_pipes(parent: u32) -> Result<()> {
 
 impl Parent {
     pub fn authenticate(expected: u32) -> Result<Self> {
+        Self::bind(expected, true)
+    }
+    pub(crate) fn authenticate_status(expected: u32) -> Result<Self> {
+        Self::bind(expected, false)
+    }
+    fn bind(expected: u32, installation: bool) -> Result<Self> {
         if expected == 0 || actual_parent()? != expected {
             return Err("parent-creator");
         }
@@ -340,7 +346,11 @@ impl Parent {
         let directories = Directories::hold(&directory)?;
         let image_lock = lock_regular(&image)?;
         image::validate(&image, &crate::packaged_version()?)?;
-        let scope = scope(&image_lock, &directories)?;
+        let scope = if installation {
+            Some(scope(&image_lock, &directories)?)
+        } else {
+            None
+        };
         private_pipes(expected)?;
         let parent = Self {
             process,
@@ -364,8 +374,8 @@ impl Parent {
     pub fn directory(&self) -> &Path {
         &self.directory
     }
-    pub fn scope(&self) -> Scope {
-        self.scope
+    pub fn scope(&self) -> Result<Scope> {
+        self.scope.ok_or("installation-not-authorized")
     }
     pub fn directory_guard(&self) -> &Directories {
         &self.directories

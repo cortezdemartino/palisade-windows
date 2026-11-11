@@ -2,10 +2,16 @@
 
 U1 requires reviewed version-matched editorial input before packaging/signing.
 Run `npm run release:notes`, then the normal checks and packaging workflow.
-`npm run verify:update-package` compares packaged notes validators, UI and trust
-anchors to source. Publication also verifies the signed notes sidecar. See
-`RELEASE-NOTES-FORMAT.md` and the source-only Manager integration kit. No U1 release
-or production signing is authorized by these procedures.
+`npm run verify:update-package` checks the archive, trust anchors and bundled
+helper hash. `npm run test:update-policy` compiles and runs a no-install
+probe for the NSIS running-client refusal and one-shot installer permit.
+Publication also verifies the signed notes sidecar. See the
+[release-note format](RELEASE-NOTES-FORMAT.md) and the source integration kit.
+
+Run the [installed-upgrade procedure](U1-INSTALLED-UPGRADE.md) on an approved
+disposable VM before approving the candidate for release. A failed install
+may need an official Manager repair. Keep the existing profile and stage
+receipts while diagnosing the failure. See [the native updater guide](NATIVE-UPDATER.md).
 
 ## Assist process ownership checks
 

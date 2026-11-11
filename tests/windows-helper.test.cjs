@@ -1,34 +1,72 @@
 'use strict';
-const test=require('node:test');
-const assert=require('node:assert/strict');
-const fs=require('node:fs/promises');
-const path=require('node:path');
-const os=require('node:os');
-const {spawn,spawnSync}=require('node:child_process');
-const {createHash}=require('node:crypto');
-test('Windows installer helper waits for parent, passes NSIS flags, and rejects changed bytes',{skip:process.platform!=='win32',timeout:60000},async()=>{
- const dir=await fs.mkdtemp(path.join(os.tmpdir(),'palisade-helper-'));
- const powershell=path.join(process.env.SystemRoot,'System32/WindowsPowerShell/v1.0/powershell.exe');
- let parent;
- try{
-  const compiler=path.join(dir,'compile.ps1'),exe=path.join(dir,'fixture.exe');
-  await fs.writeFile(compiler,`param([string]$Destination)\n$ErrorActionPreference='Stop'\nAdd-Type -TypeDefinition 'public class Program { public static int Main(string[] args) { return args.Length == 2 && args[0] == "/S" && args[1] == "--force-run" ? (System.Environment.GetEnvironmentVariable("PALISADE_TEST_INSTALL_FAIL") == "1" ? 17 : 0) : 11; } }' -OutputAssembly $Destination -OutputType WindowsApplication\n`);
-  const compiled=spawnSync(powershell,['-NoProfile','-NonInteractive','-File',compiler,'-Destination',exe],{encoding:'utf8',windowsHide:true});
-  assert.equal(compiled.status,0,compiled.stderr);
-  const digest=createHash('sha256').update(await fs.readFile(exe)).digest('hex');
-  for(const scenario of ["success","tampered","installer-failure"]){
-   const tampered=scenario==="tampered";
-   parent=spawn(process.execPath,['-e','setTimeout(()=>{},20000)'],{windowsHide:true,stdio:'ignore'});
-   const receipt=path.join(dir,`result-${scenario}.json`),handshake=path.join(dir,`ready-${scenario}`);
-   const helper=spawn(powershell,['-NoProfile','-NonInteractive','-File',path.join(__dirname,'../src/updates/install.ps1'),'-ParentId',String(parent.pid),'-Installer',exe,'-Executable',exe,'-Receipt',receipt,'-Version','0.2.1','-Sha256',tampered?'0'.repeat(64):digest,'-Handshake',handshake],{windowsHide:true,stdio:'ignore',env:{...process.env,PALISADE_TEST_INSTALL_FAIL:scenario==='installer-failure'?'1':'0'}});
-   const finished=new Promise((resolve,reject)=>{helper.on('error',reject);helper.on('exit',resolve);});
-   let ready=false;
-   for(let i=0;i<100;i++){try{ready=(await fs.readFile(handshake,'utf8')).trim()==='ready';}catch{}if(ready)break;await new Promise(r=>setTimeout(r,50));}
-   assert.equal(ready,true);await new Promise(r=>setTimeout(r,200));await assert.rejects(fs.readFile(receipt));
-   parent.kill();parent=null;
-   assert.equal(await finished,0);
-   const result=JSON.parse((await fs.readFile(receipt,'utf8')).replace(/^\uFEFF/,''));
-   assert.equal(result.version,'0.2.1');assert.equal(result.exitCode,tampered?-1:scenario==='installer-failure'?17:0,JSON.stringify(result));
-  }
- }finally{parent?.kill();await new Promise(r=>setTimeout(r,200));await fs.rm(dir,{recursive:true,force:true});}
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const path = require('node:path');
+const os = require('node:os');
+const fs = require('node:fs/promises');
+const { createHash } = require('node:crypto');
+const { EventEmitter } = require('node:events');
+const { PassThrough } = require('node:stream');
+const { FILENAME, PROTOCOL, verifyHelper, exchangeApply } = require('../src/updates/native-helper.cjs');
+
+test('a copied native updater must match the integrity record inside the app archive', async () => {
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'palisade-helper-integrity-'));
+  try {
+    const binary = path.join(directory, FILENAME);
+    const content = Buffer.from('nonexecuted fixture');
+    const manifest = { schema: 1, protocol: PROTOCOL, filename: FILENAME, version: '0.3.4', size: content.length,
+      sha256: createHash('sha256').update(content).digest('hex') };
+    await fs.writeFile(binary, content);
+    assert.equal((await verifyHelper(binary, Buffer.from(JSON.stringify(manifest)), manifest.version)).sha256, manifest.sha256);
+    await assert.rejects(verifyHelper(binary, Buffer.from(JSON.stringify(manifest)), '0.3.5'), /record/);
+    await fs.writeFile(binary, Buffer.alloc(content.length, 42));
+    await assert.rejects(verifyHelper(binary, Buffer.from(JSON.stringify(manifest)), manifest.version), /mismatch/);
+  } finally { await fs.rm(directory, { recursive: true, force: true }); }
+});
+
+function handoffFixture(options = {}) {
+  const token = { stage: '75a9d45c-7191-4ddd-824f-142177570ec3', nonce: 'a'.repeat(64),
+    version: '0.3.4', releaseSha256: 'b'.repeat(64) };
+  const child = new EventEmitter();
+  child.stdin = new PassThrough();
+  child.stdout = new PassThrough();
+  child.unref = () => { child.detached = true; };
+  let request = '';
+  child.stdin.on('data', chunk => { request += chunk.toString(); });
+  const result = exchangeApply('fixture-only.exe', 123, token, { ...options, spawnFn: (_image, args, spawnOptions) => {
+    assert.deepEqual(args, ['--apply', '123', token.stage, token.nonce]);
+    assert.equal(spawnOptions.shell, false);
+    return child;
+  } });
+  const send = data => child.stdout.write(JSON.stringify(data) + '\n');
+  return { child, result, token, send, request: () => request };
+}
+test('the fixed handoff commits once after a matching ready frame and accepts only its acknowledgement', async () => {
+  let commits = 0;
+  const h = handoffFixture({ onCommit: () => { commits++; } });
+  h.send({ state: 'ready', ...h.token });
+  assert.equal(commits, 1);
+  assert.equal(h.request(), 'PALISADE-UPDATE-COMMIT-V1 ' + h.token.nonce + '\n');
+  h.send({ state: 'committed', stage: h.token.stage, nonce: h.token.nonce });
+  await h.result;
+  assert.equal(h.child.detached, true);
+});
+test('stale readiness and cancellation cannot send an installer authorization', async () => {
+  const stale = handoffFixture();
+  stale.send({ state: 'ready', ...stale.token, nonce: 'c'.repeat(64) });
+  await assert.rejects(stale.result, error => error.commitSent === false);
+  assert.equal(stale.request(), '');
+  const abort = new AbortController();
+  const canceled = handoffFixture({ signal: abort.signal });
+  abort.abort();
+  await assert.rejects(canceled.result, error => error.commitSent === false);
+  assert.equal(canceled.request(), '');
+});
+test('losing acknowledgement preserves uncertain commit instead of reporting cancellation', async () => {
+  const abort = new AbortController();
+  const h = handoffFixture({ signal: abort.signal });
+  h.send({ state: 'ready', ...h.token });
+  abort.abort();
+  h.child.emit('close', 1);
+  await assert.rejects(h.result, error => error.commitSent === true);
 });

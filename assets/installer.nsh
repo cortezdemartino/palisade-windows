@@ -1,3 +1,5 @@
+!include "${BUILD_RESOURCES_DIR}\no-force-close.nsh"
+
 !macro customInstall
   ; Refresh the application entry even on updates that retain existing shortcuts.
   ; Pinning remains a user action; this creates only the normal app shortcut.
