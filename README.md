@@ -1,6 +1,6 @@
 # Palisade for Windows
 
-The v0.3.4 development candidate adds built-in downloads, restart controls and
+Version 0.3.4 adds built-in downloads, restart controls and
 signed release notes in local **Updates & What's New** settings. Installed
 upgrade qualification is pending.
 See [release-note format and signing](docs/RELEASE-NOTES-FORMAT.md).

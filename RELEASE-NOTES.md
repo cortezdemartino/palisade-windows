@@ -1,6 +1,6 @@
 # Release notes
 
-## 0.3.4 (development candidate)
+## 0.3.4
 
 - Added authenticated release summaries, expandable details and offline history
   to local Updates & What's New settings.

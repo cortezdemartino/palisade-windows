@@ -1,6 +1,6 @@
 # Windows client guide
 
-## Updates and release notes (development candidate)
+## Updates and release notes
 
 Open Device settings, then **Updates & What's New**. **Check now** checks the
 official stable release. When authenticated editorial notes exist, select a
@@ -9,7 +9,7 @@ categories and compatibility information come from that signed document.
 Previously verified notes remain available offline. Missing or invalid notes are
 shown as unavailable; an unsigned release description is never substituted.
 
-The v0.3.4 development candidate shows the last check, download progress and
+Version 0.3.4 shows the last check, download progress and
 installation history here. It still needs an installed Windows upgrade test.
 
 ## Installation
@@ -27,7 +27,7 @@ An old development entry named Electron can incorrectly share Palisade's identit
 
 ## Updating
 
-The v0.3.4 candidate checks signed stable releases on launch, every six hours
+Version 0.3.4 checks signed stable releases on launch, every six hours
 and after waking if overdue. It checks again after network failures with a
 longer delay between attempts. Select **Check now** to check immediately.
 Background downloads are enabled by default. Use **Pause for 24 hours** to

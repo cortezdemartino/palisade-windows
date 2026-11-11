@@ -7,7 +7,7 @@
   "sections": [
     { "category": "new", "items": ["Check for updates, see download progress, pause automatic updates and choose when to restart.", "Browse verified release summaries and details while offline."] },
     { "category": "security", "items": ["Palisade verifies the release signature and both installer checksums before an update can run."] },
-    { "category": "limitations", "items": ["This development build still needs a complete upgrade test on an installed Windows client.", "Assist remains disabled."] }
+    { "category": "limitations", "items": ["Installed upgrade, UAC cancellation and authenticated session preservation still need verification on a disposable Windows test device.", "Assist remains disabled."] }
   ],
   "compatibility": ["Windows 10 and 11 on x64. Update Manager remains available for manual repair."]
 }
