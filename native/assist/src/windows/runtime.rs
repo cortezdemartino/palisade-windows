@@ -210,7 +210,9 @@ impl StreamRuntime {
         let source = source.map(|s| Arc::new(Mutex::new(s)));
         // This runtime can admit at most one executor generation. Register its
         // event with the independent local Stop owner before creating the worker.
-        let executor_stop = has_input_grant
+        // A source-bearing runtime can receive its first input grant from a
+        // later lease update. Reserve Stop ownership for that path as well.
+        let executor_stop = (cfg!(feature = "native-input") && source.is_some())
             .then(|| stop_surface.executor_stop())
             .transpose()?;
         let lease_executor_stop = executor_stop.clone();

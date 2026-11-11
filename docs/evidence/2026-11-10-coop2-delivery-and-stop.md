@@ -50,6 +50,10 @@ suspension signals only its own event and leaves resource and lease flags
 independent. Lease loss also signals the event. A failed Windows signal
 remains recorded through cleanup.
 
+The registration also covers a runtime with an owned capture source whose
+initial grants are resource-only. Source review identified that its first
+input grant can arrive later through the lease poller.
+
 This fences subsequent input admission. A system call already executing when
 Stop arrives cannot be recalled. The no-authority tests exercise the real
 Windows event and hidden safety-window message path without keyboard or
