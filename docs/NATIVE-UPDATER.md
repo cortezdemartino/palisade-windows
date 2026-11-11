@@ -102,6 +102,8 @@ publisher checks still apply.
 The helper and installer share a product-wide exclusion object across Windows
 sessions. The installer holds it through exit and consumes a one-use permit
 before proceeding. The installer refuses when a Palisade process is running.
+The assisted installer also runs this check in the elevated NSIS inner process
+during initialization, where the builder skips its install-section check.
 The desktop checks for this exclusion before starting a window or admitting
 Assist. If the helper integrity or status check fails, built-in installation
 and Assist capture are unavailable for that launch.

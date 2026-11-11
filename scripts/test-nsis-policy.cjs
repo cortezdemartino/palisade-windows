@@ -25,11 +25,12 @@ async function run() {
     const templates = path.join(path.dirname(require.resolve('app-builder-lib/package.json')), 'templates/nsis/include');
     const probe = path.join(directory, 'policy-probe.exe');
     const script = path.join(directory, 'policy-probe.nsi');
-    await fs.writeFile(script, `Unicode true\nSilentInstall silent\nRequestExecutionLevel user\nName "Palisade no-install policy probe"\nOutFile ${quoted(probe)}\n!addincludedir ${quoted(templates)}\n!addplugindir /x86-unicode ${quoted(path.join(plugins, 'x86-unicode'))}\n!define APP_EXECUTABLE_FILENAME ${quoted(filename)}\n!define PALISADE_UPDATE_MUTEX_NAME ${quoted('Global\\Palisade-Policy-Probe-' + id)}\n!define PALISADE_UPDATE_PERMIT_PREFIX ${quoted('Global\\Palisade-Policy-Permit-' + id + '-')}\n!include ${quoted(path.join(root, 'assets/no-force-close.nsh'))}\nSection\n!insertmacro customCheckAppRunning\nSetErrorLevel 0\nSectionEnd\n`);
+    await fs.writeFile(script, `Unicode true\nSilentInstall silent\nRequestExecutionLevel user\nName "Palisade no-install policy probe"\nOutFile ${quoted(probe)}\n!addincludedir ${quoted(templates)}\n!addplugindir /x86-unicode ${quoted(path.join(plugins, 'x86-unicode'))}\n!define APP_EXECUTABLE_FILENAME ${quoted(filename)}\n!define PALISADE_UPDATE_MUTEX_NAME ${quoted('Global\\Palisade-Policy-Probe-' + id)}\n!define PALISADE_UPDATE_PERMIT_PREFIX ${quoted('Global\\Palisade-Policy-Permit-' + id + '-')}\n!define BUILD_RESOURCES_DIR ${quoted(path.join(root, 'assets'))}\n!define UAC_IsInnerInstance \`$R9 == "fixture-inner"\`\n!include ${quoted(path.join(root, 'assets/installer.nsh'))}\nFunction .onInit\n${'${GetParameters}'} $R0\n${'${GetOptions}'} $R0 "/fixture-inner" $R1\n${'${IfNot} ${Errors}'}\nStrCpy $R9 "fixture-inner"\n${'${EndIf}'}\n!insertmacro customInit\nFunctionEnd\nSection\n${'${IfNot} ${UAC_IsInnerInstance}'}\n!insertmacro customCheckAppRunning\n${'${EndIf}'}\nSetErrorLevel 0\nSectionEnd\n`);
     const built = spawnSync(nsis.path, ['/V2', script], { env: { ...process.env, ...nsis.env }, encoding: 'utf8', windowsHide: true, timeout: 30000 });
     assert.equal(built.status, 0, built.stdout + built.stderr);
     const invoke = (args = []) => spawnSync(probe, ['/S', ...args], { encoding: 'utf8', windowsHide: true, timeout: 10000 });
     assert.equal(invoke().status, 0, 'Absent fixture must permit a no-op operation.');
+    assert.equal(invoke(['/fixture-inner']).status, 0, 'The assisted inner initialization path can admit a no-op operation.');
     assert.equal(invoke(['--palisade-update=invalid']).status, 170, 'Forged permit must refuse.');
     assert.equal(invoke(['--palisade-update=' + 'a'.repeat(64)]).status, 170, 'Unknown permit must refuse.');
     fixture = spawn(executable, [], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
@@ -39,6 +40,7 @@ async function run() {
     while (!output.join('').includes('ready') && Date.now() < deadline) await new Promise(resolve => setTimeout(resolve, 10));
     assert.ok(output.join('').includes('ready'));
     assert.equal(invoke().status, 170, 'A running client must refuse, without force-closing it.');
+    assert.equal(invoke(['/fixture-inner']).status, 170, 'Inner initialization refuses a running client even though its install section skips the check.');
     fixture.stdin.write('ping\n');
     const aliveDeadline = Date.now() + 5000;
     while (!output.join('').includes('alive') && Date.now() < aliveDeadline) await new Promise(resolve => setTimeout(resolve, 10));

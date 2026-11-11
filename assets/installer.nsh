@@ -1,5 +1,15 @@
 !include "${BUILD_RESOURCES_DIR}\no-force-close.nsh"
 
+!macro customInit
+  !ifndef ONE_CLICK
+    ; Assisted installers skip CHECK_APP_RUNNING in the elevated UAC child.
+    ; The child must acquire its own exclusion before reaching installSection.
+    ${If} ${UAC_IsInnerInstance}
+      !insertmacro customCheckAppRunning
+    ${EndIf}
+  !endif
+!macroend
+
 !macro customInstall
   ; Refresh the application entry even on updates that retain existing shortcuts.
   ; Pinning remains a user action; this creates only the normal app shortcut.
