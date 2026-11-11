@@ -126,7 +126,10 @@ test('tray close stays silent, explicit notification click restores the app, and
   let hidden = 0, shown = 0, focused = 0, appMenu, trayMenu, openSettings, deviceAction;
   const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() {}, focus: () => focused++ });
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
-  const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, setDisplayMediaRequestHandler(fn) { this.display = fn; }, flushStorageData() {} };
+  let flushCookies, storageFlushed = false;
+  const cookies = new Promise(resolve => { flushCookies = resolve; });
+  const profile = { webRequest: { onBeforeRequest() {} }, setPermissionRequestHandler(fn) { this.request = fn; }, setPermissionCheckHandler(fn) { this.check = fn; }, setDevicePermissionHandler() {}, setDisplayMediaRequestHandler(fn) { this.display = fn; },
+    flushStorageData() { storageFlushed = true; }, cookies: { flushStore: () => cookies } };
   let appId;
   const app = Object.assign(new EventEmitter(), { setName() {}, setAppUserModelId(value) { appId = value; }, requestSingleInstanceLock: () => true,
     whenReady: () => Promise.resolve(), isReady: () => true, getPath: () => 'fixture-profile', getLoginItemSettings: () => ({ openAtLogin: false }), getVersion: () => '0.2.2', quit: () => {
@@ -188,6 +191,12 @@ test('tray close stays silent, explicit notification click restores the app, and
   assert.equal(granted, false);
   const quit = appMenu[0].submenu.find((item) => item.label === 'Quit');
   assert.equal(quit.accelerator, 'CmdOrCtrl+Q'); quit.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(storageFlushed, true);
+  prevented = false;
+  window.emit('close', { preventDefault: () => { prevented = true; } });
+  assert.equal(prevented, true);
+  flushCookies();
   await new Promise(resolve => setImmediate(resolve));
   prevented = false; window.emit('close', { preventDefault: () => { prevented = true; } });
   assert.equal(prevented, false);

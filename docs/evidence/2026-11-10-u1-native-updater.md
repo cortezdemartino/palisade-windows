@@ -9,7 +9,7 @@ workflows completed successfully.
 - [Changelog workflow](https://github.com/cortezdemartino/palisade-windows/actions/runs/42878783181)
 - [Native verification foundation workflow](https://github.com/cortezdemartino/palisade-windows/actions/runs/42888442126)
 
-The integrated v0.3.4 candidate passed 221 application tests and syntax
+The integrated v0.3.4 candidate passed 222 application tests and syntax
 checks with Node 22.23.4 on Windows x64. The native updater passed strict
 Clippy and 26 tests in each configuration. The locked Rust update audit
 and production npm audit reported no advisories. Manager source passed 51
@@ -26,6 +26,12 @@ Packaged verification checked the ASAR sources, helper integrity and the
 actual packaged helper's version and foreign-parent refusal. The packaged
 Electron Settings fixture exercised progress, restart and cancellation
 controls against a controlled state. The hosted page had no access to them.
+
+Source review identified the need to exclude cache operations during an
+install, retain a lost-acknowledgement handoff until an authenticated idle
+report, and await the cookie store flush before exit. The implementation
+addresses those cases and tests the restart/repair refusal and profile flush
+ordering. Installed upgrade remains a separate qualification.
 
 The test suite contains no positive installed upgrade, cross-user UAC
 approval, authenticated profile migration or post-install relaunch evidence.

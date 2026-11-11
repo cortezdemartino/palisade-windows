@@ -239,6 +239,7 @@ function releaseFixture(version = '0.2.4') {
 async function nativeHarness(options = {}) {
   const { manifest, digest } = releaseFixture();
   const activity = [];
+  const { nativeOverrides, ...harnessOptions } = options;
   const native = {
     stage: async id => { activity.push('stage'); return { directory: 'C:\\Fixture\\' + id }; },
     inspect: async id => {
@@ -247,10 +248,11 @@ async function nativeHarness(options = {}) {
     },
     discard: async id => { activity.push('discard:' + id); },
     apply: async (_receipt, _nonce, { onCommit }) => { activity.push('apply'); onCommit(); },
+    ...nativeOverrides,
   };
   const h = await harness({ native, release: manifest, beforeManager: async () => { activity.push('quiesce'); },
     download: async (_manifest, _directory, _transport, progress) => { activity.push('download'); progress(6, 12); progress(12, 12); },
-    ...options });
+    ...harnessOptions });
   return { ...h, activity, manifest, digest };
 }
 
@@ -322,4 +324,27 @@ test('install on quit requires opt-in, a ready release and no active assistance'
     assert.equal(h.activity.includes('apply'), applies);
     assert.equal(h.quit(), 0, 'The shared quit handler retains ownership of the exit.');
   }
+});
+
+test('missing commit acknowledgement blocks Manager and retries until an authenticated idle status', async () => {
+  let state = 'updating';
+  const h = await nativeHarness({ nativeOverrides: {
+    apply: async (_receipt, _nonce, { onCommit }) => {
+      onCommit();
+      throw Object.assign(Error('Acknowledgement lost'), { commitSent: true });
+    },
+    status: async () => ({ state }),
+  } });
+  await h.controller.check(); await h.settle();
+  assert.equal(await h.controller.restart(), false);
+  assert.equal(h.controller.notesState().updateBusy, true);
+  await h.controller.openManager();
+  assert.equal(await h.controller.restart(), false);
+  assert.equal(h.quit(), 0);
+  assert.equal(h.calls.some(call => call[0] === 'spawn'), false);
+  state = 'idle';
+  await h.runTimer(5000);
+  assert.equal(h.controller.notesState().updateBusy, false);
+  await h.controller.openManager();
+  assert.equal(h.calls.some(call => call[0] === 'spawn'), true);
 });

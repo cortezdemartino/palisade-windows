@@ -91,7 +91,8 @@ product identity. A downloaded stage can be reverified offline for display.
 
 At a requested restart the desktop re-fetches the current signed release and
 matches the exact digest. It waits for the shared Assist cleanup barrier and
-profile save before starting the verified staged copy of the helper. A matching
+profile save, including the awaited cookie store flush, before starting the
+verified staged copy of the helper. A matching
 ready message permits a one-shot commit on the private pipe. The desktop exits
 after the acknowledgement. The helper waits on the retained parent process
 handle, re-verifies the held installer, adds its Internet zone information and
@@ -110,7 +111,8 @@ reopens Palisade. The next launch confirms the version that actually runs. Local
 receipts support diagnosis and carry no installation authority. When a receipt
 is lost or a restart is interrupted, the desktop re-verifies saved bytes and
 requires a fresh restart authorization. Once commit has been sent, an
-unconfirmed acknowledgement is reported as uncertain.
+unconfirmed acknowledgement is reported as uncertain. Another update or
+Manager repair is blocked until the authenticated helper reports idle.
 
 ## Recovery and qualification
 

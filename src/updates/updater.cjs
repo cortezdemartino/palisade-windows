@@ -28,13 +28,13 @@ function createUpdateController(getWindow, onStatus = () => {}, {
   if (typeof beforeManager !== 'function') throw Error('Exit preparation hook required');
   const supported = () => app.isPackaged && process.platform === 'win32';
   const journal = journalOverride || (supported() ? createJournal(path.join(app.getPath('userData'), 'updates')) : null);
-  let managerBusy = false, started = false, stopped = false, handoffAcknowledged = false;
-  let intervalTimer, retryTimer, snoozeTimer, operation, lastAttempt = null, failures = 0;
+  let managerBusy = false, started = false, stopped = false, handoffAcknowledged = false, handoffUncertain = false;
+  let intervalTimer, retryTimer, snoozeTimer, handoffTimer, operation, lastAttempt = null, failures = 0;
   let trust, notesHistory, offer, verified, notifiedVersion, latestVersion = '';
   let notesStatus = 'Release notes have not been checked.';
   let state = 'idle', status = 'Updates: idle', progress = 0, commitSent = false;
   const paused = () => preferences().snoozeUntil > now();
-  const active = () => Boolean(operation) || managerBusy || handoffAcknowledged;
+  const active = () => Boolean(operation) || managerBusy || handoffAcknowledged || handoffUncertain;
   const notesState = () => {
     const record = journal?.get();
     const prefs = preferences();
@@ -279,7 +279,9 @@ function createUpdateController(getWindow, onStatus = () => {}, {
       } catch (error) {
         if (!stopped) {
           if (commitSent || error?.commitSent) {
+            handoffUncertain = true;
             publish('failed', 'restart could not be confirmed. An authorized update may run when Palisade exits.');
+            void checkHandoff();
           } else {
             if (journal.get().stage?.phase === 'handoff') {
               try { journal.set({ stage: { ...stage, phase: 'staged' } }); } catch { /* Recovery will recheck the stage. */ }
@@ -294,8 +296,24 @@ function createUpdateController(getWindow, onStatus = () => {}, {
     if (result && !onQuit) app.quit();
     return result;
   }
+  async function checkHandoff() {
+    if (stopped || !handoffUncertain) return;
+    try {
+      const response = await native.status({ timeout: 3000 });
+      if (stopped) return;
+      if (response.state === 'idle') {
+        handoffUncertain = false;
+        publish('recovered', 'the previous update has stopped. You can try again.');
+        return;
+      }
+    } catch { /* Only an authenticated idle response settles uncertain ownership. */ }
+    if (!stopped) {
+      handoffTimer = setTimeout(() => { void checkHandoff(); }, 5000);
+      handoffTimer.unref?.();
+    }
+  }
   async function openManager() {
-    if (managerBusy || stopped || operation || handoffAcknowledged) return;
+    if (active() || stopped) return;
     managerBusy = true;
     let directory, preparing = false;
     try {
@@ -369,7 +387,7 @@ function createUpdateController(getWindow, onStatus = () => {}, {
     }
   }
   function settingsChanged() {
-    if (operation?.kind === 'restart' || handoffAcknowledged) return;
+    if (operation?.kind === 'restart' || handoffAcknowledged || handoffUncertain) return;
     scheduleSnooze();
     if (paused()) {
       if (operation?.kind === 'download' || operation?.kind === 'check') cancel();
@@ -380,7 +398,7 @@ function createUpdateController(getWindow, onStatus = () => {}, {
   }
   function stop() {
     stopped = true; started = false;
-    clearTimeout(retryTimer); clearTimeout(snoozeTimer); clearInterval(intervalTimer);
+    clearTimeout(retryTimer); clearTimeout(snoozeTimer); clearTimeout(handoffTimer); clearInterval(intervalTimer);
     if (!commitSent) operation?.cancel.abort();
     powerMonitor.removeListener('resume', resume);
     app.removeListener('will-quit', stop);

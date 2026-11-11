@@ -52,7 +52,11 @@ assistLifecycle.hold({
 });
 async function prepareForExit(reason) {
   await assistLifecycle.quiesce(reason);
-  if (app.isReady()) session.fromPartition(PARTITION).flushStorageData();
+  if (app.isReady()) {
+    const profile = session.fromPartition(PARTITION);
+    profile.flushStorageData();
+    await profile.cookies.flushStore();
+  }
 }
 
 app.setName('Palisade');
