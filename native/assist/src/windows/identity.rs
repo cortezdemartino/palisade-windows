@@ -103,9 +103,13 @@ pub(crate) fn storage() -> Result<PathBuf, &'static str> {
         CoTaskMemFree(raw.cast());
         path
     };
-    let base = path.join("Palisade").join("Assist");
+    let product = match crate::qualification::namespace()? {
+        Some(namespace) => path.join(format!("Palisade-Assist-Qualification-{namespace}")),
+        None => path.join("Palisade"),
+    };
+    let base = product.join("Assist");
     fs::create_dir_all(&base).map_err(|_| "identity-location")?;
-    for directory in [&path, &path.join("Palisade"), &base] {
+    for directory in [&path, &product, &base] {
         refuse_reparse(directory)?;
     }
     Ok(base)

@@ -62,6 +62,10 @@ pub enum Command {
     Pulse {},
     Status {},
     Shutdown {},
+    Native {
+        document: u32,
+        operation: crate::endpoint::Operation,
+    },
     // Only a bounded, cancellable scheduling fixture. Never invokes OS adapters.
     ProbeWait {
         milliseconds: u16,
@@ -94,6 +98,12 @@ impl Ingress {
             ..Self::new(probe)
         }
     }
+    pub(crate) fn endpoint(probe: bool) -> Self {
+        Self {
+            version: 3,
+            ..Self::new(probe)
+        }
+    }
     pub fn accept(&mut self, bytes: &[u8], signals: &Signals) -> Result<Request, &'static str> {
         let result = (|| {
             if self.closed || signals.closing() || bytes.is_empty() || bytes.len() > MAX_FRAME {
@@ -122,6 +132,7 @@ impl Ingress {
                     self.closed = true;
                     signals.revoke();
                 }
+                Command::Native { .. } if self.version != 3 => return Err("operation-unavailable"),
                 Command::ProbeWait { milliseconds }
                     if !self.probe || *milliseconds == 0 || *milliseconds > 10_000 =>
                 {
@@ -155,6 +166,10 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    Native {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     Hello {
         protocol: &'static str,
         version: u32,
@@ -196,6 +211,36 @@ mod tests {
     }
     fn hello() -> serde_json::Value {
         json!({"type":"hello","protocol":PROTOCOL,"version":1,"challenge":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"})
+    }
+    #[test]
+    fn endpoint_dispatch_requires_its_own_version_and_private_handshake() {
+        let native = serde_json::json!({"type":"native","document":0,"operation":{"op":"status"}});
+        for version in [1, 2] {
+            let signals = Signals::default();
+            let mut ingress = if version == 1 {
+                Ingress::new(true)
+            } else {
+                Ingress::owned(true)
+            };
+            let mut greeting = hello();
+            greeting["version"] = version.into();
+            ingress.accept(&wire(0, greeting), &signals).unwrap();
+            assert!(ingress.accept(&wire(1, native.clone()), &signals).is_err());
+            assert!(signals.failed());
+        }
+        let signals = Signals::default();
+        assert!(
+            Ingress::endpoint(true)
+                .accept(&wire(0, native.clone()), &signals)
+                .is_err()
+        );
+        let signals = Signals::default();
+        let mut ingress = Ingress::endpoint(true);
+        let mut greeting = hello();
+        greeting["version"] = 3.into();
+        ingress.accept(&wire(0, greeting), &signals).unwrap();
+        ingress.accept(&wire(1, native.clone()), &signals).unwrap();
+        assert!(ingress.accept(&wire(1, native), &signals).is_err());
     }
     #[test]
     fn urgent_shutdown_is_terminal_before_ordinary_dispatch() {

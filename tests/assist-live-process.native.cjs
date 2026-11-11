@@ -10,6 +10,61 @@ const { prepareProcessWatcher } = require('./native-process-watch.cjs');
 const binary = process.env.PALISADE_ASSIST_TEST_BINARY || path.resolve('.assist/Palisade-Assist.exe');
 const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('src/assist/guardian-integrity.json');
 const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: randomBytes(32).toString('base64url') };
+const canonical = (op, fields = {}) => ({ p: 'palisade.assist.native', v: 1, id: randomBytes(12).toString('base64url'), op, ...fields });
+
+test('actual persistent endpoint negotiates canonical v1 through monitor/coordinator without native authority', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true, endpoint: true });
+  try {
+    assert.deepEqual(await channel.request(canonical('hello', { versions: [1] }), 3),
+      { version: 1, features: { capture: false, clipboard: false, files: false, input: false } });
+    const status = await channel.request(canonical('status'), 3);
+    assert.deepEqual(status, { endpoint: { enrolled: false, endpointId: null, pin: 'none' },
+      capture: { operation: null, state: 'idle', trackSid: null }, controller: { session: null, state: 'idle' } });
+    await assert.rejects(channel.request(canonical('enroll.key', { origin: 'https://attacker.example' }), 3), { code: 'binding-mismatch' });
+    await assert.rejects(channel.request(canonical('enroll.key', { origin: 'https://palisade.onyxops.org' }), 3), { code: 'not-enrolled' });
+    await assert.rejects(channel.request(canonical('grant.offer', { session: 'session_test', grant: '{}' }), 3), { code: 'not-enrolled' });
+    await assert.rejects(channel.request(canonical('capture.start', { operation: 'capture_test', room: '!room:example.test' }), 3), { code: 'capture-unavailable' });
+    await assert.rejects(channel.request(canonical('peer.offer', { session: 'session_test', grantId: 'grant_test', sdp: 'not-sdp' }), 3), { code: 'transport-mismatch' });
+    assert.deepEqual(await channel.request(canonical('status'), 3), status);
+  } finally { await channel.close(); }
+  assert.equal(life.status().holders, 0);
+});
+
+test('actual endpoint fences replaced documents and does not reconstruct enrollment', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await channel.request(canonical('hello', { versions: [1] }), 0);
+    await assert.rejects(channel.request(canonical('status'), 1), { code: 'stopped' });
+  } finally { await channel.close(); }
+  assert.equal(life.status().holders, 0);
+});
+
+test('actual monitor refuses a concurrent endpoint for the same application process', async () => {
+  const life = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await assert.rejects(openLiveChannel({ binary, manifestFile, lifecycle: createAssistLifecycle(), probe: true, ownedTree: true, endpoint: true }), { code: 'assist-native-unavailable' });
+    assert.equal((await channel.status()).authority, 'none');
+  } finally { await channel.close(); }
+});
+
+test('application runtime reserves one actual endpoint and retains it through terminal document loss', async () => {
+  const { createNativeRuntime } = require('../src/assist/native-runtime.cjs');
+  const lifecycle = createAssistLifecycle(), statuses = [];
+  const runtime = createNativeRuntime({ binary, manifestFile, lifecycle, probe: true, onStatus: state => statuses.push(state) });
+  assert.throws(() => createNativeRuntime({ binary, manifestFile, lifecycle, probe: true }), /already reserved/);
+  await runtime.ready;
+  const scope = { generation: 0, signal: new AbortController().signal };
+  await runtime.dispatch(canonical('hello', { versions: [1] }), scope);
+  await assert.rejects(runtime.dispatch(canonical('status'), { generation: 1, signal: scope.signal }), { code: 'stale-operation' });
+  await runtime.stopAll();
+  await assert.rejects(runtime.dispatch(canonical('status'), scope), { code: 'stopped' });
+  assert.equal(lifecycle.status().holders, 0);
+  assert(statuses.includes('Cleanup pending'));
+  assert(statuses.includes('Session ended'));
+});
 function frame(command, sequence = 0) {
   const bytes = Buffer.from(typeof command === 'string' ? command : JSON.stringify({ sequence, command }));
   const prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length); return Buffer.concat([prefix, bytes]);

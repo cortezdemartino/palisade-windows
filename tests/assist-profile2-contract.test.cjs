@@ -130,8 +130,9 @@ test("web extension v2 preserves separately negotiated v1 hello and v2 payload r
 test("no page-provided authority, automatic enablement or unsafe feature advertisement",()=>{
   const main=fs.readFileSync(path.join(__dirname,"../src/main.cjs"),"utf8");
   const live=fs.readFileSync(path.join(__dirname,"../src/assist/live-channel.cjs"),"utf8");
-  assert.doesNotMatch(main,/installNativeBridge\(/);
-  assert.match(live,/const scope = ownedTree \? 'channel-and-process-exit' : 'channel-only'/);
+  assert.equal(require('../src/assist/build-policy.cjs').nativeEndpointEnabled, false);
+  assert.match(main,/if \(nativeEndpointEnabled && app\.isPackaged && startupVerified\)/);
+  assert.match(live,/const scope = endpoint \? 'endpoint-and-process-exit' : ownedTree \? 'channel-and-process-exit' : 'channel-only'/);
   assert.match(live,/result\.cleanupScope === scope/);
   assert.match(live,/result\.nativeInput === false/);
   assert.deepEqual(ext.safety.ops.sort(), ["resource.cancel","resource.sync(state: off)"].sort());

@@ -68,6 +68,39 @@ fn run() -> Result<(), &'static str> {
 fn run() -> Result<(), &'static str> {
     use palisade_assist_guardian::windows::{lifecycle::NativeStop, parent::Parent};
     let args: Vec<_> = std::env::args().skip(1).collect();
+    if args.as_slice() == ["--build-info"] {
+        palisade_assist_guardian::qualification::target()?;
+        let value = serde_json::json!({"protocol":"palisade.assist.build","version":1,
+            "origin":palisade_assist_guardian::qualification::ORIGIN,
+            "namespace":palisade_assist_guardian::qualification::namespace()?,
+            "issuerFingerprint":palisade_assist_guardian::qualification::issuer_pin()?,
+            "nativeInput":false,"localYield":false});
+        return writeln!(std::io::stdout().lock(), "{value}").map_err(|_| "build-info-output");
+    }
+    if args.len() == 4 && ["--tree-endpoint", "--tree-endpoint-probe"].contains(&args[0].as_str()) {
+        return palisade_assist_guardian::windows::process_monitor::run_endpoint(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[0] == "--tree-endpoint-probe",
+            palisade_assist_guardian::windows::image::ImageManifest {
+                filename: "Palisade-Assist.exe".into(),
+                protocol: "palisade.assist.guardian".into(),
+                version: 1,
+                size: args[2].parse().map_err(|_| "helper-integrity")?,
+                sha256: args[3].clone(),
+            },
+        );
+    }
+    if args.len() == 5
+        && args[0] == "--endpoint-coordinator"
+        && ["normal", "probe"].contains(&args[4].as_str())
+    {
+        return palisade_assist_guardian::windows::process_monitor::endpoint_coordinator(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[4] == "probe",
+            args[2].parse().map_err(|_| "tree-handles")?,
+            args[3].parse().map_err(|_| "tree-handles")?,
+        );
+    }
     if args.len() == 2 && args[0] == "--custody-coordinator-probe" {
         return palisade_assist_guardian::windows::custody_probe::run_coordinator_probe(
             args[1].parse().map_err(|_| "invalid-parent")?,

@@ -18,6 +18,8 @@ fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
 pub fn request(path: &str, body: Option<&[u8]>) -> Result<Vec<u8>, &'static str> {
+    let (host, port) = crate::qualification::target()?;
+    let host = wide(host);
     if !matches!(
         path,
         "/api/v1/assist/issuer" | "/api/v1/assist/streams/endpoint-lease"
@@ -40,12 +42,7 @@ pub fn request(path: &str, body: Option<&[u8]>) -> Result<Vec<u8>, &'static str>
         if WinHttpSetTimeouts(session.0, 1000, 1000, 1000, 1000) == 0 {
             return Err("network-policy");
         }
-        let connection = Http(WinHttpConnect(
-            session.0,
-            w!("palisade.onyxops.org"),
-            443,
-            0,
-        ));
+        let connection = Http(WinHttpConnect(session.0, host.as_ptr(), port, 0));
         if connection.0.is_null() {
             return Err("network-unavailable");
         }

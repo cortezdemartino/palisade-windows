@@ -91,6 +91,16 @@ impl Parent {
     pub fn pid(&self) -> u32 {
         unsafe { GetProcessId(self.0) }
     }
+    pub(crate) fn creation_time(&self) -> Result<u64, &'static str> {
+        let (mut created, mut exited, mut kernel, mut user) =
+            unsafe { (zeroed(), zeroed(), zeroed(), zeroed()) };
+        if unsafe { GetProcessTimes(self.0, &mut created, &mut exited, &mut kernel, &mut user) }
+            == 0
+        {
+            return Err("parent-time");
+        }
+        Ok((u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime))
+    }
     pub fn alive(&self) -> bool {
         unsafe { WaitForSingleObject(self.0, 0) == WAIT_TIMEOUT }
     }

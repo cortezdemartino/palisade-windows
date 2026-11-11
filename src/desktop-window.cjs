@@ -2,6 +2,7 @@
 const path = require('node:path');
 const { readFile } = require('node:fs/promises');
 const { BrowserWindow, WebContentsView, ipcMain, protocol } = require('electron');
+const { PALISADE_ORIGIN } = require('./security-policy.cjs');
 protocol.registerSchemesAsPrivileged([{ scheme: 'palisade-controls', privileges: { standard: true, secure: true } }]);
 const CONTROLS_URL = 'palisade-controls://app/window-chrome.html';
 const installedSessions = new WeakSet();
@@ -43,7 +44,7 @@ function lockLocalContents(contents) {
   contents.session.setDevicePermissionHandler(() => false);
 }
 
-function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDeviceAction = () => {} }) {
+function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings = () => ({}), onDeviceAction = () => {} }) {
   const window = new BrowserWindow({
     title: 'Palisade', width: 1240, height: 780, minWidth: 780, minHeight: 540,
     backgroundColor: '#0d0f14', icon, show: false, autoHideMenuBar: true,
@@ -53,6 +54,7 @@ function createDesktopWindow({ partition, icon, onSettings = () => ({}), onDevic
   const view = new WebContentsView({ webPreferences: {
     ...SECURE_WEB_PREFERENCES, partition, javascript: true, backgroundThrottling: false,
     preload: path.join(__dirname, 'chat-notifications-preload.cjs'),
+    additionalArguments: nativeAssist === true ? ['--palisade-assist-native', '--palisade-assist-native-origin=' + PALISADE_ORIGIN] : [],
   } });
   const controls = new WebContentsView({ webPreferences: {
     ...SECURE_WEB_PREFERENCES, partition: 'palisade-window-controls', javascript: true,

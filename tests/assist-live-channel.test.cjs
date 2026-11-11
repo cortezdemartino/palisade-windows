@@ -47,6 +47,7 @@ function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1
         setImmediate(() => child.emit('spawn')); return child;
       } };
       if (name === './guardian.cjs') return { verifyGuardian: verify };
+      if (name === './native-protocol.cjs') return require('../src/assist/native-protocol.cjs');
       return require(name);
     },
   });

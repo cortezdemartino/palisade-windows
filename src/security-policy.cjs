@@ -1,7 +1,8 @@
 'use strict';
 
 /** The only top-level renderer origin trusted by the public desktop edition. */
-const PALISADE_URL = 'https://palisade.onyxops.org/';
+const { qualification } = require('./assist/qualification.cjs');
+const PALISADE_URL = qualification ? qualification.origin + '/' : 'https://palisade.onyxops.org/';
 const PALISADE_ORIGIN = new URL(PALISADE_URL).origin;
 
 function parseUrl(value) {

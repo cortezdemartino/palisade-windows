@@ -14,6 +14,15 @@ const status = {
   capture: { operation: null, state: "idle", trackSid: null },
   controller: { session: null, state: "idle" },
 };
+test('first document navigation invalidates witnesses without ending the unbound native launch', async () => {
+  const t = setup();
+  t.contents.emit('did-start-navigation', {}, 'https://palisade.onyxops.org/', false, true);
+  assert.equal(t.stops(), 0);
+  await t.connect(DOC);
+  assert.equal((await t.request('hello', { versions: [1] })).ok, true);
+  t.contents.emit('did-start-navigation', {}, 'https://palisade.onyxops.org/', false, true);
+  assert.equal(t.stops(), 1);
+});
 test('destroyed contents revoke scopes without reading a destroyed main frame', async () => {
   const t = setup();
   await t.connect(DOC);

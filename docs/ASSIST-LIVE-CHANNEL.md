@@ -1,5 +1,29 @@
 # Private native Assist channel
 
+## Persistent enrollment endpoint, private version 3
+
+The explicit `endpoint: true, ownedTree: true` trusted-main option negotiates
+version 3 and the existing retained monitor/coordinator. Canonical native-v1
+operations have a closed typed private representation. One launch owns the
+operational key, issuer, enrollment and attempted-endpoint history. Navigation,
+renderer loss and canceled work end this launch rather than adopting a new
+document. The initial blank document only invalidates connection witnesses.
+
+Only the explicit disposable qualification build starts this path. It embeds an
+independent test issuer pin and fixed HTTPS origin, isolates profile/native
+storage, and does not advertise sensitive capabilities. Public builds remain off.
+See [the complete scope and evidence](evidence/2026-11-11-rc2-native-endpoint.md).
+
+The coordinator emits `endpoint-only` after revoking its record, canceling native
+enrollment work and discarding its operational key. Only the owning monitor can
+upgrade it to `endpoint-and-process-exit` after exact coordinator exit and closed
+job admission/job zero. Main also joins the exact monitor. A channel-only terminal
+cannot satisfy version 3; this scope still cannot prove input or resource cleanup.
+
+Native grant/capture/peer/resource execution is not connected. Do not attach those
+components without their own retained cleanup witnesses and a deliberately
+negotiated scope. The original version 1/2 restrictions below remain in force.
+
 ## Direct native stop checks
 
 The owned coordinator retains wait-only monitor/event handles and checks them

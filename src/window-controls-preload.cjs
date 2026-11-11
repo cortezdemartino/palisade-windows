@@ -42,6 +42,7 @@ contextBridge.exposeInMainWorld('desktopControls', {
       if (typeof state?.maximized === 'boolean') callback({ maximized: state.maximized, settingsOpen: state.settingsOpen === true,
         keepRunningInTray: state.keepRunningInTray === true, launchOnLogin: state.launchOnLogin === true,
         loginAvailable: state.loginAvailable === true, version: typeof state.version === 'string' ? state.version.slice(0, 64) : '',
+        nativeAssistStatus: typeof state.nativeAssistStatus === 'string' ? state.nativeAssistStatus.slice(0, 200) : 'Native endpoint unavailable',
         notificationStatus: typeof state.notificationStatus === 'string' ? state.notificationStatus.slice(0, 200) : '',
         updateStatus: typeof state.updateStatus === 'string' ? state.updateStatus.slice(0, 160) : '',
         latestVersion: typeof state.latestVersion === 'string' ? state.latestVersion.slice(0, 64) : '',

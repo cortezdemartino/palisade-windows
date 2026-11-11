@@ -5,6 +5,7 @@ const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
 const { TextDecoder } = require('node:util');
 const { verifyGuardian } = require('./guardian.cjs');
+const nativeProtocol = require('./native-protocol.cjs');
 const PROTOCOL = 'palisade.assist.live', MAX_FRAME = 65_536, CAPACITY = 8;
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const exact = (v, fields) => v && typeof v === 'object' && !Array.isArray(v) &&
@@ -12,8 +13,9 @@ const exact = (v, fields) => v && typeof v === 'object' && !Array.isArray(v) &&
 const unavailable = () => Object.assign(Error('Assist native channel unavailable'), { code: 'assist-native-unavailable' });
 const incomplete = () => Object.assign(Error('Assist native cleanup unproven'), { code: 'assist-cleanup-incomplete' });
 
-async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false, ownedTree = false, signal } = {}) {
+async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false, ownedTree = false, endpoint = false, signal } = {}) {
   if (!lifecycle || typeof lifecycle.hold !== 'function' || typeof probe !== 'boolean' || typeof ownedTree !== 'boolean' ||
+      typeof endpoint !== 'boolean' || (endpoint && !ownedTree) ||
       (signal && (typeof signal.addEventListener !== 'function' || typeof signal.removeEventListener !== 'function'))) throw unavailable();
   let child = null, launched = false, spawning = true, revoked = false, failed = false,
     closed = false, writeBlocked = false, terminal = false, sequence = 0, heartbeat;
@@ -22,9 +24,9 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
   void exited.catch(() => {});
   const abort = new AbortController(), pending = new Map(), challenge = randomBytes(32).toString('base64url');
   let buffered = Buffer.alloc(0);
-  const version = ownedTree ? 2 : 1;
-  const scope = ownedTree ? 'channel-and-process-exit' : 'channel-only';
-  const mode = ownedTree ? (probe ? 'tree-live-probe' : 'tree-live') : (probe ? 'live-probe' : 'live');
+  const version = endpoint ? 3 : ownedTree ? 2 : 1;
+  const scope = endpoint ? 'endpoint-and-process-exit' : ownedTree ? 'channel-and-process-exit' : 'channel-only';
+  const mode = endpoint ? (probe ? 'tree-endpoint-probe' : 'tree-endpoint') : ownedTree ? (probe ? 'tree-live-probe' : 'tree-live') : (probe ? 'live-probe' : 'live');
   const holder = lifecycle.hold({ revoke, wait: () => exited });
   const externalAbort = () => revoke();
   signal?.addEventListener('abort', externalAbort, { once: true });
@@ -68,7 +70,7 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     const id = sequence++, prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length);
     let resolve, reject;
     const answer = new Promise((done, fail) => { resolve = done; reject = fail; });
-    const entry = { type: command.type, resolve, reject, done: false, timer: null };
+    const entry = { type: command.type, document: command.document, operation: command.operation, resolve, reject, done: false, timer: null };
     pending.set(id, entry);
     if (timeoutMs) entry.timer = setTimeout(() => {
       if (entry.done) return;
@@ -80,6 +82,17 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (entry.type === 'native' && endpoint) {
+      if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'native' || result.document !== entry.document) return false;
+      const answer = result.answer;
+      if (!answer || !['ok', 'error'].includes(answer.outcome) ||
+          !exact(answer, answer.outcome === 'ok' ? ['outcome', 'result'] : ['outcome', 'code'])) return false;
+      try {
+        nativeProtocol.parseResponse({ p: nativeProtocol.NATIVE_PROTOCOL, v: 1, id: 'private_reply',
+          ...(answer.outcome === 'ok' ? { ok: true, result: answer.result } : { ok: false, error: answer.code }) }, entry.operation.op);
+        return true;
+      } catch { return false; }
+    }
     if (entry.type === 'hello') return exact(result, ['type', 'protocol', 'version', 'challenge', 'mode', 'nativeInput', 'cleanupScope']) &&
       result.type === 'hello' && result.protocol === PROTOCOL && result.version === version && result.challenge === challenge &&
       result.mode === mode && result.nativeInput === false && result.cleanupScope === scope;
@@ -159,6 +172,17 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     heartbeat.unref?.();
     const api = { status: () => send({ type: 'status' }), revoke,
       close: () => holder.finish('channel-close'), wait: () => exited, signal: abort.signal, pid: child.pid };
+    if (endpoint) api.request = (request, document) => {
+      try {
+        const canonical = nativeProtocol.parseRequest(request);
+        if (canonical.op === 'stop' || !Number.isInteger(document) || document < 0 || document >= 0xffffffff) throw unavailable();
+        const { p, v, id, ...operation } = canonical;
+        return send({ type: 'native', document, operation }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs).then(reply => {
+          if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
+          return reply.answer.result;
+        });
+      } catch (error) { return Promise.reject(error); }
+    };
     if (probe) api.probeWait = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 10_000
       ? send({ type: 'probe-wait', milliseconds }, 12_000) : Promise.reject(unavailable());
     if (probe && ownedTree) api.probeDescendant = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 2000

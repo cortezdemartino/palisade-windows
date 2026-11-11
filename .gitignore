@@ -20,3 +20,4 @@ src/updates/helper-integrity.json
 .assist/
 src/assist/guardian-integrity.json
 src/assist/hosted-preload.cjs
+src/assist/qualification.json

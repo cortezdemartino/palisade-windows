@@ -22,7 +22,10 @@ function report() {
 
 // Separately negotiated native channel. Production passes no enabling argument
 // until its compiled coordinator, native authority and acceptance gates are met.
-if (typeof process !== 'undefined' && process.isMainFrame && location.origin === 'https://palisade.onyxops.org' && Array.isArray(process.argv) && process.argv.includes('--palisade-assist-native')) {
+const nativeOriginArgument = typeof process !== 'undefined' && Array.isArray(process.argv)
+  ? process.argv.find(value => value.startsWith('--palisade-assist-native-origin=')) : null;
+const nativeOrigin = nativeOriginArgument ? nativeOriginArgument.slice('--palisade-assist-native-origin='.length) : 'https://palisade.onyxops.org';
+if (typeof process !== 'undefined' && process.isMainFrame && location.origin === nativeOrigin && Array.isArray(process.argv) && process.argv.includes('--palisade-assist-native')) {
   const documentId = crypto.randomUUID(), listeners = new Set(), calls = new Set();
   let alive = true, lastSequence = 0;
   const connect = 'palisade:assist-native-connect', request = 'palisade:assist-native-request', expired = 'palisade:assist-native-expired', probe = 'palisade:assist-native-probe', witness = 'palisade:assist-native-witness', eventChannel = 'palisade:assist-native-event';

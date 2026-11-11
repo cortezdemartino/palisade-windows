@@ -2,7 +2,7 @@
 const { ipcMain } = require("electron");
 const { randomBytes } = require("node:crypto");
 const { performance } = require("node:perf_hooks");
-const { isPalisadeUrl } = require("../security-policy.cjs");
+const { isPalisadeUrl, PALISADE_ORIGIN } = require("../security-policy.cjs");
 const protocol = require("./native-protocol.cjs");
 const CHANNELS = Object.freeze({
   connect: "palisade:assist-native-connect",
@@ -28,7 +28,7 @@ function installNativeBridge(
     enabled = false,
     dispatch,
     stopAll,
-    origin = "https://palisade.onyxops.org",
+    origin = PALISADE_ORIGIN,
     now = () => performance.now(),
     timeoutMs = protocol.NATIVE_LIMITS.requestTimeoutMs,
   } = {},
@@ -37,7 +37,7 @@ function installNativeBridge(
   if (
     typeof dispatch !== "function" ||
     typeof stopAll !== "function" ||
-    origin !== "https://palisade.onyxops.org"
+    origin !== PALISADE_ORIGIN
   )
     throw Error("Native coordinator and fixed origin required");
   let disposed = false,
@@ -418,7 +418,12 @@ function installNativeBridge(
     });
   });
   const navigate = (_event, _url, inPlace, mainFrame) => {
-    if (mainFrame && !inPlace) end("reload");
+    if (mainFrame && !inPlace) {
+      // The initial empty WebContents has no document/native authority to end.
+      // Still invalidate any in-flight connection witness before first load.
+      if (document !== null || pending.size || lifetimes.size) end("reload");
+      else invalidate("stopped");
+    }
   };
   contents.on("did-start-navigation", navigate);
   const gone = () => end("error");

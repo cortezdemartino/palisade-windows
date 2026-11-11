@@ -132,6 +132,7 @@ if (controls) {
       renderNotes();
     }
     document.getElementById('notification-status').textContent = state.notificationStatus;
+    document.getElementById('assist-native-status').textContent = state.nativeAssistStatus || 'Native endpoint unavailable';
     const button = document.getElementById('maximize');
     button.dataset.maximized = String(maximized);
     button.title = maximized ? 'Restore' : 'Maximize';

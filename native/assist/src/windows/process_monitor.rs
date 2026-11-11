@@ -25,6 +25,39 @@ use std::{
 };
 use windows_sys::Win32::{Foundation::*, System::Threading::*};
 pub const SCOPE: &str = "channel-and-process-exit";
+pub const ENDPOINT_SCOPE: &str = "endpoint-and-process-exit";
+// A local process may preempt this name to deny service, never to grant any
+// authority. The exact validated application object supplies PID + creation.
+struct EndpointOwner {
+    _handle: std::os::windows::io::OwnedHandle,
+}
+impl EndpointOwner {
+    fn reserve(parent: &Parent) -> Result<Self, &'static str> {
+        use std::os::windows::io::FromRawHandle;
+        let name: Vec<u16> = format!(
+            "Local\\Palisade.Assist.Endpoint.v3.{}.{}",
+            parent.pid(),
+            parent.creation_time()?
+        )
+        .encode_utf16()
+        .chain(Some(0))
+        .collect();
+        unsafe {
+            SetLastError(0);
+            let handle = CreateEventW(std::ptr::null(), 1, 0, name.as_ptr());
+            if handle.is_null() {
+                return Err("endpoint-owner-unavailable");
+            }
+            let owner = Self {
+                _handle: std::os::windows::io::OwnedHandle::from_raw_handle(handle),
+            };
+            if GetLastError() == ERROR_ALREADY_EXISTS {
+                return Err("endpoint-already-running");
+            }
+            Ok(owner)
+        }
+    }
+}
 struct RevokeOnDrop(Arc<StopEvent>);
 impl Drop for RevokeOnDrop {
     fn drop(&mut self) {
@@ -40,6 +73,10 @@ struct Answer {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum ResultKind {
+    Native {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     Hello {
         protocol: String,
         version: u32,
@@ -68,6 +105,7 @@ enum ResultKind {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
+    Native,
     Hello,
     Pulse,
     Status,
@@ -79,6 +117,7 @@ enum Kind {
 impl Kind {
     fn of(command: &Command) -> Self {
         match command {
+            Command::Native { .. } => Self::Native,
             Command::Hello { .. } => Self::Hello,
             Command::Pulse {} => Self::Pulse,
             Command::Status {} => Self::Status,
@@ -116,6 +155,7 @@ fn validated(
     state: &mut State,
     mut answer: Answer,
     probe: bool,
+    endpoint: bool,
 ) -> Result<Option<Answer>, &'static str> {
     if state.terminal.is_some() {
         return Err("monitor-trailing-output");
@@ -137,23 +177,38 @@ fn validated(
             },
         ) => {
             let valid = protocol == PROTOCOL
-                && *version == 2
+                && *version == if endpoint { 3 } else { 2 }
                 && Some(challenge.as_str()) == state.challenge.as_deref()
-                && mode == "tree-coordinator"
+                && mode
+                    == if endpoint {
+                        "endpoint-coordinator"
+                    } else {
+                        "tree-coordinator"
+                    }
                 && !*native_input
-                && cleanup_scope == "channel-only";
-            *mode = if probe {
+                && cleanup_scope
+                    == if endpoint {
+                        "endpoint-only"
+                    } else {
+                        "channel-only"
+                    };
+            *mode = if endpoint && probe {
+                "tree-endpoint-probe"
+            } else if endpoint {
+                "tree-endpoint"
+            } else if probe {
                 "tree-live-probe"
             } else {
                 "tree-live"
             }
             .into();
-            *cleanup_scope = SCOPE.into();
+            *cleanup_scope = if endpoint { ENDPOINT_SCOPE } else { SCOPE }.into();
             valid
         }
         (Kind::Pulse, ResultKind::Pulse {})
         | (Kind::ProbeWait, ResultKind::ProbeWait {})
         | (Kind::ProbeDescendant, ResultKind::ProbeDescendant {}) => true,
+        (Kind::Native, ResultKind::Native { .. }) => endpoint,
         (Kind::ProbeStopHolder, ResultKind::ProbeStopHolder { pid, coordinator }) => {
             *pid > 0 && *coordinator > 0 && pid != coordinator
         }
@@ -161,7 +216,13 @@ fn validated(
             ["inactive", "revoked"].contains(&state.as_str()) && authority == "none"
         }
         (Kind::Shutdown, ResultKind::CleanupComplete { challenge, scope }) => {
-            Some(challenge.as_str()) == state.challenge.as_deref() && scope == "channel-only"
+            Some(challenge.as_str()) == state.challenge.as_deref()
+                && scope
+                    == if endpoint {
+                        "endpoint-only"
+                    } else {
+                        "channel-only"
+                    }
         }
         _ => false,
     };
@@ -179,6 +240,15 @@ pub fn coordinator(parent: u32, probe: bool, job: usize, stop: usize) -> Result<
     // Validate the creator before adopting any inherited handle.
     let _parent = Parent::validate_executor(parent, probe)?;
     super::live::run_owned(parent, probe, InheritedTree::open(job, stop)?)
+}
+pub fn endpoint_coordinator(
+    parent: u32,
+    probe: bool,
+    job: usize,
+    stop: usize,
+) -> Result<(), &'static str> {
+    let _parent = Parent::validate_executor(parent, probe)?;
+    super::live::run_endpoint(parent, probe, InheritedTree::open(job, stop)?)
 }
 pub fn release_probe(parent: u32, milliseconds: u16) -> Result<(), &'static str> {
     let parent = Parent::validate_executor(parent, true)?;
@@ -220,7 +290,25 @@ pub fn stop_probe(parent: u32) -> Result<(), &'static str> {
     Ok(())
 }
 pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), &'static str> {
+    run_inner(parent_pid, probe, manifest, false)
+}
+pub fn run_endpoint(
+    parent_pid: u32,
+    probe: bool,
+    manifest: ImageManifest,
+) -> Result<(), &'static str> {
+    run_inner(parent_pid, probe, manifest, true)
+}
+fn run_inner(
+    parent_pid: u32,
+    probe: bool,
+    manifest: ImageManifest,
+    endpoint: bool,
+) -> Result<(), &'static str> {
     let parent = Parent::validate(parent_pid, probe)?;
+    let _endpoint_owner = endpoint
+        .then(|| EndpointOwner::reserve(&parent))
+        .transpose()?;
     let image = VerifiedImage::open(&manifest)?;
     let mut tree = ProcessTree::new()?;
     let query = tree.query_handle()?;
@@ -245,7 +333,12 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
     let child = tree.launch(
         &image,
         &[
-            "--tree-coordinator".into(),
+            if endpoint {
+                "--endpoint-coordinator"
+            } else {
+                "--tree-coordinator"
+            }
+            .into(),
             std::process::id().to_string().into(),
             (query.as_raw_handle() as usize).to_string().into(),
             (child_stop.as_raw_handle() as usize).to_string().into(),
@@ -317,7 +410,11 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
     let (read_signals, read_stop, read_state, read_guard) =
         (signals.clone(), stop.clone(), state.clone(), guard.clone());
     thread::spawn(move || {
-        let mut ingress = Ingress::owned(probe);
+        let mut ingress = if endpoint {
+            Ingress::endpoint(probe)
+        } else {
+            Ingress::owned(probe)
+        };
         let mut pipe = std::io::stdin().lock();
         let result = (|| {
             loop {
@@ -411,6 +508,7 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
                     &mut *response_state.lock().map_err(|_| "monitor-state")?,
                     answer,
                     probe,
+                    endpoint,
                 )?;
                 if let Some(answer) = answer {
                     response_writer
@@ -467,7 +565,7 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
         .take()
         .ok_or("monitor-cleanup-unproven")?;
     if let ResultKind::CleanupComplete { scope, .. } = &mut terminal.result {
-        *scope = SCOPE.into();
+        *scope = if endpoint { ENDPOINT_SCOPE } else { SCOPE }.into();
     } else {
         return Err("monitor-cleanup-unproven");
     }
@@ -484,6 +582,36 @@ pub fn run(parent_pid: u32, probe: bool, manifest: ImageManifest) -> Result<(), 
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn endpoint_terminal_cannot_be_substituted_with_old_channel_or_input_proof() {
+        for scope in [
+            "channel-only",
+            "channel-and-process-exit",
+            "input-cleanup",
+            "endpoint-only",
+        ] {
+            let challenge = "A".repeat(43);
+            let mut state = State {
+                challenge: Some(challenge.clone()),
+                ..State::default()
+            };
+            state.pending.insert(1, Kind::Shutdown);
+            let result = validated(
+                &mut state,
+                Answer {
+                    sequence: 1,
+                    result: ResultKind::CleanupComplete {
+                        challenge,
+                        scope: scope.into(),
+                    },
+                },
+                true,
+                true,
+            );
+            assert_eq!(result.is_ok(), scope == "endpoint-only");
+            assert_eq!(state.terminal.is_some(), scope == "endpoint-only");
+        }
+    }
     #[test]
     fn early_error_and_unwind_signal_stop_despite_other_arc_owners() {
         for panic in [false, true] {
@@ -531,7 +659,8 @@ mod tests {
                             scope: scope.into()
                         }
                     },
-                    true
+                    true,
+                    false
                 )
                 .is_err()
             );
@@ -552,7 +681,8 @@ mod tests {
                         scope: "channel-only".into()
                     }
                 },
-                true
+                true,
+                false
             )
             .unwrap()
             .is_none()
@@ -565,7 +695,8 @@ mod tests {
                     sequence: 2,
                     result: ResultKind::Pulse {}
                 },
-                true
+                true,
+                false
             )
             .is_err()
         );

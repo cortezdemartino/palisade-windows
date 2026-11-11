@@ -1,5 +1,22 @@
 # Complete Windows Assist delivery plan
 
+## Current RC-2 checkpoint
+
+The real native bridge/monitor/coordinator is connected for an explicit isolated
+qualification build. Public desktop native startup remains disabled. Enrollment
+uses the existing qualified issuer and memory-only operational signer with native
+confirmation. Canonical refusal paths preserve unavailable capture/input/resources.
+[Implementation, qualification instructions and remaining gates](evidence/2026-11-11-rc2-native-endpoint.md).
+
+RC-2 is not complete: normal executor receipts/mirror settlement, native source
+binding, StreamRuntime/SessionGate/LeasePoller attachment, actual service enrollment
+and positive grant/consent/ACK/lease negotiation remain open. The frozen WIN-P01
+harness also requires real decoded capture before inspecting endpoint proof.
+All 30 canonical acceptance cases remain unqualified on a real endpoint. No
+publication, installation or production activation occurs in this phase.
+
+## Historical component checkpoints
+
 COOP-2 keeps cooperative input blocked on safe physical delivery. The
 candidate registers normal executor Stop events with the local safety
 window and tightens custody settlement for armed native generations.

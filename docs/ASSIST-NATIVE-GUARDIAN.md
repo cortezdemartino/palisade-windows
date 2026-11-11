@@ -1,5 +1,21 @@
 # Native Assist components
 
+## Connected launch endpoint
+
+The [RC-2 endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md) connects
+the actual application-owned monitor and persistent coordinator to canonical
+native enrollment. It reuses exact-image/job/Stop ownership and introduces an
+explicit private-v3 endpoint cleanup scope. One launch retains the operational
+key and enrollment replay history. The isolated qualification build fixes its
+HTTPS origin, independent issuer pin and storage namespace at build time.
+
+This does not complete native session execution. Normal executor receipts,
+monitor mirror settlement and StreamRuntime/source/lease/peer integration remain
+unfinished. All sensitive feature declarations are false and public startup
+remains disabled. Existing consent dialogs are not qualified against synthetic
+Win32 button commands from a same-integrity local process; native and physical
+acceptance remain separate from the passing no-authority process tests.
+
 ## Session isolation
 
 Each runtime uses its own terminal cancellation token under the launch emergency

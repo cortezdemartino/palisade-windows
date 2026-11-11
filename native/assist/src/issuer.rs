@@ -4,7 +4,7 @@ use crate::grant::decode;
 use ed25519_dalek::VerifyingKey;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-pub const ORIGIN: &str = "https://palisade.onyxops.org";
+pub const ORIGIN: &str = crate::qualification::ORIGIN;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Issuer {
@@ -81,6 +81,11 @@ impl Candidate {
         stored: Option<&Record>,
         release_pin: Option<&str>,
     ) -> Result<Method, &'static str> {
+        // A compiled pin is mandatory. A previously confirmed record cannot
+        // weaken it when an artifact deliberately fixes its signing authority.
+        if release_pin.is_some_and(|pin| pin != self.fingerprint) {
+            return Err("issuer-changed");
+        }
         if let Some(record) = stored {
             if record.version != 1
                 || record.origin != ORIGIN
@@ -112,12 +117,22 @@ mod tests {
         Candidate::parse(&serde_json::to_vec(&serde_json::json!({"protocol":"palisade.assist.control","version":1,"publicKey":f["issuerPublicKey"],"fingerprint":f["issuerFingerprint"]})).unwrap()).unwrap()
     }
     #[test]
+    fn compiled_issuer_pin_cannot_be_overridden_by_a_confirmed_record() {
+        let key = candidate();
+        let other = "b".repeat(64);
+        assert_eq!(key.qualify(None, Some(&other)), Err("issuer-changed"));
+        assert_eq!(
+            key.qualify(Some(&key.record(Method::Confirmed)), Some(&other)),
+            Err("issuer-changed")
+        );
+    }
+    #[test]
     fn https_first_use_and_legacy_formats_cannot_qualify_trust() {
         let key = candidate();
         assert_eq!(key.qualify(None, None), Err("issuer-unqualified"));
         assert_eq!(
             key.qualify(None, Some(&"a".repeat(64))),
-            Err("issuer-unqualified")
+            Err("issuer-changed")
         );
         for method in ["tofu", "first-use", "https", "none"] {
             let mut record = serde_json::to_value(key.record(Method::Confirmed)).unwrap();

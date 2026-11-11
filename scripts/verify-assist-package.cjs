@@ -24,6 +24,11 @@ async function verifyAssistPackage(resources = path.resolve('out/win-unpacked/re
     const manifest = path.join(temporary, 'manifest.json');
     await fs.writeFile(manifest, extractFile(archive, path.normalize('src/assist/guardian-integrity.json')));
     await verifyGuardian(path.join(resources, 'assist/Palisade-Assist.exe'), manifest);
+    const info = spawnSync(path.join(resources, 'assist/Palisade-Assist.exe'), ['--build-info'], { windowsHide: true, shell: false, encoding: 'utf8' });
+    if (info.error || info.status !== 0) throw Error('Packaged native build policy unavailable');
+    const compiled = JSON.parse(info.stdout);
+    if (compiled.origin !== 'https://palisade.onyxops.org' || compiled.namespace !== null || compiled.issuerFingerprint !== null ||
+        compiled.nativeInput !== false || compiled.localYield !== false) throw Error('Qualification helper cannot be packaged for production');
     // Reuse the fixed no-authority fixture against the bytes actually packaged,
     // so release/profile overrides cannot make panic recovery debug-only.
     const probe = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=^' + CLEANUP_TEST + '$',
@@ -33,7 +38,9 @@ async function verifyAssistPackage(resources = path.resolve('out/win-unpacked/re
     });
     if (probe.error || probe.status !== 0 || !verifiedCleanupReport(probe.stdout)) throw Error('Packaged native cleanup probe failed');
     const main = extractFile(archive, path.normalize('src/main.cjs')).toString('utf8');
-    if (/openGuardian|openLiveChannel|assist[\\/](?:guardian|live-channel)\.cjs/.test(main)) throw new Error('Unqualified native helper must not start in production');
+    const policy = extractFile(archive, path.normalize('src/assist/build-policy.cjs')).toString('utf8');
+    if (entries.includes('/src/assist/qualification.json') || !/nativeEndpointEnabled: qualification !== null/.test(policy) || !/captureEnabled: false/.test(policy) ||
+        !/if \(nativeEndpointEnabled && app\.isPackaged && startupVerified\)/.test(main)) throw new Error('Unqualified native helper must not start in production');
   } finally { await fs.rm(temporary, { recursive: true, force: true }); }
 }
 module.exports = { verifyAssistPackage, verifiedCleanupReport };

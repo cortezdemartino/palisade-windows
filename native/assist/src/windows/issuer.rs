@@ -40,9 +40,15 @@ impl TrustedIssuer {
     }
     pub fn load() -> Result<Self, &'static str> {
         let candidate = current()?;
+        if let Some(pin) = crate::qualification::issuer_pin()? {
+            candidate.qualify(None, Some(pin))?;
+        }
         let directory = identity::storage()?;
         let stored = read_record(&directory.join(RECORD))?;
-        let method = candidate.qualify(stored.as_ref(), RELEASE_ISSUER_FINGERPRINT)?;
+        let method = candidate.qualify(
+            stored.as_ref(),
+            crate::qualification::issuer_pin()?.or(RELEASE_ISSUER_FINGERPRINT),
+        )?;
         if stored.is_none() {
             write_new(&directory.join(RECORD), &candidate.record(method))?;
         }
@@ -51,11 +57,30 @@ impl TrustedIssuer {
     // The trusted coordinator may request this narrow prompt, never supply an
     // "approved" boolean. This is not exposed on diagnostic v1 IPC.
     pub fn confirm_current(cancel: Arc<AtomicBool>) -> Result<Self, &'static str> {
+        if cancel.load(Ordering::SeqCst) {
+            return Err("cancelled");
+        }
         let candidate = current()?;
+        if let Some(pin) = crate::qualification::issuer_pin()? {
+            candidate.qualify(None, Some(pin))?;
+        }
         let directory = identity::storage()?;
         let path = directory.join(RECORD);
         if let Some(record) = read_record(&path)? {
-            let method = candidate.qualify(Some(&record), RELEASE_ISSUER_FINGERPRINT)?;
+            let method = candidate.qualify(
+                Some(&record),
+                crate::qualification::issuer_pin()?.or(RELEASE_ISSUER_FINGERPRINT),
+            )?;
+            return Ok(Self { candidate, method });
+        }
+        if let Ok(method) = candidate.qualify(
+            None,
+            crate::qualification::issuer_pin()?.or(RELEASE_ISSUER_FINGERPRINT),
+        ) {
+            if cancel.load(Ordering::SeqCst) {
+                return Err("cancelled");
+            }
+            write_new(&path, &candidate.record(method))?;
             return Ok(Self { candidate, method });
         }
         let text = format!(

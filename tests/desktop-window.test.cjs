@@ -39,7 +39,7 @@ test('Tabler controls reserve a separate strip and reject untrusted window comma
     setBounds(bounds) { this.bounds = bounds; }
     setVisible(visible) { this.visible = visible; }
   }
-  const context = { module: { exports: {} }, URL, Response, __dirname: path.join(__dirname, '../src'), require: (name) => name === 'electron' ? { BrowserWindow: Owner, WebContentsView: View, ipcMain, protocol: { registerSchemesAsPrivileged() {} } } : require(name) };
+  const context = { module: { exports: {} }, URL, Response, __dirname: path.join(__dirname, '../src'), require: (name) => name === 'electron' ? { BrowserWindow: Owner, WebContentsView: View, ipcMain, protocol: { registerSchemesAsPrivileged() {} } } : name === './security-policy.cjs' ? require('../src/security-policy.cjs') : require(name) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/desktop-window.cjs'), 'utf8'), context);
   const deviceActions = [];
   const result = context.module.exports.createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.3' }), onDeviceAction: action => deviceActions.push(action), partition: 'persist:palisade-desktop', icon: {} });
@@ -107,6 +107,11 @@ test('local preload exposes only fixed controls and strips Electron events from 
   assert.equal(received.length, 1); assert.equal(received[0].length, 1); assert.equal(received[0][0].maximized, true);
   assert.equal(received[0][0].settingsOpen, false);
   assert.equal(received[0][0].version, '');
+  ipcRenderer.emit('palisade:window-state', {}, { maximized: false, nativeAssistStatus: 'Enrolled', privateKey: 'never-forward' });
+  assert.equal(received.at(-1)[0].nativeAssistStatus, 'Enrolled');
+  assert.equal(received.at(-1)[0].privateKey, undefined);
+  ipcRenderer.emit('palisade:window-state', {}, { maximized: false, nativeAssistStatus: 'x'.repeat(500) });
+  assert.equal(received.at(-1)[0].nativeAssistStatus.length, 200);
   const note = { version: '0.4.0', publishedAt: '2026-11-10T00:00:00.000Z', locale: 'en', title: 'Release', summary: 'Summary.',
     sections: [{ title: 'Fixed', items: ['A fix.'] }], compatibility: [], privatePath: 'C:\\private\\file' };
   ipcRenderer.emit('palisade:window-state', {}, { maximized: false, releaseHistory: [note] });
@@ -152,6 +157,9 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './assist/source-picker.cjs') return { chooseSource() {} };
     if (name === './assist/capture.cjs') return require('../src/assist/capture.cjs');
     if (name === './assist/build-policy.cjs') return require('../src/assist/build-policy.cjs');
+    if (name === './assist/native-bridge.cjs') return { installNativeBridge() { throw Error('Production native bridge must remain disabled'); } };
+    if (name === './assist/native-runtime.cjs') return { createNativeRuntime() { throw Error('Production runtime must remain disabled'); } };
+    if (name === './assist/guardian.cjs') return require('../src/assist/guardian.cjs');
     if (name === './assist/lifecycle.cjs') return require('../src/assist/lifecycle.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {}, onQuit() {} }) };

@@ -1,21 +1,41 @@
-# Companion Assist handoff prompt
+# Companion Assist qualification handoff
 
-Continue Assist integration in cortezdemartino/project-palisade on main from the committed M4G-WEB-6 handoff at 5b82bc90e4997f35dd18273427c258fe54eefb95. Preserve docs/49 native v1, docs/50, docs/51 Profile 2/extension v2, the v2 release-authority rule and the interop manifest. The Windows agent owns native implementation; its current resume/evidence remains authoritative about unfinished work.
+Continue in `cortezdemartino/project-palisade` on main. The Windows repository is
+read-only in that assignment. Start from current main, retaining candidate
+`5fd1958358e2a56d965a4952c35eb6281d461b3e` and evidence
+`ea9f927e90389677fd7a41a86fffc808027d1ce3` as inspected checkpoints.
 
-The mouse-only release contract is already resolved. Windows has consumed its exact protocol blob, release fixture and manifest, and is qualifying native carried-grant ownership. Do not recreate or loosen that contract. Component tests do not qualify actual Windows input.
+The cooperative contract is already frozen. Do not recreate it, change the nine
+fixture families, weaken the 30 acceptance cases or advertise unsupported native
+features. Windows still owns native source binding, normal executor cleanup
+receipts, SessionGate/LeasePoller attachment, consent qualification and real input.
+This is not a request to bypass those Windows implementation requirements.
 
-## New owner requirement: cooperative local input
+## Requested qualification harness addition
 
-The host must retain their own mouse and keyboard during an approved Assist session. Both people can interact; Windows has one system cursor, with local host priority. Ordinary host input should temporarily yield remote input rather than end the authorized session or require another approval on every mouse movement. No exclusive local-input lockout.
+The current native WIN-P01 test calls `publisher.share()` and waits for decoded
+capture before inspecting enrollment. Windows' first connected endpoint supports
+native enrollment while capture, input and resources remain unavailable. Add a
+separately named, explicitly staged native enrollment check using the existing
+canonical native-v1 methods and authenticated service enrollment/proof routes.
+Do not count this stage as passing WIN-P01, WIN-C01 or full Assist acceptance.
 
-Define and implement a negotiated, versioned **nonterminal local-yield** contract distinct from the existing terminal `lifecycle suspended/stopped`. Today those terminal events cause service revocation and fresh-grant acquisition; keep that behavior intact for Stop, revoke, lock, protected desktop, sensitive native UI, source/peer/lease loss, expiry, replacement and stream end. Old/revoked authority must never return through local yield.
+Inspect `apps/web/src/features/assist/streamAssistController.ts::enrollEndpoint`,
+`apps/web/e2e/assistAcceptance.spec.ts` and docs/49 and docs/54. Reuse their existing
+account/device/service authorization. If a current publisher stream is required,
+state that prerequisite accurately and use only the approved disposable fixture;
+do not fabricate a production stream or loosen device binding to remove it.
 
-Specify exact messages, feature negotiation, bounded fields, native/web UI states and error handling with fixtures. Native observation alone decides local yield and readiness; a renderer/helper message cannot authorize resumption. Recommended default: yield both remote mouse and keyboard during local activity, keep yielding while local keys/buttons are held, and allow only fresh helper input after two seconds of local inactivity, completed owned-input cleanup, a fresh native readiness barrier and current unchanged grants/consent/lease/peer/source. This is a proposal until committed as canonical. No held remote keys/buttons, queued actions or in-flight old yield-epoch packets may replay after readiness. Do not extend the original deadline, broaden capabilities, change the controller, or auto-resume a revoked/expired session. Preserve independently authorized resources and viewing unless another security transition ends them.
+The stage should verify the real Windows bridge/helper, the artifact's exact
+revision/hash/profile, native operational public key, independent issuer pin,
+local confirmation, canonical signature and the service's proven endpoint. Accept
+truthful false feature declarations. Test denied/canceled enrollment, device or
+endpoint substitution, restart/replacement and stale proof rejection. Never inject
+OS input, use MOCK/native approval booleans, extend authority or disable TLS.
 
-The helper must clear its own held-key/button bookkeeping on yield and start with fresh gestures after native readiness, without automatically re-pressing previous input. Add deterministic and browser tests for local activity during a helper drag/modifier hold, repeated host movement, overlapping input, held local buttons, late/queued packets, yield/resume races, old native status, feature mismatch and Stop/revoke/stream-end during yield. Native cleanup must never release a local person's hold; if ownership is uncertain, remain yielded until safely neutral. A mock endpoint cannot establish that Windows behavior. Update docs/51, docs/52 and the generated interop manifest. Return the exact commit, source blobs and fixture digests for Windows to pin; do not deploy or enable it.
-
-Complete real joint acceptance using the matching Windows candidate: profile2/reacquisition, resource-only and both input/resource sessions, images, directional temporary synchronization, multi-file/resume/drop, capture/stream deadline/voice preservation and cancellation races. Keep native sensitive UI guarding, crash-surviving cleanup and Windows implementation requirements assigned to Windows; do not treat mocked endpoints as qualification.
-
-Follow docs/42's owner-disabled Actions exception: equivalent exact-candidate local package, real Synapse/Postgres/LiveKit, Chromium/Firefox and ciphertext checks, with exact SHAs, counts, failures/skips and hardware limits. Earlier full-suite host failures remain recorded; a focused subset is not full-suite acceptance. Qualify working TURN under #48 and production issuer prerequisites under #47 without putting secrets in issues. Update existing #18/#33 and Windows#4/#5 rather than duplicating interventions.
-
-Architecture approval exists. No installation, personal-desktop input, native activation, deployment, release signing or publication is authorized. Deliver evidence and practical guides with accurate Implemented / Experimental / Planned / Blocked / Not Verified classifications.
+Document the required independent test issuer fingerprint, approved disposable
+Windows device and test account coordination in the existing qualification guide
+and interventions. Keep credentials/private keys out of issues and profiles.
+Record actual outcomes separately from source/unit/mock evidence. Return the exact
+commit and test commands to Windows #4. No wire changes, deployment, installation,
+production activation or release publication are authorized by this handoff.

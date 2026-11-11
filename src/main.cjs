@@ -11,7 +11,10 @@ const { installSessionPolicy } = require('./session-policy.cjs');
 const { installAssistBridge } = require('./assist/bridge.cjs');
 const { createCaptureController } = require('./assist/capture.cjs');
 const { chooseSource } = require('./assist/source-picker.cjs');
-const { captureEnabled } = require('./assist/build-policy.cjs');
+const { captureEnabled, nativeEndpointEnabled, qualification } = require('./assist/build-policy.cjs');
+const { installNativeBridge } = require('./assist/native-bridge.cjs');
+const { createNativeRuntime } = require('./assist/native-runtime.cjs');
+const { packagedGuardianPaths } = require('./assist/guardian.cjs');
 const { createAssistLifecycle, installQuitBarrier } = require('./assist/lifecycle.cjs');
 const { installChatNotifications } = require('./chat-notifications.cjs');
 const { createDesktopWindow } = require('./desktop-window.cjs');
@@ -24,12 +27,15 @@ const {
 // The hosted client has an unread observer and the canonical description-only Assist v1 API.
 // Only the isolated local window-controls view has a narrowly scoped control bridge.
 // The web client remains responsible for Matrix auth, Rust cryptography, and E2EE.
-const PARTITION = 'persist:palisade-desktop';
+const PARTITION = qualification ? 'persist:palisade-assist-qualification-' + qualification.namespace : 'persist:palisade-desktop';
 const ICON = path.join(__dirname, '..', 'assets', 'icon.ico');
 let window = null;
 let mainContents = null;
 let assistCapture = null;
 let assistBridge = null;
+let nativeAssistBridge = null;
+let nativeAssistRuntime = null;
+let nativeAssistStatus = 'Native endpoint unavailable';
 let refreshDeviceSettings = null;
 let showDeviceSettings = null;
 const activeNotifications = new Set();
@@ -59,9 +65,10 @@ async function prepareForExit(reason) {
   }
 }
 
-app.setName('Palisade');
+if (qualification) app.setPath('userData', path.join(app.getPath('appData'), 'Palisade-Assist-Qualification-' + qualification.namespace));
+app.setName(qualification ? 'Palisade Assist Qualification' : 'Palisade');
 // Development Electron must never take the installed client's shell identity.
-if (process.platform === 'win32') app.setAppUserModelId(app.isPackaged ? APP_ID : APP_ID + '.development');
+if (process.platform === 'win32') app.setAppUserModelId(qualification ? APP_ID + '.qualification.' + qualification.namespace : app.isPackaged ? APP_ID : APP_ID + '.development');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -104,7 +111,7 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     let native;
-    if (app.isPackaged && process.platform === 'win32') {
+    if (!qualification && app.isPackaged && process.platform === 'win32') {
       const helper = createNativeHelper({ resources: process.resourcesPath, version: app.getVersion() });
       try {
         const status = await helper.status();
@@ -118,11 +125,11 @@ if (!app.requestSingleInstanceLock()) {
         updateStatus = 'Updates: built-in updater unavailable. Use Update Manager to repair.';
       }
     }
-    void ensureAppRegistration({ packaged: app.isPackaged, shell, appData: app.getPath('appData') }).catch(() => {
+    void ensureAppRegistration({ packaged: app.isPackaged && !qualification, shell, appData: app.getPath('appData') }).catch(() => {
       notificationStatus = 'Windows app registration could not be repaired. Run the official installer to repair it.';
       refreshDeviceSettings?.();
     });
-    notificationBranding = ensureNotificationBranding({ packaged: app.isPackaged }).then(() => true).catch(() => {
+    notificationBranding = ensureNotificationBranding({ packaged: app.isPackaged && !qualification }).then(() => true).catch(() => {
       notificationStatus = 'Windows notification branding could not be registered.';
       refreshDeviceSettings?.();
       return false;
@@ -131,8 +138,9 @@ if (!app.requestSingleInstanceLock()) {
     desktopSettings = loadSettings(app.getPath('userData'));
     keepRunningInTray = desktopSettings.keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
-    createMainWindow(profile, Boolean(native) || !app.isPackaged);
+    createMainWindow(profile, Boolean(native) || !app.isPackaged || Boolean(qualification));
     createTray();
+    if (qualification) { updateStatus = 'Updates unavailable in qualification builds'; createApplicationMenu(); return; }
     updaterController = createUpdateController(() => window, (status) => {
       const changed = updateStatus !== status;
       updateStatus = status;
@@ -155,14 +163,14 @@ if (!app.requestSingleInstanceLock()) {
 
 function createMainWindow(profile, startupVerified) {
   const icon = nativeImage.createFromPath(ICON);
-  const desktop = createDesktopWindow({ partition: PARTITION, icon,
+  const desktop = createDesktopWindow({ partition: PARTITION, icon, nativeAssist: nativeEndpointEnabled && app.isPackaged && startupVerified,
     onSettings: () => ({ keepRunningInTray, launchOnLogin: app.getLoginItemSettings().openAtLogin,
-      loginAvailable: app.isPackaged, version: app.getVersion(), updateStatus, notificationStatus,
+      loginAvailable: app.isPackaged && !qualification, version: app.getVersion(), updateStatus, notificationStatus, nativeAssistStatus,
       ...updaterController?.notesState?.() }),
     onDeviceAction: (action) => {
       try {
       if (action === 'tray-on' || action === 'tray-off') trayPreferenceItem().click({ checked: action === 'tray-on' });
-      else if ((action === 'login-on' || action === 'login-off') && app.isPackaged) {
+      else if ((action === 'login-on' || action === 'login-off') && app.isPackaged && !qualification) {
         app.setLoginItemSettings({ openAtLogin: action === 'login-on' }); createApplicationMenu();
       } else if (action === 'notification-test') notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.');
       else if (action === 'notification-settings' || action === 'microphone-settings') {
@@ -197,7 +205,7 @@ function createMainWindow(profile, startupVerified) {
   refreshDeviceSettings = desktop.refreshSettings;
   showDeviceSettings = desktop.showSettings;
   window = desktop.window;
-  const identity = appDetails({ packaged: app.isPackaged });
+  const identity = appDetails({ packaged: app.isPackaged && !qualification });
   if (identity) window.setAppDetails(identity);
   const contents = mainContents = desktop.contents;
   assistCapture = createCaptureController({ enabled: captureEnabled && startupVerified, getContents: () => contents, getWindow: () => window,
@@ -205,14 +213,22 @@ function createMainWindow(profile, startupVerified) {
     revoke: () => { if (!contents.isDestroyed()) { contents.forcefullyCrashRenderer(); contents.reload(); } } });
   installSessionPolicy(profile, () => mainContents);
   assistBridge = installAssistBridge(contents, { desktopVersion: app.getVersion() });
+  if (nativeEndpointEnabled && app.isPackaged && startupVerified) {
+    if (!nativeAssistRuntime) nativeAssistRuntime = createNativeRuntime({ lifecycle: assistLifecycle,
+      ...packagedGuardianPaths(process.resourcesPath),
+      onStatus: status => { nativeAssistStatus = status; refreshDeviceSettings?.(); updateTrayMenu(); } });
+    void nativeAssistRuntime.ready.catch(() => {});
+    nativeAssistBridge = installNativeBridge(contents, { enabled: true,
+      dispatch: nativeAssistRuntime.dispatch, stopAll: nativeAssistRuntime.stopAll });
+  }
   for (const name of ['minimize', 'hide', 'close', 'unresponsive']) window.on(name, assistCapture.stop);
   contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => { if (mainFrame && !inPlace) assistCapture?.stop(); });
   contents.on('render-process-gone', () => assistCapture?.stop());
-  const revokeCapture = () => assistCapture?.stop();
+  const revokeCapture = () => { assistCapture?.stop(); void nativeAssistRuntime?.stopAll().catch(() => {}); };
   for (const name of ['lock-screen', 'suspend', 'shutdown']) powerMonitor.on(name, revokeCapture);
   for (const name of ['display-added', 'display-removed', 'display-metrics-changed']) screen.on(name, revokeCapture);
   window.once('closed', () => {
-    assistBridge?.dispose(); assistCapture?.dispose();
+    nativeAssistBridge?.dispose(); assistBridge?.dispose(); assistCapture?.dispose();
     for (const name of ['lock-screen', 'suspend', 'shutdown']) powerMonitor.removeListener(name, revokeCapture);
     for (const name of ['display-added', 'display-removed', 'display-metrics-changed']) screen.removeListener(name, revokeCapture);
   });
@@ -357,6 +373,8 @@ function updateTrayMenu() {
     Menu.buildFromTemplate([
       { label: 'Open Palisade', click: openWindow },
       ...(exitWaiting ? [{ label: 'Quit pending: stopping assistance', enabled: false }] : []),
+      ...(nativeEndpointEnabled ? [{ label: nativeAssistStatus, enabled: false },
+        { label: 'Stop assistance', click: () => { void nativeAssistRuntime?.stopAll().catch(() => {}); } }] : []),
       { label: 'Stop screen sharing and reload Palisade', enabled: assistCapture?.busy() === true, click: () => assistCapture?.stop() },
       trayPreferenceItem(),
       { type: 'separator' },
@@ -392,7 +410,7 @@ function createApplicationMenu() {
           { label: 'Check for Updates', click: () => void updaterController?.check(true) },
           { label: 'Open Update Manager', click: () => void updaterController?.openManager() },
           trayPreferenceItem(),
-          { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged,
+          { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged && !qualification,
             checked: app.getLoginItemSettings().openAtLogin,
             click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked }); createApplicationMenu(); } },
           { label: 'About Palisade', click: () => void dialog.showMessageBox({

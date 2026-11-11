@@ -66,6 +66,8 @@ test('desktop settings survive restart without changing session or user data', a
     assert.equal(pkg.build.productName,'Palisade'); assert.equal(pkg.build.nsis.deleteAppDataOnUninstall,false);
     const main=await readFile(path.join(__dirname,'../src/main.cjs'),'utf8');
     assert.match(main,/persist:palisade-desktop/);
-    assert.doesNotMatch(main,/clearStorageData|clearAuthCache|setPath\(['"]userData/);
+    assert.doesNotMatch(main,/clearStorageData|clearAuthCache/);
+    assert.equal(require('../src/assist/qualification.cjs').qualification, null);
+    assert.match(main,/if \(qualification\) app\.setPath\('userData'/);
   } finally { await rm(dir,{recursive:true,force:true}); }
 });

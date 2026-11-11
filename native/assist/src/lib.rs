@@ -4,6 +4,7 @@ pub mod cancellation;
 pub mod cleanup;
 pub mod cooperative;
 pub mod custody;
+pub mod endpoint;
 pub mod executor;
 pub mod framing;
 pub mod grant;
@@ -13,6 +14,7 @@ pub mod input_age;
 pub mod issuer;
 pub mod live;
 pub mod observation;
+pub mod qualification;
 pub mod statements;
 pub mod stream;
 #[cfg(windows)]

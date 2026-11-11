@@ -64,19 +64,27 @@ fn emit(
         })
 }
 pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
-    run_inner(parent_pid, probe, None)
+    run_inner(parent_pid, probe, None, false)
 }
 pub(crate) fn run_owned(
     parent_pid: u32,
     probe: bool,
     tree: super::process_tree::InheritedTree,
 ) -> Result<(), &'static str> {
-    run_inner(parent_pid, probe, Some(tree))
+    run_inner(parent_pid, probe, Some(tree), false)
+}
+pub(crate) fn run_endpoint(
+    parent_pid: u32,
+    probe: bool,
+    tree: super::process_tree::InheritedTree,
+) -> Result<(), &'static str> {
+    run_inner(parent_pid, probe, Some(tree), true)
 }
 fn run_inner(
     parent_pid: u32,
     probe: bool,
     tree: Option<super::process_tree::InheritedTree>,
+    endpoint: bool,
 ) -> Result<(), &'static str> {
     let owned = tree.is_some();
     let stop_reader = tree.as_ref().map(|tree| tree.stop_reader()).transpose()?;
@@ -86,6 +94,8 @@ fn run_inner(
         Parent::validate(parent_pid, probe)?
     };
     let signals = Arc::new(Signals::default());
+    let mut native_endpoint =
+        endpoint.then(|| super::endpoint::Endpoint::new(probe, signals.cancellation()));
     let live_stop = match &tree {
         Some(tree) => crate::cancellation::SessionStop::monitored(
             signals.cancellation(),
@@ -151,7 +161,9 @@ fn run_inner(
     let read_stop = live_stop.clone();
     thread::spawn(move || {
         let mut input = std::io::stdin().lock();
-        let mut ingress = if owned {
+        let mut ingress = if endpoint {
+            Ingress::endpoint(probe)
+        } else if owned {
             Ingress::owned(probe)
         } else {
             Ingress::new(probe)
@@ -179,9 +191,17 @@ fn run_inner(
                             request.sequence,
                             Reply::Hello {
                                 protocol: PROTOCOL,
-                                version: if owned { 2 } else { 1 },
+                                version: if endpoint {
+                                    3
+                                } else if owned {
+                                    2
+                                } else {
+                                    1
+                                },
                                 challenge: challenge.clone(),
-                                mode: if owned {
+                                mode: if endpoint {
+                                    "endpoint-coordinator"
+                                } else if owned {
                                     "tree-coordinator"
                                 } else if probe {
                                     "live-probe"
@@ -189,7 +209,11 @@ fn run_inner(
                                     "live"
                                 },
                                 native_input: false,
-                                cleanup_scope: "channel-only",
+                                cleanup_scope: if endpoint {
+                                    "endpoint-only"
+                                } else {
+                                    "channel-only"
+                                },
                             },
                             &read_signals,
                         )?;
@@ -234,6 +258,21 @@ fn run_inner(
                 continue;
             }
             match request.command {
+                Command::Native {
+                    document,
+                    operation,
+                } => {
+                    let answer = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-unavailable")?
+                        .dispatch(document, operation);
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::Native { document, answer },
+                        &signals,
+                    )?;
+                }
                 Command::Status {} => emit(
                     &output,
                     request.sequence,
@@ -322,6 +361,9 @@ fn run_inner(
         // No sessions/children are admitted in this revision. Active-resource
         // cleanup and crash-surviving ownership must precede a broader proof.
         signals.revoke();
+        if let Some(endpoint) = &mut native_endpoint {
+            endpoint.revoke();
+        }
         if signals.failed() {
             return Err("live-failed");
         }
@@ -337,7 +379,11 @@ fn run_inner(
                     sequence,
                     result: Reply::CleanupComplete {
                         challenge,
-                        scope: "channel-only",
+                        scope: if endpoint {
+                            "endpoint-only"
+                        } else {
+                            "channel-only"
+                        },
                     },
                 },
                 delivered: Some(delivered),

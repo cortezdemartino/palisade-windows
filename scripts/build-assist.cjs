@@ -11,10 +11,22 @@ const { nativeNotices } = require('./native-notices.cjs');
 async function buildAssist() {
   if (process.platform !== 'win32' || process.arch !== 'x64') throw new Error('Build the Assist helper on Windows x64');
   const cargo = process.env.CARGO || 'cargo';
+  const { qualification } = require('../src/assist/qualification.cjs');
+  const env = { ...process.env };
+  for (const name of ['PALISADE_ASSIST_BUILD_ORIGIN', 'PALISADE_ASSIST_BUILD_ISSUER', 'PALISADE_ASSIST_BUILD_NAMESPACE']) delete env[name];
+  if (qualification) Object.assign(env, { PALISADE_ASSIST_BUILD_ORIGIN: qualification.origin,
+    PALISADE_ASSIST_BUILD_ISSUER: qualification.issuerFingerprint, PALISADE_ASSIST_BUILD_NAMESPACE: qualification.namespace });
   const result = spawnSync(cargo, ['build', '--release', '--locked', '--manifest-path', 'native/assist/Cargo.toml'],
-    { cwd: root, windowsHide: true, stdio: 'inherit', shell: false });
+    { cwd: root, env, windowsHide: true, stdio: 'inherit', shell: false });
   if (result.error || result.status !== 0) throw new Error('Assist helper compilation failed');
-  const bytes = await fs.readFile(path.join(root, 'native/assist/target/release/palisade-assist-guardian.exe'));
+  const output = path.join(root, 'native/assist/target/release/palisade-assist-guardian.exe');
+  const information = spawnSync(output, ['--build-info'], { windowsHide: true, shell: false, encoding: 'utf8' });
+  if (information.error || information.status !== 0) throw Error('Assist compiled policy unavailable');
+  const policy = JSON.parse(information.stdout);
+  if (policy.origin !== (qualification?.origin || 'https://palisade.onyxops.org') ||
+      policy.namespace !== (qualification?.namespace || null) || policy.issuerFingerprint !== (qualification?.issuerFingerprint || null) ||
+      policy.nativeInput !== false || policy.localYield !== false) throw Error('Assist compiled policy mismatch');
+  const bytes = await fs.readFile(output);
   // Package manifest is inside ASAR, protected by the application's existing integrity fuse.
   const manifest = { protocol: 'palisade.assist.guardian', version: 1, filename: FILENAME,
     size: bytes.length, sha256: createHash('sha256').update(bytes).digest('hex') };

@@ -34,6 +34,9 @@ pub struct EnrolledIdentity<'a> {
     pub enrollment: &'a Enrollment,
 }
 impl Enrollment {
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
     fn prepare(
         issuer: &TrustedIssuer,
         identity: &EndpointIdentity,

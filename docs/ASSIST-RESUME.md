@@ -1,6 +1,27 @@
 # Assist continuation checkpoint
 
-## Active work: COOP-2
+## Active work: RC-2
+
+Continue from the [November 11 connected endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md).
+Electron now owns a private-v3 persistent native monitor/coordinator and canonical
+enrollment dispatcher behind an explicit isolated qualification build. Public
+desktop builds remain inactive. Real compiled-helper and isolated Electron
+handshake/crash tests are separate from enrollment and device qualification.
+
+Next engineering: normal executor generation receipts and monitor mirror
+settlement, native capture/source binding, then attach the existing persistent
+StreamRuntime/SessionGate/LeasePoller and complete grant consent/ACK/lease/peer.
+All sensitive capability flags remain false. Primary RC-2 session acceptance,
+service enrollment and WIN-P01 are not passed. Do not substitute process exit
+for input cleanup or describe native confirmation as service proof.
+The compiled test profile requires independently supplied disposable issuer/TLS
+and device approval; no production trust material is generated.
+
+Companion inspected read-only at `ea9f927e90389677fd7a41a86fffc808027d1ce3`;
+candidate `5fd1958358e2a56d965a4952c35eb6281d461b3e`. Frozen hashes and all 30
+cases remain unchanged. No release, installation or activation is authorized.
+
+## Prior COOP-2 checkpoint
 
 U1 source and packaging reached v0.3.4 at
 `f194e0caaf5308e9206ff8e90187ca94a358c150`. The signed updater and changelog are
