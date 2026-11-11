@@ -1,5 +1,12 @@
 # Complete Windows Assist delivery plan
 
+COOP-2 keeps cooperative input blocked on safe physical delivery. The
+candidate registers normal executor Stop events with the local safety
+window and tightens custody settlement for armed native generations.
+The normal child receipt channel, persistent runtime and real Windows
+acceptance remain open.
+[Delivery decision and verification](evidence/2026-11-10-coop2-delivery-and-stop.md).
+
 Current owner priority is U1. Its signed changelog work preserves this plan, the
 existing Assist quiescence barrier and all release gates. It does not enable Assist
 or qualify the native endpoint. Routine updates still use Manager until the

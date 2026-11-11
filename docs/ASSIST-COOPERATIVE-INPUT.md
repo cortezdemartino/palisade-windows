@@ -149,6 +149,19 @@ released by stale snapshot-based cleanup.
 
 ## Remaining native integration
 
+COOP-2 found no documented conditional release operation for the shared
+Windows desktop input stream. A valid observation before `SendInput` can
+become stale before delivery. A hook can disappear before observing that
+release, and a late acknowledgement cannot protect the host's already
+affected hold. Cooperative input and `localYield` remain unavailable.
+
+Normal dormant runtimes now register their executor Stop event with the
+local safety window before worker startup. An input-only Stop and lease
+loss signal the same event. The native custody registry retains unresolved
+armed ownership until it has exact process exit and both terminal receipts.
+The normal executor still needs its dedicated monitor-owned receipt channel.
+[Delivery decision and test evidence](evidence/2026-11-10-coop2-delivery-and-stop.md).
+
 1. Finish monitor-owned executor generation registration and positive terminal
    cleanup receipts before admitting active input. Job/process exit alone is not proof.
 2. Implement independently owned physical observation and bounded delivery arbitration.

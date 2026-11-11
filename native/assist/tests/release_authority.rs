@@ -26,10 +26,14 @@ struct Trace {
     pause_on_down: Option<Arc<palisade_assist_guardian::cooperative::InputFence>>,
     pending_observation: Option<palisade_assist_guardian::cooperative::LocalObservation>,
     fail_empty_intents: usize,
+    require_registration: bool,
     intent_calls: usize,
 }
 struct Fake(Rc<RefCell<Trace>>);
 impl Backend for Fake {
+    fn requires_registration(&self) -> bool {
+        self.0.borrow().require_registration
+    }
     fn cooperative_ready(&self) -> bool {
         self.0.borrow().cooperative
     }
@@ -797,6 +801,41 @@ fn managed(gate: &mut SessionGate, trace: Rc<RefCell<Trace>>) -> Executor<Fake> 
         true,
         reservation,
     )
+}
+
+#[test]
+fn native_mirror_failure_blocks_readiness_and_receipt_after_later_successful_write() {
+    let (mut gate, now) = setup(&["control_mouse"]);
+    let trace = Rc::new(RefCell::new(Trace {
+        require_registration: true,
+        ..Trace::default()
+    }));
+    let mut executor = managed(&mut gate, trace.clone());
+    dispatch(
+        &mut gate,
+        &mut executor,
+        &fixtures()["scenarios"][0]["steps"][0]["message"],
+        now,
+    )
+    .unwrap();
+    gate.suspend_input();
+    let requirement = gate.require_input_cleanup().unwrap();
+    trace.borrow_mut().fail_empty_intents = 1;
+    assert!(matches!(
+        executor.release_for(&requirement, &source()),
+        Err("mirror-unconfirmed")
+    ));
+    assert!(matches!(
+        executor.release_for(&requirement, &source()),
+        Err("mirror-settlement-failed")
+    ));
+    assert!(!executor.yield_cleanup_complete());
+    assert!(matches!(gate.reserve_executor(), Err("cleanup-pending")));
+    assert_eq!(
+        trace.borrow().applied.len(),
+        2,
+        "Only the original DOWN and one cleanup UP"
+    );
 }
 
 #[test]

@@ -1,20 +1,18 @@
 # Assist continuation checkpoint
 
-## Active work: U1, by owner direction
+## Active work: COOP-2
 
-The owner switched priority to the native updater and shared changelog. Assist
-remains disabled and its outstanding runtime/qualification work below is preserved.
-The U1 signed-notes foundation is implemented in the development candidate;
-desktop-owned installer staging/apply and installed-upgrade qualification remain
-unfinished. See `RELEASE-NOTES-FORMAT.md` and the U1 evidence record. No release,
-production signing, deployment or installation is authorized for this phase.
+U1 source and packaging reached v0.3.4 at
+`f194e0caaf5308e9206ff8e90187ca94a358c150`. The signed updater and changelog are
+implemented. Installed upgrade remains Not Verified on a disposable VM.
+[U1 evidence](evidence/2026-11-10-u1-native-updater.md).
 
-The independent inactive `native/update` library now verifies signed release
-authority, protected staging, parent/installation identity and private pipe binding.
-Its Windows tests do not qualify actual installed-parent authentication or upgrades.
-See `NATIVE-UPDATER.md` and `evidence/2026-11-10-u1-native-foundation.md`. Stage/apply
-dispatch, desktop coordinator and installer completion/recovery remain unfinished.
-COOP-2 is queued to begin automatically after U1, with fail-closed dispatch preserved.
+COOP-2 preserves the frozen companion contract at `c9f822b`. The documented
+Windows APIs leave physical delivery arbitration Blocked. Normal executor Stop
+events now register before worker startup, and armed native custody requires
+both cleanup witnesses. Continue the exact normal executor receipt channel and
+persistent runtime ownership while cooperative dispatch stays inactive.
+[COOP-2 evidence](evidence/2026-11-10-coop2-delivery-and-stop.md).
 
 ## Native physical observation continuation
 
@@ -32,8 +30,7 @@ do not claim COOP-1 complete or hide the normal runtime/cleanup gaps below.
 Companion main inspected read-only: `c9f822bef6d6257f2a2845b309131e83729a0e42`.
 Its new docs/54 acceptance tooling does not change the frozen protocol, nine fixture
 families or manifest v3/all 30 cases. Both the older e45 manifest hash and frozen
-manifest hash were independently verified; retain the latter. Phase U1 (#8/#9)
-remains queued after COOP-1, with no signing/publication/deployment authorization.
+manifest hash were independently verified; retain the latter.
 
 ## Direct executor stop continuation
 

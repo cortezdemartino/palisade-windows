@@ -1,8 +1,9 @@
+use super::process_tree::StopEvent;
 use std::{
     cell::Cell,
     ptr,
     sync::{
-        Arc,
+        Arc, Mutex, Weak,
         atomic::{AtomicBool, Ordering},
         mpsc,
     },
@@ -21,17 +22,55 @@ pub struct NativeStop {
     #[cfg(test)]
     hwnd: usize,
     stop: Arc<AtomicBool>,
+    executors: Arc<ExecutorStops>,
     thread: Option<thread::JoinHandle<()>>,
     probe: bool,
 }
 struct Context {
     stop: Arc<AtomicBool>,
+    executors: Arc<ExecutorStops>,
     alive: Cell<bool>,
+}
+#[derive(Default)]
+struct ExecutorStops(Mutex<Vec<Weak<StopEvent>>>);
+impl ExecutorStops {
+    fn register(&self, stopped: &AtomicBool) -> Result<Arc<StopEvent>, &'static str> {
+        let event = Arc::new(StopEvent::new()?);
+        let mut entries = self.0.lock().map_err(|_| "native-stop-unavailable")?;
+        if stopped.load(Ordering::SeqCst) {
+            return Err("native-stop-unavailable");
+        }
+        entries.retain(|entry| entry.strong_count() != 0);
+        if entries.len() >= 8 {
+            return Err("native-stop-capacity");
+        }
+        entries.push(Arc::downgrade(&event));
+        Ok(event)
+    }
+    fn stop_all(&self, stopped: &AtomicBool) {
+        stopped.store(true, Ordering::SeqCst);
+        // Only registration uses this small lock. Ordinary I/O, dispatch,
+        // SessionGate, prompts and process waits never run under it.
+        let entries = self
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        for event in entries.iter().filter_map(Weak::upgrade) {
+            let _ = event.revoke();
+        }
+    }
+}
+impl Context {
+    fn revoke(&self) {
+        self.executors.stop_all(&self.stop);
+    }
 }
 impl NativeStop {
     pub fn start(stop: Arc<AtomicBool>, probe: bool) -> Result<Self, &'static str> {
         let (ready, receive) = mpsc::sync_channel(1);
         let thread_stop = stop.clone();
+        let executors = Arc::new(ExecutorStops::default());
+        let thread_executors = executors.clone();
         let worker = thread::spawn(move || unsafe {
             let module = GetModuleHandleW(ptr::null());
             let class = WNDCLASSW {
@@ -43,6 +82,7 @@ impl NativeStop {
             RegisterClassW(&class);
             let context = Context {
                 stop: thread_stop,
+                executors: thread_executors,
                 alive: Cell::new(false),
             };
             let context_pointer = (&context as *const Context).cast_mut();
@@ -129,7 +169,7 @@ impl NativeStop {
                         || IsWindowVisible(label) == 0
                         || IsWindowVisible(button) == 0))
             {
-                context.stop.store(true, Ordering::SeqCst);
+                context.revoke();
                 KillTimer(hwnd, 1);
                 if !probe {
                     UnregisterHotKey(hwnd, 1);
@@ -140,7 +180,7 @@ impl NativeStop {
                 return;
             }
             if ready.send(Ok(hwnd as usize)).is_err() {
-                context.stop.store(true, Ordering::SeqCst);
+                context.revoke();
             }
             let mut message = std::mem::zeroed();
             while !context.stop.load(Ordering::SeqCst)
@@ -149,7 +189,7 @@ impl NativeStop {
                 TranslateMessage(&message);
                 DispatchMessageW(&message);
             }
-            context.stop.store(true, Ordering::SeqCst);
+            context.revoke();
             if context.alive.get() {
                 KillTimer(hwnd, 1);
                 if !probe {
@@ -168,6 +208,7 @@ impl NativeStop {
                 #[cfg(test)]
                 hwnd: _hwnd,
                 stop,
+                executors,
                 thread: Some(worker),
                 probe,
             }),
@@ -183,6 +224,12 @@ impl NativeStop {
         }
         Ok(session)
     }
+    pub(crate) fn executor_stop(&self) -> Result<Arc<StopEvent>, &'static str> {
+        if self.probe {
+            return Err("native-stop-unavailable");
+        }
+        self.executors.register(&self.stop)
+    }
     #[cfg(test)]
     fn post(&self, message: u32) {
         unsafe {
@@ -193,7 +240,7 @@ impl NativeStop {
 impl Drop for NativeStop {
     fn drop(&mut self) {
         // No messages to an HWND that its owning thread may already have destroyed.
-        self.stop.store(true, Ordering::SeqCst);
+        self.executors.stop_all(&self.stop);
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
@@ -243,7 +290,7 @@ unsafe extern "system" fn window_proc(
                     | WM_COMMAND
             )
         {
-            (*context).stop.store(true, Ordering::SeqCst);
+            (*context).revoke();
             if message == WM_CLOSE {
                 return 0;
             }
@@ -257,7 +304,7 @@ unsafe extern "system" fn window_proc(
         }
         if message == WM_NCDESTROY && !context.is_null() {
             (*context).alive.set(false);
-            (*context).stop.store(true, Ordering::SeqCst);
+            (*context).revoke();
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         }
         DefWindowProcW(hwnd, message, wparam, lparam)
@@ -266,6 +313,32 @@ unsafe extern "system" fn window_proc(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::windows::io::AsRawHandle;
+    use windows_sys::Win32::System::Threading::WaitForSingleObject;
+
+    #[test]
+    fn stop_window_signals_registered_executor_events_and_seals_admission() {
+        let stop = Arc::new(AtomicBool::new(false));
+        let surface = NativeStop::start(stop.clone(), true).unwrap();
+        let first = surface.executors.register(&stop).unwrap();
+        let sibling = surface.executors.register(&stop).unwrap();
+        let first_reader = first.reader().unwrap();
+        let sibling_reader = sibling.reader().unwrap();
+        assert_eq!(
+            unsafe { WaitForSingleObject(first_reader.as_raw_handle(), 0) },
+            WAIT_TIMEOUT
+        );
+        surface.post(WM_CLOSE);
+        assert_eq!(
+            unsafe { WaitForSingleObject(first_reader.as_raw_handle(), 2000) },
+            WAIT_OBJECT_0
+        );
+        assert_eq!(
+            unsafe { WaitForSingleObject(sibling_reader.as_raw_handle(), 2000) },
+            WAIT_OBJECT_0
+        );
+        assert!(surface.executors.register(&stop).is_err());
+    }
     #[test]
     fn hidden_startup_cannot_hide_required_owned_controls() {
         if std::env::var_os("PALISADE_UI_HIDDEN_FIXTURE").is_some() {

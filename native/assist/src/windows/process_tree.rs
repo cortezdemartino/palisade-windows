@@ -43,30 +43,41 @@ impl std::fmt::Debug for LaunchFailure {
         f.write_str(self.error)
     }
 }
-pub struct StopEvent(OwnedHandle);
+pub struct StopEvent {
+    handle: OwnedHandle,
+    signal_failed: std::sync::atomic::AtomicBool,
+}
 impl StopEvent {
     pub(crate) fn raw(&self) -> usize {
-        self.0.as_raw_handle() as usize
+        self.handle.as_raw_handle() as usize
     }
     pub fn new() -> Result<Self, &'static str> {
         let raw = unsafe { CreateEventW(ptr::null(), 1, 0, ptr::null()) };
         if raw.is_null() {
             return Err("tree-stop-event");
         }
-        Ok(Self(unsafe { OwnedHandle::from_raw_handle(raw) }))
+        Ok(Self {
+            handle: unsafe { OwnedHandle::from_raw_handle(raw) },
+            signal_failed: std::sync::atomic::AtomicBool::new(false),
+        })
     }
     pub fn revoke(&self) -> Result<(), &'static str> {
-        if unsafe { SetEvent(self.0.as_raw_handle()) } == 0 {
+        if unsafe { SetEvent(self.handle.as_raw_handle()) } == 0 {
+            self.signal_failed
+                .store(true, std::sync::atomic::Ordering::SeqCst);
             return Err("tree-stop-event");
         }
         Ok(())
+    }
+    pub(crate) fn signal_failed(&self) -> bool {
+        self.signal_failed.load(std::sync::atomic::Ordering::SeqCst)
     }
     pub fn reader(&self) -> Result<OwnedHandle, &'static str> {
         let mut handle = ptr::null_mut();
         if unsafe {
             DuplicateHandle(
                 GetCurrentProcess(),
-                self.0.as_raw_handle(),
+                self.handle.as_raw_handle(),
                 GetCurrentProcess(),
                 &mut handle,
                 SYNCHRONIZATION_SYNCHRONIZE,

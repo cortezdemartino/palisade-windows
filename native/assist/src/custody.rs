@@ -91,6 +91,16 @@ impl Registry {
         if self.entries.len() >= CAPACITY {
             return Err("custody-capacity");
         }
+        // All native executors target the same interactive input stream. A new
+        // generation or session must wait for the old native custody to settle.
+        if mode == Mode::Native
+            && self
+                .entries
+                .values()
+                .any(|entry| entry.mode == Mode::Native && !self.complete(entry))
+        {
+            return Err("custody-cleanup-pending");
+        }
         if self.entries.contains_key(&execution)
             || self.entries.values().any(|entry| {
                 entry.ticket.nonce == nonce
@@ -243,31 +253,38 @@ impl Registry {
         Ok(())
     }
     pub fn input_settled(&self, ticket: &Ticket) -> Result<bool, &'static str> {
-        let entry = self.entry(ticket)?;
-        Ok(if !entry.armed {
-            entry.closing
-        } else {
-            entry.child_exited
-                && (entry.mirror_released || (self.coordinator_exited && entry.child_released))
-        })
+        Ok(self.settled(self.entry(ticket)?))
+    }
+    fn settled(&self, entry: &Entry) -> bool {
+        if !entry.armed {
+            return entry.closing;
+        }
+        if !entry.child_exited {
+            return false;
+        }
+        match entry.mode {
+            // Neither process exit nor the surviving party's receipt supplies
+            // the missing proof for an armed native generation.
+            Mode::Native => entry.child_released && entry.mirror_released,
+            Mode::Probe => {
+                entry.mirror_released || (self.coordinator_exited && entry.child_released)
+            }
+        }
+    }
+    fn complete(&self, entry: &Entry) -> bool {
+        (entry.phase == Phase::NeverStarted || entry.child_exited) && self.settled(entry)
     }
     pub fn completion(&self, ticket: &Ticket) -> Result<Option<Completion>, &'static str> {
         let entry = self.entry(ticket)?;
-        let process_complete = entry.phase == Phase::NeverStarted || entry.child_exited;
-        Ok(
-            (process_complete && self.input_settled(ticket)?).then(|| Completion {
-                ticket: ticket.clone(),
-                mode: entry.mode,
-            }),
-        )
+        Ok(self.complete(entry).then(|| Completion {
+            ticket: ticket.clone(),
+            mode: entry.mode,
+        }))
     }
     /// Includes ONLY registered entries, not arbitrary descendants/resources.
     /// Full launch cleanup additionally seals admission and verifies actual jobs.
     pub fn known_entries_complete(&self) -> bool {
-        self.entries.values().all(|entry| {
-            self.completion(&entry.ticket)
-                .is_ok_and(|proof| proof.is_some())
-        })
+        self.entries.values().all(|entry| self.complete(entry))
     }
     pub fn sealed_entries_complete(&self) -> bool {
         self.closing && self.known_entries_complete()
@@ -321,7 +338,7 @@ mod tests {
         assert!(registry.known_entries_complete());
     }
     #[test]
-    fn child_recovery_needs_actual_coordinator_and_child_exit() {
+    fn native_child_receipt_and_both_exits_cannot_replace_mirror_proof() {
         for child_first in [true, false] {
             let (mut registry, ticket) = armed();
             registry.child_released(&ticket, Mode::Native).unwrap();
@@ -334,7 +351,7 @@ mod tests {
                 assert!(registry.completion(&ticket).unwrap().is_none());
                 registry.child_exited(&ticket, process()).unwrap();
             }
-            assert!(registry.completion(&ticket).unwrap().is_some());
+            assert!(registry.completion(&ticket).unwrap().is_none());
         }
     }
     #[test]
@@ -348,11 +365,13 @@ mod tests {
         // No time, exit-code or job-zero method exists that can manufacture proof.
     }
     #[test]
-    fn mirror_may_recover_a_fenced_child_without_a_child_receipt() {
+    fn native_mirror_proof_cannot_replace_the_child_receipt() {
         let (mut registry, ticket) = armed();
         registry.child_exited(&ticket, process()).unwrap();
         assert!(registry.completion(&ticket).unwrap().is_none());
         registry.mirror_released(&ticket, Mode::Native).unwrap();
+        assert!(registry.completion(&ticket).unwrap().is_none());
+        registry.child_released(&ticket, Mode::Native).unwrap();
         assert!(registry.completion(&ticket).unwrap().is_some());
     }
     #[test]
@@ -370,6 +389,8 @@ mod tests {
             assert_eq!(registry.completion(&ticket).unwrap().is_some(), !arm_first);
             if arm_first {
                 registry.mirror_released(&ticket, Mode::Native).unwrap();
+                assert!(!registry.known_entries_complete());
+                registry.child_released(&ticket, Mode::Native).unwrap();
             }
             assert!(registry.known_entries_complete());
         }
@@ -442,6 +463,15 @@ mod tests {
         let (mut registry, old) = armed();
         registry.child_exited(&old, process()).unwrap();
         registry.mirror_released(&old, Mode::Native).unwrap();
+        assert_eq!(
+            registry.reserve("session_fixture_01", 1, 2, [4; 32], Mode::Native),
+            Err("custody-cleanup-pending")
+        );
+        assert_eq!(
+            registry.reserve("session_other_01", 2, 2, [4; 32], Mode::Native),
+            Err("custody-cleanup-pending")
+        );
+        registry.child_released(&old, Mode::Native).unwrap();
         let next = registry
             .reserve("session_fixture_01", 1, 2, [4; 32], Mode::Native)
             .unwrap();

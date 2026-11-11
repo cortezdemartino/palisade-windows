@@ -176,6 +176,7 @@ pub struct Executor<B: Backend> {
     last_source: Option<Source>,
     epoch: Option<u64>,
     cleanup_pending: bool,
+    mirror_failed: bool,
     receipt_issued: bool,
 }
 impl<B: Backend> Executor<B> {
@@ -214,6 +215,7 @@ impl<B: Backend> Executor<B> {
             last_source: None,
             epoch: None,
             cleanup_pending: false,
+            mirror_failed: false,
             receipt_issued: false,
         }
     }
@@ -371,7 +373,7 @@ impl<B: Backend> Executor<B> {
                     }
                     self.ledger.plan(&step)?;
                     self.owners.entry(owner.clone()).or_default().plan(&step)?;
-                    self.backend.intent(&self.ledger)?;
+                    self.synchronize_mirror()?;
                 }
                 let (now, t) = clock()?;
                 gate.validate_permit(&permit, source.generation, now, t)?;
@@ -388,7 +390,7 @@ impl<B: Backend> Executor<B> {
                             self.owners.remove(&owner);
                         }
                     }
-                    self.backend.intent(&self.ledger)?;
+                    self.synchronize_mirror()?;
                 }
                 let (now, t) = clock()?;
                 gate.tick(now, t)?;
@@ -409,6 +411,22 @@ impl<B: Backend> Executor<B> {
         self.backend.finish();
         result
     }
+    fn synchronize_mirror(&mut self) -> Result<(), &'static str> {
+        let result = self.backend.intent(&self.ledger);
+        if result.is_err() && self.backend.requires_registration() {
+            self.mirror_failed = true;
+        }
+        result
+    }
+    fn confirm_mirror_settlement(&mut self) -> Result<(), &'static str> {
+        self.synchronize_mirror()?;
+        if self.mirror_failed {
+            // A later write can update the mirror. It cannot prove settlement
+            // of the earlier failed native generation.
+            return Err("mirror-settlement-failed");
+        }
+        Ok(())
+    }
     pub fn release_owned(&mut self, source: &Source) -> Result<(), &'static str> {
         self.cleanup_pending = true;
         let result = (|| {
@@ -422,12 +440,12 @@ impl<B: Backend> Executor<B> {
                 self.backend.cleanup_allowed()?;
                 self.backend.apply(source, &action)?;
                 self.ledger.plan(&action)?;
-                self.backend.intent(&self.ledger)?;
+                self.synchronize_mirror()?;
             }
             // Empty local state is not proof that the surviving backend mirror
             // received the last handover/release. Keep the owner until its final
             // empty intent is acknowledged, including terminal cleanup retries.
-            self.backend.intent(&self.ledger)?;
+            self.confirm_mirror_settlement()?;
             self.owners.clear();
             self.cleanup_pending = false;
             Ok(())
@@ -470,12 +488,12 @@ impl<B: Backend> Executor<B> {
                     }
                 }
                 self.owners.retain(|_, owned| owned.held());
-                self.backend.intent(&self.ledger)?;
+                self.synchronize_mirror()?;
                 completed.push((action, disposition));
             }
             // Retry a failed final mirror write even if its positive delivery
             // acknowledgement already left the local ledger empty.
-            self.backend.intent(&self.ledger)?;
+            self.confirm_mirror_settlement()?;
             self.cleanup_pending = false;
             Ok(completed)
         })();

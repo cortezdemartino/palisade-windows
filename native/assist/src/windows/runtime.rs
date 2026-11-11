@@ -10,6 +10,7 @@ use super::{
     lease::{self, LeasePoller},
     lifecycle::NativeStop,
     process_input::ProcessInput,
+    process_tree::StopEvent,
 };
 use crate::{
     executor::Executor,
@@ -38,11 +39,13 @@ enum Work {
 }
 pub use crate::input::InputProfile;
 /// Prepared before authority and cloned into urgent readers/watchdogs. Calling
-/// either method touches only atomics, never registry/UI/network/join locks.
+/// either method signals the retained native event and uses atomics, without
+/// taking a SessionGate, UI, network or join lock.
 #[derive(Clone)]
 pub struct RuntimeRevoker {
     stop: crate::cancellation::SessionStop,
     input_stop: Arc<AtomicBool>,
+    executor_stop: Option<Arc<StopEvent>>,
     ready: Arc<AtomicBool>,
     lease_cancel: Arc<AtomicBool>,
     files: Option<super::files::FileRevoker>,
@@ -51,6 +54,9 @@ impl RuntimeRevoker {
     pub fn suspend_input(&self) {
         self.input_stop.store(true, Ordering::SeqCst);
         self.ready.store(false, Ordering::SeqCst);
+        if let Some(event) = &self.executor_stop {
+            let _ = event.revoke();
+        }
     }
     pub fn revoke(&self) {
         self.stop.revoke();
@@ -66,6 +72,7 @@ pub struct StreamRuntime {
     source: Option<Arc<Mutex<Source>>>,
     stop: crate::cancellation::SessionStop,
     input_stop: Arc<AtomicBool>,
+    executor_stop: Option<Arc<StopEvent>>,
     identity: Arc<EndpointIdentity>,
     prompts: BTreeMap<String, Prompt>,
     poller: Option<LeasePoller>,
@@ -172,12 +179,13 @@ impl StreamRuntime {
             return Err("invalid-session");
         }
         ordinary_desktop()?;
-        if grants.iter().any(|g| {
+        let has_input_grant = grants.iter().any(|g| {
             matches!(
                 g.grant.capability.as_str(),
                 "control_mouse" | "control_keyboard"
             )
-        }) {
+        });
+        if has_input_grant {
             if !cfg!(feature = "native-input") {
                 return Err("native-input-disabled");
             }
@@ -200,17 +208,29 @@ impl StreamRuntime {
             None
         };
         let source = source.map(|s| Arc::new(Mutex::new(s)));
+        // This runtime can admit at most one executor generation. Register its
+        // event with the independent local Stop owner before creating the worker.
+        let executor_stop = has_input_grant
+            .then(|| stop_surface.executor_stop())
+            .transpose()?;
+        let lease_executor_stop = executor_stop.clone();
         let lost = stop.clone();
         let poller = LeasePoller::start(
             identity.clone(),
             gate.clone(),
-            Arc::new(move || lost.revoke()),
+            Arc::new(move || {
+                lost.revoke();
+                if let Some(event) = &lease_executor_stop {
+                    let _ = event.revoke();
+                }
+            }),
         );
         let lease_cancel = poller.cancel_flag();
         let (work, receive) = mpsc::sync_channel(1);
         let ready = Arc::new(AtomicBool::new(false));
         let input_stop = Arc::new(AtomicBool::new(false));
         let worker_input_stop = input_stop.clone();
+        let worker_executor_stop = executor_stop.clone();
         let worker_ready = ready.clone();
         let (worker_gate, worker_source, worker_stop) =
             (gate.clone(), source.clone(), stop.clone());
@@ -266,6 +286,10 @@ impl StreamRuntime {
                         && quiet_since.elapsed() >= Duration::from_millis(250)
                     {
                         let result = (|| {
+                            let direct_stop = worker_executor_stop
+                                .as_ref()
+                                .ok_or("executor-stop-required")?
+                                .clone();
                             // The slot remains held until the child is fenced and
                             // its owned input is released, across all streams.
                             owner = Some(InputOwner::acquire()?);
@@ -286,6 +310,7 @@ impl StreamRuntime {
                                 false,
                                 &manifest,
                                 owner.as_ref().ok_or("input-owner-required")?,
+                                direct_stop,
                             ) {
                                 Ok(child) => child,
                                 Err(error) => {
@@ -454,6 +479,7 @@ impl StreamRuntime {
             source,
             stop,
             input_stop,
+            executor_stop,
             identity,
             prompts: BTreeMap::new(),
             poller: Some(poller),
@@ -597,6 +623,7 @@ impl StreamRuntime {
         RuntimeRevoker {
             stop: self.stop.clone(),
             input_stop: self.input_stop.clone(),
+            executor_stop: self.executor_stop.clone(),
             ready: self.ready.clone(),
             lease_cancel: self.lease_cancel.clone(),
             files: self.files.as_ref().map(|f| f.revoker()),
@@ -657,6 +684,10 @@ impl StreamRuntime {
                 self.cleanup_failed = true;
             }
         }
+        self.cleanup_failed |= self
+            .executor_stop
+            .as_ref()
+            .is_some_and(|event| event.signal_failed());
         if self.cleanup_failed {
             Err("runtime-cleanup-failed")
         } else {
@@ -716,6 +747,7 @@ mod tests {
         let revoker = |stop| RuntimeRevoker {
             stop,
             input_stop: Arc::new(AtomicBool::new(false)),
+            executor_stop: Some(Arc::new(StopEvent::new().unwrap())),
             ready: Arc::new(AtomicBool::new(true)),
             lease_cancel: Arc::new(AtomicBool::new(false)),
             files: None,
@@ -736,11 +768,21 @@ mod tests {
         let revoker = RuntimeRevoker {
             stop: Arc::new(AtomicBool::new(false)).into(),
             input_stop: Arc::new(AtomicBool::new(false)),
+            executor_stop: Some(Arc::new(StopEvent::new().unwrap())),
             ready: Arc::new(AtomicBool::new(true)),
             lease_cancel: Arc::new(AtomicBool::new(false)),
             files: None,
         };
         revoker.suspend_input();
+        use std::os::windows::io::AsRawHandle;
+        use windows_sys::Win32::{
+            Foundation::WAIT_OBJECT_0, System::Threading::WaitForSingleObject,
+        };
+        let reader = revoker.executor_stop.as_ref().unwrap().reader().unwrap();
+        assert_eq!(
+            unsafe { WaitForSingleObject(reader.as_raw_handle(), 0) },
+            WAIT_OBJECT_0
+        );
         assert!(revoker.input_stop.load(Ordering::SeqCst));
         assert!(!revoker.ready.load(Ordering::SeqCst));
         assert!(!revoker.stop.is_stopped());

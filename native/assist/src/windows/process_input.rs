@@ -139,16 +139,13 @@ impl ProcessInput {
         probe: bool,
         manifest: &super::image::ImageManifest,
         owner: &super::input_owner::InputOwner,
+        direct_stop: Arc<super::process_tree::StopEvent>,
     ) -> Result<Self, &'static str> {
         if !probe && !cfg!(feature = "native-input") {
             return Err("native-input-disabled");
         }
         let verified = super::image::VerifiedImage::open(manifest)?;
-        let stop = if probe {
-            None
-        } else {
-            Some(Arc::new(super::process_tree::StopEvent::new()?))
-        };
+        let stop = (!probe).then_some(direct_stop);
         let mut command = Command::new(verified.path());
         command.args([
             if probe {
