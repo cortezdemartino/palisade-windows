@@ -70,7 +70,12 @@ impl Endpoint {
             _ => (),
         }
         if let Operation::Hello { versions } = operation {
-            if versions.is_empty() || versions.len() > 4 || versions.contains(&0) {
+            if versions.is_empty()
+                || versions.len() > 4
+                || versions
+                    .iter()
+                    .any(|v| *v == 0 || *v > 9_007_199_254_740_991)
+            {
                 return Err(Error::InvalidMessage);
             }
             if !versions.contains(&1) {
@@ -206,6 +211,31 @@ mod tests {
     }
     fn hello() -> Operation {
         Operation::Hello { versions: vec![1] }
+    }
+    #[test]
+    fn native_version_negotiation_retains_canonical_safe_integer_range() {
+        let mut e = endpoint();
+        assert!(matches!(
+            e.dispatch(
+                0,
+                Operation::Hello {
+                    versions: vec![9_007_199_254_740_991, 1]
+                }
+            ),
+            Answer::Ok { .. }
+        ));
+        let mut e = endpoint();
+        assert!(matches!(
+            e.dispatch(
+                0,
+                Operation::Hello {
+                    versions: vec![9_007_199_254_740_992, 1]
+                }
+            ),
+            Answer::Error {
+                code: Error::InvalidMessage
+            }
+        ));
     }
     #[test]
     fn negotiation_and_document_replacement_are_native_enforced() {

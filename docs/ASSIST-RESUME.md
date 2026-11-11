@@ -4,6 +4,10 @@
 
 Continue from the [November 11 connected endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md).
 Implementation pushed at `2f8f258edc7b3f03b863e6af9984eb4def8f9ef2`.
+The subsequent version-offer conformance fix preserves all canonical safe integers;
+local native verification is now 205 tests per configuration. Both that initial
+source checkpoint and `d476476` documentation checkpoint passed exact-SHA CI.
+Check issue #1 for the final correction's CI outcome before claiming final success.
 Electron now owns a private-v3 persistent native monitor/coordinator and canonical
 enrollment dispatcher behind an explicit isolated qualification build. Public
 desktop builds remain inactive. Real compiled-helper and isolated Electron

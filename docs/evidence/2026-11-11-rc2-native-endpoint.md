@@ -127,7 +127,7 @@ Local candidate verification passed:
 
 - `npm run check`: 226 application tests and syntax checks.
 - `npm run test:assist-native`: formatting, strict all-target/all-feature Clippy,
-  150 library plus 54 integration tests in each default/all-feature configuration.
+  151 library plus 54 integration tests in each default/all-feature configuration.
 - `npm run test:assist-process`: 33 real no-authority process groups per build
   configuration and the separate hidden-startup native-control fixture.
 - `npm run package:win`: Windows x64 NSIS packaging. No installer was executed.
@@ -161,7 +161,17 @@ mandatory-pin behavior returns `issuer-changed`, and its expectation was correct
 
 The implementation was pushed to main. Exact-source Windows build
 [42986856090](https://github.com/cortezdemartino/palisade-windows/actions/runs/42986856090)
-was running at this evidence update; its eventual result must be checked before
-claiming CI success. The final documentation-only commit also triggers an
-exact-SHA Windows build. GitHub issue #1 records its terminal outcome.
+passed. Documentation checkpoint `d47647696dfb42d73ba8591c39ef5654480fefa5`
+also passed [42987179543](https://github.com/cortezdemartino/palisade-windows/actions/runs/42987179543).
+
+A final conformance correction widens the private version-offer representation
+from u32 to u64, enforcing the canonical JavaScript safe-integer range rather
+than narrowing a valid offer. It still negotiates only supported native version 1.
+New boundary tests and actual monitor/coordinator hello with
+`[Number.MAX_SAFE_INTEGER, 1]` pass. Full native suites now total 205 per
+configuration; both 33-group process suites, final NSIS, packaged integrity and
+actual isolated Electron/native crash checks were rerun successfully. Independent
+source review cleared this correction within the same inactive scope.
+This correction triggers a further exact-SHA Windows build; issue #1 records its
+terminal outcome so a pending run is never represented as passed.
 No release tag, signing workflow, publication, deployment or installation ran.

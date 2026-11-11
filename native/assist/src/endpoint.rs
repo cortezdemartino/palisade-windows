@@ -7,7 +7,7 @@ use serde_json::Value;
 #[serde(tag = "op", deny_unknown_fields)]
 pub enum Operation {
     #[serde(rename = "hello")]
-    Hello { versions: Vec<u32> },
+    Hello { versions: Vec<u64> },
     #[serde(rename = "enroll.key")]
     EnrollKey { origin: String },
     #[serde(rename = "enroll.prove", rename_all = "camelCase")]
