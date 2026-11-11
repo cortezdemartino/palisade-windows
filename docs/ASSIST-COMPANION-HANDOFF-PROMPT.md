@@ -4,6 +4,9 @@ Continue in `cortezdemartino/project-palisade` on main. The Windows repository i
 read-only in that assignment. Start from current main, retaining candidate
 `5fd1958358e2a56d965a4952c35eb6281d461b3e` and evidence
 `ea9f927e90389677fd7a41a86fffc808027d1ce3` as inspected checkpoints.
+Windows implementation checkpoint:
+`2f8f258edc7b3f03b863e6af9984eb4def8f9ef2`. Companion readiness/evidence updates
+through `3a75ffed2fb38a49578717a590a4fae1c7ae3735` retain the same frozen wire.
 
 The cooperative contract is already frozen. Do not recreate it, change the nine
 fixture families, weaken the 30 acceptance cases or advertise unsupported native

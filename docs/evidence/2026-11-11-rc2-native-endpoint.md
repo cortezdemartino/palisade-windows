@@ -1,6 +1,7 @@
 # RC-2 persistent endpoint checkpoint
 
 Starting Windows revision: `3bebe84065fc92de50f3c74658976d11a3919234`.
+Implementation revision: `2f8f258edc7b3f03b863e6af9984eb4def8f9ef2`.
 Companion inspected read-only at `ea9f927e90389677fd7a41a86fffc808027d1ce3`,
 including candidate `5fd1958358e2a56d965a4952c35eb6281d461b3e`.
 The frozen nine fixture families and all 30 acceptance cases are unchanged.
@@ -12,6 +13,9 @@ The control, cooperative and extension source blobs independently match
 `005ac6ce6ca4b7c4fc27bcc32aa6d9d5f7ad03e1` respectively.
 The yield fixture SHA-256 remains
 `5e678a011977aa063bba30200234ae9bb0fd971196daf198143e208155b74e89`.
+Companion main advanced during implementation to
+`3a75ffed2fb38a49578717a590a4fae1c7ae3735` with readiness/evidence updates.
+Its frozen source blobs and manifest were rechecked and remain identical.
 
 ## Connected implementation
 
@@ -154,3 +158,10 @@ document-replacement test retried an already revoked channel and hit its watchdo
 the corrected test verifies terminal refusal and joins that channel. An older
 issuer test expected `issuer-unqualified` for a wrong explicit pin; the stricter
 mandatory-pin behavior returns `issuer-changed`, and its expectation was corrected.
+
+The implementation was pushed to main. Exact-source Windows build
+[42986856090](https://github.com/cortezdemartino/palisade-windows/actions/runs/42986856090)
+was running at this evidence update; its eventual result must be checked before
+claiming CI success. The final documentation-only commit also triggers an
+exact-SHA Windows build. GitHub issue #1 records its terminal outcome.
+No release tag, signing workflow, publication, deployment or installation ran.

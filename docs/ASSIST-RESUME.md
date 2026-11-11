@@ -3,6 +3,7 @@
 ## Active work: RC-2
 
 Continue from the [November 11 connected endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md).
+Implementation pushed at `2f8f258edc7b3f03b863e6af9984eb4def8f9ef2`.
 Electron now owns a private-v3 persistent native monitor/coordinator and canonical
 enrollment dispatcher behind an explicit isolated qualification build. Public
 desktop builds remain inactive. Real compiled-helper and isolated Electron
@@ -17,7 +18,7 @@ for input cleanup or describe native confirmation as service proof.
 The compiled test profile requires independently supplied disposable issuer/TLS
 and device approval; no production trust material is generated.
 
-Companion inspected read-only at `ea9f927e90389677fd7a41a86fffc808027d1ce3`;
+Companion inspected read-only through `3a75ffed2fb38a49578717a590a4fae1c7ae3735`;
 candidate `5fd1958358e2a56d965a4952c35eb6281d461b3e`. Frozen hashes and all 30
 cases remain unchanged. No release, installation or activation is authorized.
 
