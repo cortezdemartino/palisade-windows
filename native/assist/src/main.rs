@@ -90,7 +90,7 @@ fn run() -> Result<(), &'static str> {
             },
         );
     }
-    if args.len() == 5
+    if args.len() == 8
         && args[0] == "--endpoint-coordinator"
         && ["normal", "probe"].contains(&args[4].as_str())
     {
@@ -99,6 +99,9 @@ fn run() -> Result<(), &'static str> {
             args[4] == "probe",
             args[2].parse().map_err(|_| "tree-handles")?,
             args[3].parse().map_err(|_| "tree-handles")?,
+            args[5].parse().map_err(|_| "custody-handles")?,
+            args[6].parse().map_err(|_| "custody-handles")?,
+            args[7].parse().map_err(|_| "custody-handles")?,
         );
     }
     if args.len() == 2 && args[0] == "--custody-coordinator-probe" {
@@ -170,19 +173,21 @@ fn run() -> Result<(), &'static str> {
             args[0] == "--live-probe",
         );
     }
-    if (args.len() == 3 && args[0] == "--executor-probe")
-        || (args.len() == 5 && args[0] == "--executor")
+    if args.len() == 3
+        && args[0] == "--owned-executor"
+        && ["probe", "native"].contains(&args[2].as_str())
     {
+        return palisade_assist_guardian::windows::process_input::run_owned_child(
+            args[1].parse().map_err(|_| "invalid-parent")?,
+            args[2] == "probe",
+        );
+    }
+    if (args.len() == 3 || args.len() == 4) && args[0] == "--executor-probe" {
         return palisade_assist_guardian::windows::process_input::run_child(
             args[1].parse().map_err(|_| "invalid-parent")?,
             args[2].parse().map_err(|_| "invalid-tag")?,
-            args[0] == "--executor-probe",
-            args.get(3)
-                .map(|v| v.parse().map_err(|_| "invalid-owner"))
-                .transpose()?,
-            args.get(4)
-                .map(|v| v.parse().map_err(|_| "invalid-stop"))
-                .transpose()?,
+            true,
+            args.get(3).cloned(),
         );
     }
     if args.len() != 2 || !["--guardian", "--probe"].contains(&args[0].as_str()) {

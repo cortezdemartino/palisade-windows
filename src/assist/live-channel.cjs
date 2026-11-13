@@ -70,7 +70,7 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     const id = sequence++, prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length);
     let resolve, reject;
     const answer = new Promise((done, fail) => { resolve = done; reject = fail; });
-    const entry = { type: command.type, document: command.document, operation: command.operation, resolve, reject, done: false, timer: null };
+    const entry = { type: command.type, document: command.document, operation: command.operation, release: command.release, resolve, reject, done: false, timer: null };
     pending.set(id, entry);
     if (timeoutMs) entry.timer = setTimeout(() => {
       if (entry.done) return;
@@ -100,6 +100,10 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       ['inactive', 'revoked'].includes(result.state) && result.authority === 'none';
     if (entry.type === 'shutdown') return exact(result, ['type', 'challenge', 'scope']) && result.type === 'cleanup-complete' &&
       result.challenge === challenge && result.scope === scope;
+    if (entry.type === 'probe-executor' && endpoint && probe) return exact(result, ['type', 'pid', 'coordinator', 'released']) && result.type === entry.type &&
+      result.released === entry.release && Number.isInteger(result.pid) && result.pid > 0 && Number.isInteger(result.coordinator) && result.coordinator > 0 && result.pid !== result.coordinator;
+    if (entry.type === 'probe-executor-cancel' && endpoint && probe) return exact(result, ['type', 'pid', 'coordinator']) && result.type === entry.type &&
+      Number.isInteger(result.pid) && result.pid > 0 && Number.isInteger(result.coordinator) && result.coordinator > 0 && result.pid !== result.coordinator;
     if (entry.type === 'probe-stop-holder' && ownedTree && probe) return exact(result, ['type', 'pid', 'coordinator']) && result.type === entry.type &&
       Number.isInteger(result.pid) && result.pid > 0 && Number.isInteger(result.coordinator) && result.coordinator > 0 && result.pid !== result.coordinator;
     return ['pulse', 'probe-wait', ...(ownedTree && probe ? ['probe-descendant'] : [])].includes(entry.type) && exact(result, ['type']) && result.type === entry.type;
@@ -188,6 +192,8 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     if (probe && ownedTree) api.probeDescendant = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 2000
       ? send({ type: 'probe-descendant', milliseconds }) : Promise.reject(unavailable());
     if (probe && ownedTree) api.probeStopHolder = () => send({ type: 'probe-stop-holder' });
+    if (probe && endpoint) api.probeExecutor = release => typeof release === 'boolean' ? send({ type: 'probe-executor', release }, 10_000) : Promise.reject(unavailable());
+    if (probe && endpoint) api.probeExecutorCancel = () => send({ type: 'probe-executor-cancel' }, 10_000);
     return Object.freeze(api);
   } catch (error) {
     revoke();

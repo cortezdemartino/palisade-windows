@@ -2,6 +2,109 @@ use super::*;
 use std::{fs, os::windows::process::CommandExt, path::PathBuf, sync::atomic::AtomicU64, thread};
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
+fn terminal_fixture() -> TerminalReceipt {
+    TerminalReceipt {
+        protocol: "palisade.assist.executor-terminal".into(),
+        version: 1,
+        creator: std::process::id(),
+        executor: 456,
+        tag: 123,
+        nonce: "A".repeat(43),
+        mode: crate::custody::Mode::Native,
+        fenced: true,
+        owned_clear: true,
+    }
+}
+#[test]
+fn dedicated_receipt_parser_requires_one_complete_bounded_strict_frame_and_eof() {
+    use std::io::Cursor;
+    let mut valid = Vec::new();
+    crate::framing::write_bounded(
+        &mut valid,
+        &serde_json::to_vec(&terminal_fixture()).unwrap(),
+        4096,
+    )
+    .unwrap();
+    assert!(read_terminal(Cursor::new(&valid)).is_ok());
+    for length in 0..valid.len() {
+        assert!(read_terminal(Cursor::new(&valid[..length])).is_err());
+    }
+    let mut twice = valid.clone();
+    twice.extend(&valid);
+    assert!(read_terminal(Cursor::new(twice)).is_err());
+    let mut trailing = valid.clone();
+    trailing.push(1);
+    assert!(read_terminal(Cursor::new(trailing)).is_err());
+    for bytes in [
+        br#"{"version":1,"version":1}"#.as_slice(),
+        br#"{"approved":true}"#,
+        b"not-json",
+        &vec![b'x'; 4097],
+    ] {
+        let mut frame = (bytes.len() as u32).to_le_bytes().to_vec();
+        frame.extend(bytes);
+        assert!(read_terminal(Cursor::new(frame)).is_err());
+    }
+}
+#[test]
+fn terminal_receipts_bind_actor_generation_mode_and_sticky_failure() {
+    for field in [
+        "valid", "creator", "executor", "tag", "nonce", "mode", "fenced", "owned",
+    ] {
+        let (send, receive) = mpsc::sync_channel(2);
+        let mut owner = TerminalOwner {
+            nonce: "A".repeat(43),
+            tag: 123,
+            child: 456,
+            expected_mode: crate::custody::Mode::Native,
+            receive,
+            confirmed: false,
+            failed: false,
+        };
+        assert_eq!(owner.poll(), Err("executor-cleanup-pending"));
+        let mut receipt = terminal_fixture();
+        match field {
+            "creator" => receipt.creator += 1,
+            "executor" => receipt.executor += 1,
+            "tag" => receipt.tag += 1,
+            "nonce" => receipt.nonce = "B".repeat(43),
+            "mode" => receipt.mode = crate::custody::Mode::Probe,
+            "fenced" => receipt.fenced = false,
+            "owned" => receipt.owned_clear = false,
+            _ => (),
+        }
+        send.send(Ok(receipt)).unwrap();
+        if field == "valid" {
+            owner.poll().unwrap();
+            owner.poll().unwrap();
+        } else {
+            assert_eq!(owner.poll(), Err("executor-cleanup-unproven"));
+            send.send(Ok(terminal_fixture())).unwrap();
+            assert_eq!(owner.poll(), Err("executor-cleanup-unproven"));
+        }
+    }
+}
+#[test]
+fn missing_or_invalid_terminal_never_becomes_an_empty_ledger_success() {
+    for invalid in [false, true] {
+        let (send, receive) = mpsc::sync_channel(1);
+        let mut owner = TerminalOwner {
+            nonce: "A".repeat(43),
+            tag: 123,
+            child: 456,
+            expected_mode: crate::custody::Mode::Native,
+            receive,
+            confirmed: false,
+            failed: false,
+        };
+        if invalid {
+            send.send(Err("executor-terminal-extra")).unwrap();
+        }
+        drop(send);
+        assert_eq!(owner.poll(), Err("executor-cleanup-unproven"));
+        assert_eq!(owner.poll(), Err("executor-cleanup-unproven"));
+    }
+}
 fn fixture_files() -> Fixture {
     let root = std::env::temp_dir().join(format!(
         "palisade-input-fence-{}-{}-{}",

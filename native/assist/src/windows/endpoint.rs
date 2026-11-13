@@ -25,9 +25,19 @@ pub struct Endpoint {
     enrollment: Option<Enrollment>,
     attempted: BTreeSet<String>,
     proof_prepared: bool,
+    custody: Option<Arc<super::process_input::custody::Client>>,
+    probe_executor: Option<super::process_input::ProcessInput>,
+    probe_generation: u64,
 }
 impl Endpoint {
     pub fn new(probe: bool, cancelled: Arc<AtomicBool>) -> Self {
+        Self::with_custody(probe, cancelled, None)
+    }
+    pub(crate) fn with_custody(
+        probe: bool,
+        cancelled: Arc<AtomicBool>,
+        custody: Option<Arc<super::process_input::custody::Client>>,
+    ) -> Self {
         Self {
             document: None,
             negotiated: false,
@@ -38,6 +48,9 @@ impl Endpoint {
             enrollment: None,
             attempted: BTreeSet::new(),
             proof_prepared: false,
+            custody,
+            probe_executor: None,
+            probe_generation: 0,
         }
     }
     fn live(&self) -> Result<(), Error> {
@@ -175,12 +188,95 @@ impl Endpoint {
     }
     pub fn revoke(&mut self) {
         self.cancelled.store(true, Ordering::SeqCst);
+        drop(self.probe_executor.take());
+        if let Some(custody) = self.custody.take() {
+            let _ = custody.seal();
+        }
         if let Some(record) = self.enrollment.take() {
             record.revoke();
         }
         self.proof_prepared = false;
         self.identity = None;
         self.issuer = None;
+    }
+    /// Private no-authority process fixture. No canonical web operation routes
+    /// here; the monitor fixes Probe mode independently of this request.
+    pub(crate) fn probe_executor(&mut self, release: bool) -> Result<u32, &'static str> {
+        use crate::executor::{Backend, Source};
+        if !self.probe {
+            return Err("operation-unavailable");
+        }
+        if release {
+            let input = self.probe_executor.take().ok_or("probe-not-held")?;
+            let pid = input.pid();
+            drop(input);
+            return Ok(pid);
+        }
+        if self.probe_executor.is_some() {
+            return Err("probe-held");
+        }
+        let client = self.custody.as_ref().ok_or("custody-required")?;
+        if !client.probe() {
+            return Err("probe-required");
+        }
+        self.probe_generation = self
+            .probe_generation
+            .checked_add(1)
+            .ok_or("probe-exhausted")?;
+        let source = Source {
+            x: -100,
+            y: 0,
+            width: 100,
+            height: 100,
+            generation: 1,
+        };
+        let mut input = super::process_input::ProcessInput::spawn_monitored(
+            client,
+            super::process_input::custody::Registration {
+                session: "session_monitor_probe".into(),
+                slot: 1,
+                execution: self.probe_generation,
+                source: source.clone(),
+            },
+            123,
+            0,
+            Arc::new(super::process_tree::StopEvent::new()?),
+        )?;
+        let mut ledger = crate::input::Ledger::default();
+        let action = crate::input::Action::Key {
+            code: "ShiftLeft".into(),
+            down: true,
+        };
+        ledger.plan(&action)?;
+        input.intent(&ledger)?;
+        input.apply(&source, &action)?;
+        let pid = input.pid();
+        self.probe_executor = Some(input);
+        Ok(pid)
+    }
+    pub(crate) fn probe_cancel_executor(&mut self) -> Result<u32, &'static str> {
+        if !self.probe || self.probe_executor.is_some() {
+            return Err("probe-required");
+        }
+        self.probe_generation = self
+            .probe_generation
+            .checked_add(1)
+            .ok_or("probe-exhausted")?;
+        super::process_input::ProcessInput::probe_cancel_startup(
+            self.custody.as_ref().ok_or("custody-required")?,
+            super::process_input::custody::Registration {
+                session: "session_monitor_probe".into(),
+                slot: 1,
+                execution: self.probe_generation,
+                source: crate::executor::Source {
+                    x: -100,
+                    y: 0,
+                    width: 100,
+                    height: 100,
+                    generation: 1,
+                },
+            },
+        )
     }
 }
 impl Drop for Endpoint {

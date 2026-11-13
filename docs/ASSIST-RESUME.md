@@ -1,6 +1,26 @@
 # Assist continuation checkpoint
 
-## Active work: RC-2
+## Active work: RC-3
+
+Continue from the [normal executor custody checkpoint](evidence/2026-11-13-rc3-executor-custody.md).
+Starting SHA: `b0720e3e69e238dd637106d60e19c0eca8e68203`.
+Private v3 now supplies the monitor-owned normal executor transport: reservation,
+sealed source/ARM, retained handoff, child terminal and coordinator mirror evidence.
+The runtime factory's existing gate reservation uses it. Direct cancellation
+bypasses ordinary custody work. Missing Native evidence retains ownership.
+Do not recreate the custody registry, executor or grant/lease verifiers.
+
+Next: canonical grant.offer into one persistent session registry, native source
+binding/protected consent, then peer, reacquisition and resources. These remain
+Windows work. Real-service enrollment and all 30 real acceptance cases are Not
+Verified. Existing #5 still needs the approved disposable device/service and public
+issuer pin. Companion `f2aa2634d8580fd082a1fa793b149374d3e3323f` is read-only;
+six frozen sources, nine fixture families and manifest are unchanged. No separate
+enrollment-only harness was found. Keep all sensitive flags and localYield false.
+Verify the exact pushed-SHA CI linked from #1. No release, signing, installation
+or production activation is authorized.
+
+## Historical RC-2 checkpoint
 
 Continue from the [November 11 connected endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md).
 Implementation pushed at `2f8f258edc7b3f03b863e6af9984eb4def8f9ef2`.

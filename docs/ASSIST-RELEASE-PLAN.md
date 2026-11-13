@@ -1,6 +1,20 @@
 # Complete Windows Assist delivery plan
 
-## Current RC-2 checkpoint
+## Current RC-3 checkpoint
+
+[Normal executor custody](evidence/2026-11-13-rc3-executor-custody.md) connects the
+live monitor/coordinator to the normal process-input transport. Armed Native
+generations require child terminal, actual exit and settled mirror. Ambiguous
+handoffs and missing evidence retain ownership. Real Probe process verification
+does not qualify physical input.
+
+RC-3 is unfinished. Connect the existing persistent runtime to canonical grants,
+native capture/source corroboration, protected consent and authenticated peers;
+then fresh-grant reacquisition and extension resources. Genuine enrollment needs
+the isolated service/device prerequisites in #5. All 30 real cases, integrated
+review and owner release gates remain independent. Production switches are unchanged.
+
+## Historical RC-2 checkpoint
 
 The real native bridge/monitor/coordinator is connected for an explicit isolated
 qualification build. Public desktop native startup remains disabled. Enrollment

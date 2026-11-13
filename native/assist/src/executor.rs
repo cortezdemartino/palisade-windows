@@ -29,6 +29,21 @@ pub struct ExecutorReservation {
     pub(crate) identity: ExecutorIdentity,
     pub(crate) instance: u64,
 }
+#[cfg(windows)]
+impl ExecutorReservation {
+    pub(crate) fn custody(
+        &self,
+        session: &str,
+        source: Source,
+    ) -> crate::windows::process_input::custody::Registration {
+        crate::windows::process_input::custody::Registration {
+            session: session.into(),
+            slot: self.instance,
+            execution: self.identity.0,
+            source,
+        }
+    }
+}
 pub struct InputCleanupRequirement {
     pub(crate) identity: ExecutorIdentity,
     pub(crate) instance: u64,

@@ -48,6 +48,18 @@ pub struct StopEvent {
     signal_failed: std::sync::atomic::AtomicBool,
 }
 impl StopEvent {
+    pub(crate) fn handle_for_query(&self) -> HANDLE {
+        self.handle.as_raw_handle()
+    }
+    pub(crate) fn from_owned(handle: OwnedHandle) -> Result<Self, &'static str> {
+        if unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) } != WAIT_TIMEOUT {
+            return Err("tree-stop-event");
+        }
+        Ok(Self {
+            handle,
+            signal_failed: std::sync::atomic::AtomicBool::new(false),
+        })
+    }
     pub(crate) fn raw(&self) -> usize {
         self.handle.as_raw_handle() as usize
     }
@@ -73,6 +85,13 @@ impl StopEvent {
         self.signal_failed.load(std::sync::atomic::Ordering::SeqCst)
     }
     pub fn reader(&self) -> Result<OwnedHandle, &'static str> {
+        self.duplicate(SYNCHRONIZATION_SYNCHRONIZE)
+    }
+    /// Validated coordinator cancellation sender; executors get only readers.
+    pub(crate) fn sender(&self) -> Result<OwnedHandle, &'static str> {
+        self.duplicate(EVENT_MODIFY_STATE | SYNCHRONIZATION_SYNCHRONIZE)
+    }
+    fn duplicate(&self, rights: u32) -> Result<OwnedHandle, &'static str> {
         let mut handle = ptr::null_mut();
         if unsafe {
             DuplicateHandle(
@@ -80,7 +99,7 @@ impl StopEvent {
                 self.handle.as_raw_handle(),
                 GetCurrentProcess(),
                 &mut handle,
-                SYNCHRONIZATION_SYNCHRONIZE,
+                rights,
                 1,
                 0,
             )

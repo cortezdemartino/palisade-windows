@@ -10,6 +10,7 @@ pub struct SessionStop {
     launch: Arc<AtomicBool>,
     session: Arc<AtomicBool>,
     witness: Option<Arc<dyn StopWitness>>,
+    parent: Option<Arc<SessionStop>>,
 }
 /// Native-owned liveness only. It never creates permission or cleanup proof.
 pub(crate) trait StopWitness: Send + Sync {
@@ -21,6 +22,7 @@ impl SessionStop {
             launch,
             session: Arc::new(AtomicBool::new(false)),
             witness: None,
+            parent: None,
         }
     }
     pub(crate) fn monitored(launch: Arc<AtomicBool>, witness: Arc<dyn StopWitness>) -> Self {
@@ -29,8 +31,27 @@ impl SessionStop {
             ..Self::child(launch)
         }
     }
+    /// A related session gets its own terminal flag while retaining every
+    /// launch/parent witness. Ending it cannot stop unrelated sibling sessions.
+    pub(crate) fn descendant(&self) -> Self {
+        Self {
+            parent: Some(Arc::new(self.clone())),
+            witness: self.witness.clone(),
+            ..Self::child(self.launch.clone())
+        }
+    }
     pub fn is_stopped(&self) -> bool {
         if self.session.load(Ordering::SeqCst) {
+            return true;
+        }
+        // A parent-session end is local. Only launch/native witness loss may
+        // revoke unrelated siblings; do not conflate these two authorities.
+        if self
+            .parent
+            .as_ref()
+            .is_some_and(|parent| parent.is_stopped())
+        {
+            self.revoke();
             return true;
         }
         if self.launch.load(Ordering::SeqCst)
@@ -67,6 +88,42 @@ impl From<Arc<AtomicBool>> for SessionStop {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn descendants_retain_parent_and_native_witness_without_revoking_siblings() {
+        struct Witness(Arc<AtomicBool>);
+        impl StopWitness for Witness {
+            fn stopped(&self) -> bool {
+                self.0.load(Ordering::SeqCst)
+            }
+        }
+        let launch = Arc::new(AtomicBool::new(false));
+        let native = Arc::new(AtomicBool::new(false));
+        let parent = SessionStop::monitored(launch.clone(), Arc::new(Witness(native.clone())));
+        let child = parent.descendant();
+        let sibling = parent.descendant();
+        child.revoke();
+        assert!(child.is_stopped());
+        assert!(!parent.is_stopped());
+        assert!(!sibling.is_stopped());
+        native.store(true, Ordering::SeqCst);
+        assert!(sibling.is_stopped());
+        assert!(parent.is_stopped());
+        native.store(false, Ordering::SeqCst);
+        assert!(sibling.is_stopped());
+        assert!(parent.descendant().is_stopped());
+    }
+    #[test]
+    fn parent_session_end_reaches_descendants_without_ending_other_sessions() {
+        let launch = Arc::new(AtomicBool::new(false));
+        let parent = SessionStop::child(launch.clone());
+        let child = parent.descendant();
+        let unrelated = SessionStop::child(launch.clone());
+        parent.revoke();
+        assert!(child.is_stopped());
+        assert!(!unrelated.is_stopped());
+        assert!(!launch.load(Ordering::SeqCst));
+    }
 
     #[test]
     fn sibling_stop_is_local_and_launch_stop_is_immediate_and_terminal() {

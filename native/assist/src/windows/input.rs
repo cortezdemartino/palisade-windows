@@ -301,6 +301,9 @@ pub(crate) struct ChildInput {
     owned: Ledger,
 }
 impl ChildInput {
+    pub(crate) fn owned_clear(&self) -> bool {
+        !self.owned.held()
+    }
     pub(crate) fn new(tag: usize) -> Self {
         Self {
             tag,

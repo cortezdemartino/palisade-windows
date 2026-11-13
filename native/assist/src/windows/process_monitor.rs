@@ -98,6 +98,15 @@ enum ResultKind {
         pid: u32,
         coordinator: u32,
     },
+    ProbeExecutor {
+        pid: u32,
+        coordinator: u32,
+        released: bool,
+    },
+    ProbeExecutorCancel {
+        pid: u32,
+        coordinator: u32,
+    },
     CleanupComplete {
         challenge: String,
         scope: String,
@@ -112,6 +121,8 @@ enum Kind {
     ProbeWait,
     ProbeDescendant,
     ProbeStopHolder,
+    ProbeExecutor(bool),
+    ProbeExecutorCancel,
     Shutdown,
 }
 impl Kind {
@@ -124,6 +135,8 @@ impl Kind {
             Command::ProbeWait { .. } => Self::ProbeWait,
             Command::ProbeDescendant { .. } => Self::ProbeDescendant,
             Command::ProbeStopHolder {} => Self::ProbeStopHolder,
+            Command::ProbeExecutor { release } => Self::ProbeExecutor(*release),
+            Command::ProbeExecutorCancel {} => Self::ProbeExecutorCancel,
             Command::Shutdown {} => Self::Shutdown,
         }
     }
@@ -212,6 +225,24 @@ fn validated(
         (Kind::ProbeStopHolder, ResultKind::ProbeStopHolder { pid, coordinator }) => {
             *pid > 0 && *coordinator > 0 && pid != coordinator
         }
+        (
+            Kind::ProbeExecutor(expected),
+            ResultKind::ProbeExecutor {
+                pid,
+                coordinator,
+                released,
+            },
+        ) => {
+            probe
+                && endpoint
+                && expected == released
+                && *pid > 0
+                && *coordinator > 0
+                && pid != coordinator
+        }
+        (Kind::ProbeExecutorCancel, ResultKind::ProbeExecutorCancel { pid, coordinator }) => {
+            probe && endpoint && *pid > 0 && *coordinator > 0 && pid != coordinator
+        }
         (Kind::Status, ResultKind::Status { state, authority }) => {
             ["inactive", "revoked"].contains(&state.as_str()) && authority == "none"
         }
@@ -246,9 +277,23 @@ pub fn endpoint_coordinator(
     probe: bool,
     job: usize,
     stop: usize,
+    request: usize,
+    response: usize,
+    urgent: usize,
 ) -> Result<(), &'static str> {
     let _parent = Parent::validate_executor(parent, probe)?;
-    super::live::run_endpoint(parent, probe, InheritedTree::open(job, stop)?)
+    let roles = [job, stop, request, response, urgent];
+    if roles
+        .iter()
+        .enumerate()
+        .any(|(i, h)| *h == 0 || roles[..i].contains(h))
+    {
+        return Err("tree-handles");
+    }
+    let custody = unsafe {
+        super::process_input::custody::Client::inherited(request, response, urgent, probe)?
+    };
+    super::live::run_endpoint(parent, probe, InheritedTree::open(job, stop)?, custody)
 }
 pub fn release_probe(parent: u32, milliseconds: u16) -> Result<(), &'static str> {
     let parent = Parent::validate_executor(parent, true)?;
@@ -330,32 +375,58 @@ fn run_inner(
         return Err("native-stop-unavailable");
     }
     let child_stop = stop.reader()?;
-    let child = tree.launch(
-        &image,
-        &[
-            if endpoint {
-                "--endpoint-coordinator"
-            } else {
-                "--tree-coordinator"
-            }
-            .into(),
-            std::process::id().to_string().into(),
-            (query.as_raw_handle() as usize).to_string().into(),
-            (child_stop.as_raw_handle() as usize).to_string().into(),
-            if probe {
-                "probe".into()
-            } else {
-                "normal".into()
-            },
-        ],
-        &[query.as_handle(), child_stop.as_handle()],
-    )?;
+    let custody_pipes = endpoint
+        .then(super::process_input::custody::Pipes::new)
+        .transpose()?;
+    let mut args: Vec<std::ffi::OsString> = vec![
+        if endpoint {
+            "--endpoint-coordinator"
+        } else {
+            "--tree-coordinator"
+        }
+        .into(),
+        std::process::id().to_string().into(),
+        (query.as_raw_handle() as usize).to_string().into(),
+        (child_stop.as_raw_handle() as usize).to_string().into(),
+        if probe { "probe" } else { "normal" }.into(),
+    ];
+    let urgent = custody_pipes.as_ref().map(|pipes| pipes.urgent.clone());
+    let mut extra = vec![query.as_handle(), child_stop.as_handle()];
+    if let Some(pipes) = &custody_pipes {
+        args.extend([
+            (pipes.request.as_raw_handle() as usize).to_string().into(),
+            (pipes.response.as_raw_handle() as usize).to_string().into(),
+            (pipes.urgent_sender.as_raw_handle() as usize)
+                .to_string()
+                .into(),
+        ]);
+        extra.extend([
+            pipes.request.as_handle(),
+            pipes.response.as_handle(),
+            pipes.urgent_sender.as_handle(),
+        ]);
+    }
+    let child = tree.launch(&image, &args, &extra)?;
+    drop(extra);
     drop(query);
     drop(child_stop);
     let process = child
         .process_handle()
         .try_clone_to_owned()
         .map_err(|_| "monitor-process-handle")?;
+    let mut tree = Some(tree);
+    let custody = custody_pipes
+        .map(|pipes| {
+            super::process_input::custody::Monitor::start(
+                tree.take().ok_or("custody-tree")?,
+                image,
+                process.try_clone().map_err(|_| "custody-coordinator")?,
+                stop.clone(),
+                pipes,
+                probe,
+            )
+        })
+        .transpose()?;
     let signals = Arc::new(Signals::default());
     let finished = Arc::new(AtomicBool::new(false));
     let state = Arc::new(Mutex::new(State::default()));
@@ -475,6 +546,11 @@ fn run_inner(
     );
     let watcher = thread::spawn(move || {
         while !watch_finished.load(Ordering::SeqCst) {
+            if urgent.as_ref().is_some_and(
+                |event| unsafe { WaitForSingleObject(event.handle_for_query(), 0) } != WAIT_TIMEOUT,
+            ) {
+                let _ = watch_stop.revoke();
+            }
             if native_flag.load(Ordering::SeqCst) {
                 fail(&watch_signals, &watch_stop);
             }
@@ -540,11 +616,32 @@ fn run_inner(
     if wait_code(&process)? != Some(0) {
         signals.fail();
     }
-    tree.close_admission();
+    if let Some(tree) = &mut tree {
+        tree.close_admission();
+    }
+    if let Some(custody) = &custody {
+        if custody.close().is_err() {
+            signals.fail();
+        }
+    }
     // Admission is closed and the exact coordinator has exited. Zero here
     // includes every inherited descendant, including Windows console helpers.
-    while !tree.exited_after_admission_closed()? {
+    while if let Some(custody) = &custody {
+        !custody.processes_exited()?
+    } else {
+        !tree
+            .as_ref()
+            .ok_or("monitor-tree")?
+            .exited_after_admission_closed()?
+    } {
         thread::sleep(Duration::from_millis(10));
+    }
+    if let Some(custody) = &custody {
+        // Missing/invalid native evidence retains the monitor and exact original
+        // handles. Job zero is not permission to discard an unsettled ledger.
+        while !custody.complete().unwrap_or(false) {
+            thread::sleep(Duration::from_millis(100));
+        }
     }
     let read_result = reader.join().map_err(|_| "monitor-reader-join")?;
     input_writer.join().map_err(|_| "monitor-writer-join")?;

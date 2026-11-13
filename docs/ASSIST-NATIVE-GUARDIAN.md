@@ -2,6 +2,12 @@
 
 ## Connected launch endpoint
 
+[RC-3 executor custody](evidence/2026-11-13-rc3-executor-custody.md) now connects
+the normal process-input factory to monitor-owned creation, sealed ARM, dedicated
+child terminal and positive mirror settlement. Partial/unacknowledged handoffs
+block replacement and retain the exact owner. Live grant/session, native capture,
+protected consent, peer and resource integration are still unfinished.
+
 The [RC-2 endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md) connects
 the actual application-owned monitor and persistent coordinator to canonical
 native enrollment. It reuses exact-image/job/Stop ownership and introduces an
@@ -9,8 +15,8 @@ explicit private-v3 endpoint cleanup scope. One launch retains the operational
 key and enrollment replay history. The isolated qualification build fixes its
 HTTPS origin, independent issuer pin and storage namespace at build time.
 
-This does not complete native session execution. Normal executor receipts,
-monitor mirror settlement and StreamRuntime/source/lease/peer integration remain
+This does not complete native session execution. Live
+StreamRuntime/source/lease/peer integration remains
 unfinished. All sensitive feature declarations are false and public startup
 remains disabled. Existing consent dialogs are not qualified against synthetic
 Win32 button commands from a same-integrity local process; native and physical
@@ -53,9 +59,10 @@ stateDiagram-v2
     ExitPending --> Complete: actual exit and required mirror evidence
 ```
 
-For an armed generation, completion requires actual child exit and either a
-positive mirror receipt from the fenced coordinator, or actual coordinator exit
-plus a positive child receipt. A child receipt alone, process exit alone, empty job
+For an armed Native generation, completion requires actual child exit, a positive
+child terminal and a settled coordinator mirror. Coordinator exit replaces neither
+receipt. Probe has a separate death fallback that cannot match Native completion.
+A child receipt alone, process exit alone, empty job
 or both owners dying without receipts is insufficient. An ambiguous launch after
 CreateProcess retains its exact child owner; Stop signals and both input pipes close
 on bootstrap/query failures. No timeout kills cleanup holders.

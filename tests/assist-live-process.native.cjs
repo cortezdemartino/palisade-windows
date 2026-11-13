@@ -12,6 +12,68 @@ const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('
 const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: randomBytes(32).toString('base64url') };
 const canonical = (op, fields = {}) => ({ p: 'palisade.assist.native', v: 1, id: randomBytes(12).toString('base64url'), op, ...fields });
 
+test('actual endpoint owns normal executor transport, terminal receipt and mirror across probe generations', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    let prior = 0;
+    for (let generation = 0; generation < 2; generation++) {
+      const held = await channel.probeExecutor(false);
+      assert.equal(held.released, false);
+      assert.notEqual(held.pid, held.coordinator);
+      assert.notEqual(held.pid, prior);
+      assert.equal((await channel.status()).authority, 'none');
+      const released = await channel.probeExecutor(true);
+      assert.deepEqual(released, { ...held, released: true });
+      prior = held.pid;
+    }
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
+
+test('actual endpoint urgent shutdown settles a held fake-input executor before launch completion', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  await channel.probeExecutor(false);
+  await channel.close();
+  assert.equal(lifecycle.status().holders, 0);
+});
+
+test('actual endpoint Stop between creation and ARM settles its retained startup before a successor', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    const cancelled = await channel.probeExecutorCancel();
+    assert.notEqual(cancelled.pid, cancelled.coordinator);
+    const fresh = await channel.probeExecutor(false);
+    assert.notEqual(fresh.pid, cancelled.pid);
+    await channel.probeExecutor(true);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
+
+test('actual endpoint coordinator loss retains failed app ownership while its probe executor cleans up', async () => {
+  const observer = await prepareProcessWatcher(binary);
+  const lifecycle = createAssistLifecycle();
+  let channel;
+  try {
+    channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+    const held = await channel.probeExecutor(false);
+    await observer.retain([{ pid: channel.pid, role: 'monitor' }, { pid: held.coordinator, role: 'coordinator' }, { pid: held.pid, role: 'holder' }]);
+    // Kill only the disposable no-authority fixture whose original handle and
+    // image were retained above. No physical input or personal app is involved.
+    process.kill(held.coordinator);
+    await assert.rejects(channel.wait(), { code: 'assist-cleanup-incomplete' });
+    const result = await observer.finish();
+    assert(result.every(item => item.exited));
+    assert.equal(result[2].code, 125);
+    await assert.rejects(lifecycle.quiesce());
+    assert.equal(lifecycle.status().holders, 1);
+    // Native mode still requires its missing coordinator mirror. This Probe
+    // result cannot satisfy Native cleanup or physical-input acceptance.
+  } finally { observer.close(); if (channel) await channel.close().catch(() => {}); }
+});
+
 test('actual persistent endpoint negotiates canonical v1 through monitor/coordinator without native authority', async () => {
   const life = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle: life, probe: true, ownedTree: true, endpoint: true });

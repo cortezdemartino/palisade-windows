@@ -64,27 +64,29 @@ fn emit(
         })
 }
 pub fn run(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
-    run_inner(parent_pid, probe, None, false)
+    run_inner(parent_pid, probe, None, false, None)
 }
 pub(crate) fn run_owned(
     parent_pid: u32,
     probe: bool,
     tree: super::process_tree::InheritedTree,
 ) -> Result<(), &'static str> {
-    run_inner(parent_pid, probe, Some(tree), false)
+    run_inner(parent_pid, probe, Some(tree), false, None)
 }
 pub(crate) fn run_endpoint(
     parent_pid: u32,
     probe: bool,
     tree: super::process_tree::InheritedTree,
+    custody: Arc<super::process_input::custody::Client>,
 ) -> Result<(), &'static str> {
-    run_inner(parent_pid, probe, Some(tree), true)
+    run_inner(parent_pid, probe, Some(tree), true, Some(custody))
 }
 fn run_inner(
     parent_pid: u32,
     probe: bool,
     tree: Option<super::process_tree::InheritedTree>,
     endpoint: bool,
+    custody: Option<Arc<super::process_input::custody::Client>>,
 ) -> Result<(), &'static str> {
     let owned = tree.is_some();
     let stop_reader = tree.as_ref().map(|tree| tree.stop_reader()).transpose()?;
@@ -94,8 +96,8 @@ fn run_inner(
         Parent::validate(parent_pid, probe)?
     };
     let signals = Arc::new(Signals::default());
-    let mut native_endpoint =
-        endpoint.then(|| super::endpoint::Endpoint::new(probe, signals.cancellation()));
+    let mut native_endpoint = endpoint
+        .then(|| super::endpoint::Endpoint::with_custody(probe, signals.cancellation(), custody));
     let live_stop = match &tree {
         Some(tree) => crate::cancellation::SessionStop::monitored(
             signals.cancellation(),
@@ -296,6 +298,37 @@ fn run_inner(
                     if !signals.revoked() {
                         emit(&output, request.sequence, Reply::ProbeWait, &signals)?;
                     }
+                }
+                Command::ProbeExecutor { release } if probe && endpoint => {
+                    let pid = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-required")?
+                        .probe_executor(release)?;
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::ProbeExecutor {
+                            pid,
+                            coordinator: std::process::id(),
+                            released: release,
+                        },
+                        &signals,
+                    )?;
+                }
+                Command::ProbeExecutorCancel {} if probe && endpoint => {
+                    let pid = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-required")?
+                        .probe_cancel_executor()?;
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::ProbeExecutorCancel {
+                            pid,
+                            coordinator: std::process::id(),
+                        },
+                        &signals,
+                    )?;
                 }
                 Command::ProbeDescendant { milliseconds } if probe && owned => {
                     let mut child = std::process::Command::new(

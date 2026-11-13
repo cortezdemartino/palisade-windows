@@ -74,6 +74,10 @@ pub enum Command {
         milliseconds: u16,
     },
     ProbeStopHolder {},
+    ProbeExecutor {
+        release: bool,
+    },
+    ProbeExecutorCancel {},
 }
 pub struct Ingress {
     next: u32,
@@ -149,6 +153,12 @@ impl Ingress {
                 Command::ProbeStopHolder {} if !self.probe || self.version != 2 => {
                     return Err("operation-unavailable");
                 }
+                Command::ProbeExecutor { .. } if !self.probe || self.version != 3 => {
+                    return Err("operation-unavailable");
+                }
+                Command::ProbeExecutorCancel {} if !self.probe || self.version != 3 => {
+                    return Err("operation-unavailable");
+                }
                 _ => (),
             }
             Ok(request)
@@ -188,6 +198,15 @@ pub enum Reply {
     ProbeWait,
     ProbeDescendant,
     ProbeStopHolder {
+        pid: u32,
+        coordinator: u32,
+    },
+    ProbeExecutor {
+        pid: u32,
+        coordinator: u32,
+        released: bool,
+    },
+    ProbeExecutorCancel {
         pid: u32,
         coordinator: u32,
     },

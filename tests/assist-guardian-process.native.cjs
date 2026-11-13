@@ -10,6 +10,26 @@ const { openGuardian } = require('../src/assist/guardian.cjs');
 const binary = process.env.PALISADE_ASSIST_TEST_BINARY || path.resolve('.assist/Palisade-Assist.exe');
 const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('src/assist/guardian-integrity.json');
 const hello = { type: 'hello', protocol: 'palisade.assist.guardian', version: 1, challenge: randomBytes(32).toString('base64url') };
+test('actual executor emits one dedicated terminal receipt independently of ordinary ACK framing', async () => {
+  const nonce = randomBytes(32).toString('base64url');
+  const child = spawn(binary, ['--executor-probe', String(process.pid), '123', nonce], { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  const exited = once(child, 'close'), ordinary = [], terminals = [];
+  child.stdin.on('error', () => {});
+  child.stdout.on('data', bytes => ordinary.push(bytes));
+  child.stderr.on('data', bytes => terminals.push(bytes));
+  const timeout = setTimeout(() => child.kill(), 6000); // No-authority fixture only.
+  try {
+    await once(child.stdout, 'data');
+    child.stdin.end();
+    assert.equal((await exited)[0], 125);
+    const data = Buffer.concat(terminals), size = data.readUInt32LE(0);
+    assert.equal(data.length, size + 4, 'one full terminal, with no diagnostics or repeated proof');
+    assert.deepEqual(JSON.parse(data.subarray(4).toString()), { protocol: 'palisade.assist.executor-terminal', version: 1,
+      creator: process.pid, executor: child.pid, tag: 123, nonce, mode: 'probe', fenced: true, owned_clear: true });
+    const ack = Buffer.concat(ordinary);
+    assert.equal(JSON.parse(ack.subarray(4, 4 + ack.readUInt32LE(0))).sequence, 0xffffffff);
+  } finally { clearTimeout(timeout); child.kill(); }
+});
 function frame(command, sequence = 0) {
   const bytes = Buffer.from(typeof command === 'string' ? command : JSON.stringify({ sequence, command }));
   const prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length); return Buffer.concat([prefix, bytes]);

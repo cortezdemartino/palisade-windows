@@ -1,5 +1,14 @@
 # Release notes
 
+## Unreleased
+
+- Connect the inactive Assist normal executor to monitor-owned creation and
+  generation-bound child/mirror cleanup evidence.
+- Retain uncertain process-handle handoffs and keep Stop independent of ordinary
+  custody requests. No Assist capabilities or production switches are enabled.
+- Full Assist enrollment/session/capture/consent/peer/resource integration and
+  disposable-device acceptance remain unfinished.
+
 ## 0.3.4
 
 - Added authenticated release summaries, expandable details and offline history

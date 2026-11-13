@@ -8,7 +8,6 @@ use super::{
     input::{Source, ordinary_desktop},
     input_owner::InputOwner,
     lease::{self, LeasePoller},
-    lifecycle::NativeStop,
     process_input::ProcessInput,
     process_tree::StopEvent,
 };
@@ -38,6 +37,12 @@ enum Work {
     Packet(String, Instant, mpsc::SyncSender<Result<(), &'static str>>),
 }
 pub use crate::input::InputProfile;
+/// Constructed by the launch-owned endpoint from its independently monitored
+/// stop witness and private custody connection; never accepted from a page.
+pub struct RuntimeOwner {
+    pub(crate) stop: crate::cancellation::SessionStop,
+    pub(crate) custody: Arc<super::process_input::custody::Client>,
+}
 /// Prepared before authority and cloned into urgent readers/watchdogs. Calling
 /// either method signals the retained native event and uses atomics, without
 /// taking a SessionGate, UI, network or join lock.
@@ -142,16 +147,14 @@ impl StreamRuntime {
         binding: Binding,
         grants: &[SignedStreamGrant],
         source: Option<Source>,
-        stop_surface: &NativeStop,
-        manifest: super::image::ImageManifest,
+        owner: RuntimeOwner,
     ) -> Result<Self, &'static str> {
         Self::begin_with_profile(
             enrolled,
             binding,
             grants,
             source,
-            stop_surface,
-            manifest,
+            owner,
             InputProfile::Legacy,
         )
     }
@@ -160,8 +163,7 @@ impl StreamRuntime {
         binding: Binding,
         grants: &[SignedStreamGrant],
         source: Option<Source>,
-        stop_surface: &NativeStop,
-        manifest: super::image::ImageManifest,
+        owner: RuntimeOwner,
         profile: InputProfile,
     ) -> Result<Self, &'static str> {
         if !cfg!(any(feature = "native-input", feature = "native-resources")) {
@@ -173,7 +175,11 @@ impl StreamRuntime {
             enrollment,
         } = enrolled;
         enrollment.verify_binding(issuer, &identity, &binding)?;
-        let stop = stop_surface.session_flag()?;
+        if owner.custody.probe() {
+            return Err("native-runtime-unqualified");
+        }
+        let stop = owner.stop.descendant();
+        let custody = owner.custody;
         enrollment.bind_session(&stop)?;
         if stop.is_stopped() || grants.is_empty() || grants.len() > 8 {
             return Err("invalid-session");
@@ -213,7 +219,7 @@ impl StreamRuntime {
         // A source-bearing runtime can receive its first input grant from a
         // later lease update. Reserve Stop ownership for that path as well.
         let executor_stop = (cfg!(feature = "native-input") && source.is_some())
-            .then(|| stop_surface.executor_stop())
+            .then(|| StopEvent::new().map(Arc::new))
             .transpose()?;
         let lease_executor_stop = executor_stop.clone();
         let lost = stop.clone();
@@ -302,16 +308,18 @@ impl StreamRuntime {
                             {
                                 return Err("random-failed");
                             }
-                            let (reservation, start_epoch) = {
+                            let (reservation, registration, start_epoch) = {
                                 let mut gate = worker_gate.lock().map_err(|_| "endpoint-failed")?;
                                 let reservation = gate.reserve_executor()?;
-                                (reservation, gate.input_epoch())
+                                let registration =
+                                    reservation.custody(&gate.binding().session, source.clone());
+                                (reservation, registration, gate.input_epoch())
                             };
-                            let child = match ProcessInput::spawn(
+                            let child = match ProcessInput::spawn_monitored(
+                                &custody,
+                                registration,
                                 usize::from_le_bytes(tag),
-                                false,
-                                &manifest,
-                                owner.as_ref().ok_or("input-owner-required")?,
+                                owner.as_ref().ok_or("input-owner-required")?.raw(),
                                 direct_stop,
                             ) {
                                 Ok(child) => child,
@@ -349,6 +357,14 @@ impl StreamRuntime {
                         })();
                         if result.is_err() {
                             worker_input_stop.store(true, Ordering::SeqCst);
+                            // No registered executor can consume this local slot.
+                            // Failed startup either retained its monitor-owned
+                            // copy or positively settled before returning. Do not
+                            // pin this coordinator's extra copy until unrelated
+                            // clipboard/file permissions also end.
+                            if executor.is_none() {
+                                owner.take();
+                            }
                         }
                     }
                     if let Some(ref mut executor) = executor {

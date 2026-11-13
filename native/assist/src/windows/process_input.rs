@@ -8,10 +8,11 @@ use crate::{
     framing::{read_frame, write_frame},
     input::{Action, Ledger},
 };
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::{
     os::windows::io::{AsRawHandle, OwnedHandle},
-    process::{Child, ChildStdin, Command, Stdio},
+    process::{Child, Command, Stdio},
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -23,15 +24,18 @@ use windows_sys::Win32::{
     Foundation::WAIT_TIMEOUT,
     System::{SystemInformation::GetTickCount64, Threading::WaitForSingleObject},
 };
+pub(crate) mod custody;
 struct ExecutorWitness {
     parent: OwnedHandle,
     stop: OwnedHandle,
+    others: Vec<OwnedHandle>,
 }
 impl ExecutorWitness {
     fn retain(parent: &Parent, raw: usize) -> Result<Self, &'static str> {
         let witness = Self {
             parent: parent.wait_handle()?,
             stop: parent.duplicate_wait(raw)?,
+            others: Vec::new(),
         };
         if witness.stopped() {
             return Err("executor-stopped");
@@ -42,6 +46,10 @@ impl ExecutorWitness {
         unsafe {
             WaitForSingleObject(self.parent.as_raw_handle(), 0) != WAIT_TIMEOUT
                 || WaitForSingleObject(self.stop.as_raw_handle(), 0) != WAIT_TIMEOUT
+                || self
+                    .others
+                    .iter()
+                    .any(|h| WaitForSingleObject(h.as_raw_handle(), 0) != WAIT_TIMEOUT)
         }
     }
 }
@@ -60,6 +68,75 @@ struct Ack {
     accepted: bool,
     uptime: u64,
 }
+/// Dedicated terminal channel, separate from the ordinary Step/Ack stream.
+/// This attests a fenced executor ledger, never physical cooperative arbitration.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct TerminalReceipt {
+    protocol: String,
+    version: u32,
+    creator: u32,
+    executor: u32,
+    tag: usize,
+    nonce: String,
+    mode: crate::custody::Mode,
+    fenced: bool,
+    owned_clear: bool,
+}
+struct TerminalOwner {
+    nonce: String,
+    tag: usize,
+    receive: mpsc::Receiver<Result<TerminalReceipt, &'static str>>,
+    child: u32,
+    expected_mode: crate::custody::Mode,
+    confirmed: bool,
+    failed: bool,
+}
+impl TerminalOwner {
+    fn poll(&mut self) -> Result<(), &'static str> {
+        if self.failed {
+            return Err("executor-cleanup-unproven");
+        }
+        if self.confirmed {
+            return Ok(());
+        }
+        match self.receive.try_recv() {
+            Ok(Ok(receipt))
+                if receipt.protocol == "palisade.assist.executor-terminal"
+                    && receipt.version == 1
+                    && receipt.creator == std::process::id()
+                    && receipt.executor == self.child
+                    && receipt.tag == self.tag
+                    && receipt.nonce == self.nonce
+                    && receipt.mode == self.expected_mode
+                    && receipt.fenced
+                    && receipt.owned_clear =>
+            {
+                self.confirmed = true;
+                Ok(())
+            }
+            Err(mpsc::TryRecvError::Empty) => Err("executor-cleanup-pending"),
+            _ => {
+                self.failed = true;
+                Err("executor-cleanup-unproven")
+            }
+        }
+    }
+}
+fn read_terminal(mut pipe: impl std::io::Read) -> Result<TerminalReceipt, &'static str> {
+    let bytes = crate::framing::read_bounded(&mut pipe, 4096)
+        .map_err(|_| "executor-terminal-pipe")?
+        .ok_or("executor-terminal-missing")?;
+    let receipt = serde_json::from_slice::<TerminalReceipt>(&bytes)
+        .map_err(|_| "executor-terminal-invalid")?;
+    if crate::framing::read_bounded(&mut pipe, 4096)
+        .map_err(|_| "executor-terminal-pipe")?
+        .is_some()
+    {
+        return Err("executor-terminal-extra");
+    }
+    Ok(receipt)
+}
 fn uptime() -> u64 {
     unsafe { GetTickCount64() }
 }
@@ -75,20 +152,66 @@ pub struct ProcessInput {
 /// EOF revokes ordinary work; the child's independent watchdog/cleanup path owns
 /// release retries. Never kill that last release holder to make a wait succeed.
 struct ExecutorProcess {
-    child: Child,
-    pipe: Option<ChildStdin>,
+    child: ProcessHandle,
+    pipe: Option<Box<dyn std::io::Write + Send>>,
     fenced: bool,
     reaped: bool,
     stop: Option<Arc<super::process_tree::StopEvent>>,
+    custody: Option<custody::Managed>,
+    startup_only: bool,
+}
+enum ProcessHandle {
+    Child(Child),
+    Monitored(OwnedHandle),
+}
+impl ProcessHandle {
+    fn try_wait(&mut self) -> std::io::Result<Option<std::process::ExitStatus>> {
+        use std::os::windows::process::ExitStatusExt;
+        match self {
+            Self::Child(child) => child.try_wait(),
+            Self::Monitored(handle) => {
+                match unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) } {
+                    windows_sys::Win32::Foundation::WAIT_OBJECT_0 => {
+                        let mut code = 0;
+                        if unsafe {
+                            windows_sys::Win32::System::Threading::GetExitCodeProcess(
+                                handle.as_raw_handle(),
+                                &mut code,
+                            )
+                        } == 0
+                        {
+                            return Err(std::io::Error::last_os_error());
+                        }
+                        Ok(Some(std::process::ExitStatus::from_raw(code)))
+                    }
+                    WAIT_TIMEOUT => Ok(None),
+                    _ => Err(std::io::Error::last_os_error()),
+                }
+            }
+        }
+    }
+    fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        loop {
+            if let Some(status) = self.try_wait()? {
+                return Ok(status);
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+    }
 }
 impl ExecutorProcess {
     fn new(mut child: Child, stop: Option<Arc<super::process_tree::StopEvent>>) -> Self {
         Self {
-            pipe: child.stdin.take(),
-            child,
+            pipe: child
+                .stdin
+                .take()
+                .map(|pipe| Box::new(pipe) as Box<dyn std::io::Write + Send>),
+            child: ProcessHandle::Child(child),
             fenced: false,
             reaped: false,
             stop,
+            custody: None,
+            startup_only: true,
         }
     }
     fn close_admission(&mut self) -> Result<(), &'static str> {
@@ -96,7 +219,14 @@ impl ExecutorProcess {
         // Signal before closing/draining ordinary I/O. A buffered Step cannot
         // regain authority while its old timestamp is still otherwise valid.
         // Even signal failure must close stdin and retain/query the child.
-        let signaled = self.stop.as_ref().map_or(Ok(()), |stop| stop.revoke());
+        let signaled = self.stop.as_ref().map_or(Ok(()), |stop| {
+            stop.revoke()?;
+            if stop.signal_failed() {
+                Err("executor-stop-failed")
+            } else {
+                Ok(())
+            }
+        });
         drop(self.pipe.take());
         signaled
     }
@@ -116,7 +246,18 @@ impl ExecutorProcess {
             }
             self.reaped = true;
         }
+        signaled?;
+        self.release_proof()?;
         Ok(())
+    }
+    fn release_proof(&mut self) -> Result<(), &'static str> {
+        if !self.fenced || !self.reaped {
+            return Err("executor-cleanup-pending");
+        }
+        if let Some(custody) = &self.custody {
+            return custody.child_released();
+        }
+        Ok(()) // No-authority legacy probe only; normal construction requires custody.
     }
 }
 impl Drop for ExecutorProcess {
@@ -131,64 +272,139 @@ impl Drop for ExecutorProcess {
             // handle and let an independent Stop path remain effective.
             std::thread::sleep(Duration::from_millis(100));
         }
+        if self.startup_only && self.custody.is_some() {
+            // No Step was admitted. Even a failed READY/ARM exchange must wait
+            // for native terminal evidence and settle the empty startup mirror.
+            loop {
+                let settled = self.release_proof().and_then(|_| {
+                    self.custody
+                        .as_mut()
+                        .ok_or("custody-required")?
+                        .mirror(&Ledger::default())
+                });
+                if settled.is_ok() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
     }
 }
 impl ProcessInput {
+    pub(crate) fn probe_cancel_startup(
+        client: &Arc<custody::Client>,
+        registration: custody::Registration,
+    ) -> Result<u32, &'static str> {
+        if !client.probe() {
+            return Err("probe-required");
+        }
+        let stop = Arc::new(super::process_tree::StopEvent::new()?);
+        let managed = client.spawn(registration, 123, 0, stop.clone())?;
+        let pid = managed.pid()?;
+        // Deterministic cancellation at the actual creation/adoption/ARM boundary.
+        // The same production constructor must retain its failed-startup owner.
+        stop.revoke()?;
+        if Self::from_monitored(managed, 123).err() != Some("custody-refused") {
+            return Err("probe-cancel-failed");
+        }
+        Ok(pid)
+    }
+    pub(crate) fn pid(&self) -> u32 {
+        match &self.process.child {
+            ProcessHandle::Child(child) => child.id(),
+            ProcessHandle::Monitored(handle) => unsafe {
+                windows_sys::Win32::System::Threading::GetProcessId(handle.as_raw_handle())
+            },
+        }
+    }
     pub fn spawn(
         tag: usize,
         probe: bool,
         manifest: &super::image::ImageManifest,
-        owner: &super::input_owner::InputOwner,
-        direct_stop: Arc<super::process_tree::StopEvent>,
+        _owner: &super::input_owner::InputOwner,
+        _direct_stop: Arc<super::process_tree::StopEvent>,
     ) -> Result<Self, &'static str> {
-        if !probe && !cfg!(feature = "native-input") {
-            return Err("native-input-disabled");
+        if !probe {
+            return Err("monitor-custody-required");
         }
         let verified = super::image::VerifiedImage::open(manifest)?;
-        let stop = (!probe).then_some(direct_stop);
         let mut command = Command::new(verified.path());
         command.args([
-            if probe {
-                "--executor-probe"
-            } else {
-                "--executor"
-            },
+            "--executor-probe",
             &std::process::id().to_string(),
             &tag.to_string(),
         ]);
-        if !probe {
-            command.arg(owner.raw().to_string());
-            command.arg(
-                stop.as_ref()
-                    .ok_or("executor-stop-required")?
-                    .raw()
-                    .to_string(),
-            );
-        }
         let child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
             .map_err(|_| "executor-start")?;
-        Self::from_child(child, tag, probe, stop)
+        Self::from_probe_child(child, tag, true, None)
     }
+    #[cfg(test)]
     fn from_child(
         child: Child,
         tag: usize,
         probe: bool,
         stop: Option<Arc<super::process_tree::StopEvent>>,
     ) -> Result<Self, &'static str> {
+        Self::from_probe_child(child, tag, probe, stop)
+    }
+    fn from_probe_child(
+        mut child: Child,
+        tag: usize,
+        probe: bool,
+        stop: Option<Arc<super::process_tree::StopEvent>>,
+    ) -> Result<Self, &'static str> {
         // Establish the retained owner before any pipe extraction, reader setup
         // or startup result can return an error after CreateProcess succeeded.
-        let mut process = ExecutorProcess::new(child, stop);
-        if !probe && process.stop.is_none() {
-            return Err("executor-stop-required");
+        let output = child.stdout.take().ok_or("executor-pipe");
+        let process = ExecutorProcess::new(child, stop);
+        if !probe {
+            return Err("monitor-custody-required");
         }
         if process.pipe.is_none() {
             return Err("executor-pipe");
         }
-        let output = process.child.stdout.take().ok_or("executor-pipe")?;
+        Self::from_transport(process, output?, tag, probe)
+    }
+    pub(crate) fn spawn_monitored(
+        client: &Arc<custody::Client>,
+        registration: custody::Registration,
+        tag: usize,
+        owner: usize,
+        stop: Arc<super::process_tree::StopEvent>,
+    ) -> Result<Self, &'static str> {
+        let custody = client.spawn(registration, tag, owner, stop)?;
+        Self::from_monitored(custody, tag)
+    }
+    pub(crate) fn from_monitored(
+        mut custody: custody::Managed,
+        tag: usize,
+    ) -> Result<Self, &'static str> {
+        let probe = custody.probe();
+        let stop = custody.stop_event();
+        let (handle, input, output) = custody.take_transport()?;
+        let process = ExecutorProcess {
+            child: ProcessHandle::Monitored(handle),
+            pipe: Some(Box::new(input)),
+            fenced: false,
+            reaped: false,
+            stop: Some(stop),
+            custody: Some(custody),
+            startup_only: true,
+        };
+        // The retained ProcessInput guard exists before ARM can reach the child.
+        process.custody.as_ref().ok_or("custody-required")?.arm()?;
+        Self::from_transport(process, output, tag, probe)
+    }
+    fn from_transport(
+        mut process: ExecutorProcess,
+        output: impl std::io::Read + Send + 'static,
+        tag: usize,
+        probe: bool,
+    ) -> Result<Self, &'static str> {
         let (send, replies) = mpsc::sync_channel(1);
         std::thread::spawn(move || {
             let mut output = output;
@@ -213,6 +429,7 @@ impl ProcessInput {
         if ready.sequence != u32::MAX || !ready.accepted {
             return Err("executor-start");
         }
+        process.startup_only = false;
         Ok(Self {
             process,
             replies,
@@ -267,6 +484,13 @@ impl Backend for ProcessInput {
         self.transmit(source, None)
     }
     fn prepare(&mut self) -> Result<(), &'static str> {
+        if self.process.fenced && (!self.probe || self.process.custody.is_some()) {
+            self.process.release_proof()?;
+            if !self.process.reaped {
+                return Err("executor-cleanup-pending");
+            }
+            return Ok(());
+        }
         if self.probe {
             return Ok(());
         }
@@ -287,6 +511,9 @@ impl Backend for ProcessInput {
     // The guardian's Executor owns this write-ahead mirror; a down cannot be
     // sent until its intent is in that surviving process's ledger.
     fn intent(&mut self, ledger: &Ledger) -> Result<(), &'static str> {
+        if let Some(custody) = &mut self.process.custody {
+            custody.mirror(ledger)?;
+        }
         self.mirror = ledger.clone();
         Ok(())
     }
@@ -304,10 +531,14 @@ impl Backend for ProcessInput {
             {
                 return Err("cleanup-only");
             }
-            if self.probe {
+            if self.probe && self.process.custody.is_none() {
                 return Ok(());
             }
-            return self.cleanup.apply(source, action);
+            // The authenticated terminal proves this generation has fenced and
+            // cleared its own ledger. Settle the write-ahead mirror logically;
+            // injecting a second UP could release input now owned by the host.
+            self.process.release_proof()?;
+            return Ok(());
         }
         self.transmit(source, Some(action.clone()))
     }
@@ -315,6 +546,9 @@ impl Backend for ProcessInput {
         self.terminate()
     }
     fn cleanup_allowed(&mut self) -> Result<(), &'static str> {
+        if self.process.fenced && (!self.probe || self.process.custody.is_some()) {
+            return self.process.release_proof();
+        }
         if self.probe {
             return Ok(());
         }
@@ -330,6 +564,24 @@ impl Backend for ProcessInput {
 impl Drop for ProcessInput {
     fn drop(&mut self) {
         let _ = self.terminate();
+        if self.process.custody.is_some() {
+            loop {
+                let settled = self.process.fence().and_then(|_| {
+                    // The native child proved its whole owned ledger clear.
+                    // This retires the corresponding logical mirror, never
+                    // sends a second round of OS UP events.
+                    self.process
+                        .custody
+                        .as_mut()
+                        .ok_or("custody-required")?
+                        .mirror(&Ledger::default())
+                });
+                if settled.is_ok() {
+                    break;
+                }
+                std::thread::sleep(Duration::from_millis(100));
+            }
+        }
     }
 }
 
@@ -337,36 +589,101 @@ pub fn run_child(
     parent_pid: u32,
     tag: usize,
     probe: bool,
-    owner_handle: Option<usize>,
-    stop_handle: Option<usize>,
+    terminal_nonce: Option<String>,
 ) -> Result<(), &'static str> {
+    if !probe {
+        return Err("monitor-custody-required");
+    }
+    let parent = Parent::validate_executor(parent_pid, probe)?;
+    if let Some(nonce) = &terminal_nonce {
+        crate::grant::decode::<32>(nonce)?;
+    }
+    run_engine(parent, tag, true, None, terminal_nonce, None, None)
+}
+/// Only the validated monitor can create this role, supply its sealed source,
+/// and send ARM on the dedicated inherited pipe. Ordinary Step cannot arm it.
+pub fn run_owned_child(parent_pid: u32, probe: bool) -> Result<(), &'static str> {
+    use std::os::windows::io::AsRawHandle;
+    let parent = Parent::validate_executor(parent_pid, probe)?;
     if !probe && !cfg!(feature = "native-input") {
         return Err("native-input-disabled");
     }
-    let parent = Parent::validate_executor(parent_pid, probe)?;
-    // Normal mode has no old-arity/EOF-only fallback. Observe the exact native
-    // stop and creator before ownership joining, hooks, readiness or any DOWN.
-    let witness = if probe {
-        None
-    } else {
-        if owner_handle == stop_handle {
-            return Err("executor-stop-binding");
-        }
-        Some(Arc::new(ExecutorWitness::retain(
-            &parent,
-            stop_handle.ok_or("executor-stop-required")?,
-        )?))
+    let spec: custody::Bootstrap = custody::read(&mut std::io::stdin().lock())?;
+    crate::grant::decode::<32>(&spec.nonce)?;
+    spec.source.point(0., 0.)?;
+    if spec.tag == 0 || (!probe && spec.owner == 0) || spec.stop == spec.owner {
+        return Err("custody-bootstrap");
+    }
+    let roles = [spec.coordinator, spec.global, spec.arm];
+    if roles
+        .iter()
+        .enumerate()
+        .any(|(i, h)| *h == 0 || roles[..i].contains(h))
+    {
+        return Err("custody-handles");
+    }
+    let (coordinator, global, arm) = unsafe {
+        (
+            custody::adopt(spec.coordinator, false)?,
+            custody::adopt(spec.global, false)?,
+            custody::adopt(spec.arm, true)?,
+        )
     };
-    // Retain the guardian's exact ownership object through any cleanup retry.
-    // No input, hooks or readiness acknowledgment precedes successful joining.
+    if unsafe { windows_sys::Win32::System::Threading::GetProcessId(coordinator.as_raw_handle()) }
+        != spec.coordinator_pid
+        || unsafe { super::parent::creation_time(coordinator.as_raw_handle())? }
+            != spec.coordinator_created
+        || !super::parent::same_user_for_query(coordinator.as_raw_handle(), probe)
+    {
+        return Err("custody-coordinator");
+    }
+    let mut witness = ExecutorWitness::retain(&parent, spec.stop)?;
+    witness.others = vec![coordinator, global];
     let _owner = if probe {
         None
     } else {
         Some(super::input_owner::InputOwner::from_parent(
-            &parent,
-            owner_handle.ok_or("input-owner-required")?,
+            &parent, spec.owner,
         )?)
     };
+    let (send, receive) = mpsc::sync_channel(1);
+    std::thread::spawn(move || {
+        let mut pipe = std::fs::File::from(arm);
+        let result = (|| {
+            let ticket: crate::custody::Ticket = custody::read(&mut pipe)?;
+            if ticket != spec.ticket {
+                return Err("custody-arm-binding");
+            }
+            if crate::framing::read_bounded(&mut pipe, 16_384)
+                .map_err(|_| "custody-arm")?
+                .is_some()
+            {
+                return Err("custody-arm-extra");
+            }
+            Ok(())
+        })();
+        let _ = send.send(result);
+    });
+    run_engine(
+        parent,
+        spec.tag,
+        probe,
+        Some(Arc::new(witness)),
+        Some(spec.nonce),
+        Some(spec.source),
+        Some(receive),
+    )
+}
+fn run_engine(
+    parent: Parent,
+    tag: usize,
+    probe: bool,
+    witness: Option<Arc<ExecutorWitness>>,
+    terminal_nonce: Option<String>,
+    sealed_source: Option<Source>,
+    arm: Option<mpsc::Receiver<Result<(), &'static str>>>,
+) -> Result<(), &'static str> {
+    let parent_pid = parent.pid();
     let stop = Arc::new(AtomicBool::new(false));
     let source = Arc::new(Mutex::new(None::<Source>));
     let input = Arc::new(Mutex::new(ChildInput::new(tag)));
@@ -396,7 +713,7 @@ pub fn run_child(
         heartbeat.clone(),
     );
     let watch_witness = witness.clone();
-    std::thread::spawn(move || {
+    let cleanup_owner = std::thread::spawn(move || {
         loop {
             std::thread::sleep(Duration::from_millis(10));
             if !parent.alive()
@@ -416,6 +733,7 @@ pub fn run_child(
                         let done = match (watch_input.lock(), watch_source.lock()) {
                             (Ok(mut input), Ok(source)) => {
                                 source.as_ref().is_none_or(|s| input.cleanup(s).is_ok())
+                                    && input.owned_clear()
                             }
                             _ => false,
                         };
@@ -425,37 +743,76 @@ pub fn run_child(
                         std::thread::sleep(Duration::from_millis(100));
                     }
                 }
+                if let Some(nonce) = &terminal_nonce {
+                    let receipt = TerminalReceipt {
+                        protocol: "palisade.assist.executor-terminal".into(),
+                        version: 1,
+                        creator: parent_pid,
+                        executor: std::process::id(),
+                        tag,
+                        nonce: nonce.clone(),
+                        mode: if probe {
+                            crate::custody::Mode::Probe
+                        } else {
+                            crate::custody::Mode::Native
+                        },
+                        fenced: true,
+                        owned_clear: true,
+                    };
+                    if let Ok(bytes) = serde_json::to_vec(&receipt) {
+                        let _ = crate::framing::write_bounded(
+                            &mut std::io::stderr().lock(),
+                            &bytes,
+                            4096,
+                        );
+                    }
+                }
                 std::process::exit(125);
             }
         }
     });
-    let _activity = if probe {
-        None
-    } else {
-        Some(super::activity::ActivityMonitor::start(stop.clone(), tag)?)
-    };
-    if !probe && !super::input::local_input_idle() {
-        stop.store(true, Ordering::SeqCst);
-        return Err("local-input-held");
-    }
-    if stop.load(Ordering::SeqCst) || witness.as_ref().is_some_and(|w| w.stopped()) {
-        stop.store(true, Ordering::SeqCst);
-        return Err("revoked");
-    }
-    let mut sequence = 0u32;
-    let mut output = std::io::stdout().lock();
-    write_frame(
-        &mut output,
-        &serde_json::to_vec(&Ack {
-            sequence: u32::MAX,
-            accepted: true,
-            uptime: uptime(),
-        })
-        .map_err(|_| "invalid-message")?,
-    )
-    .map_err(|_| "executor-pipe")?;
-    let mut simulated = Ledger::default();
-    let outcome = (|| {
+    let outcome = crate::cleanup::attempt(|| {
+        if let Some(arm) = arm {
+            loop {
+                if stop.load(Ordering::SeqCst) || witness.as_ref().is_some_and(|w| w.stopped()) {
+                    return Err("revoked");
+                }
+                match arm.recv_timeout(Duration::from_millis(10)) {
+                    Ok(result) => {
+                        result?;
+                        break;
+                    }
+                    Err(mpsc::RecvTimeoutError::Timeout) => (),
+                    Err(_) => return Err("custody-arm-missing"),
+                }
+            }
+        }
+        let _activity = if probe {
+            None
+        } else {
+            Some(super::activity::ActivityMonitor::start(stop.clone(), tag)?)
+        };
+        if !probe && !super::input::local_input_idle() {
+            stop.store(true, Ordering::SeqCst);
+            return Err("local-input-held");
+        }
+        if stop.load(Ordering::SeqCst) || witness.as_ref().is_some_and(|w| w.stopped()) {
+            stop.store(true, Ordering::SeqCst);
+            return Err("revoked");
+        }
+        let mut sequence = 0u32;
+        let mut output = std::io::stdout().lock();
+        write_frame(
+            &mut output,
+            &serde_json::to_vec(&Ack {
+                sequence: u32::MAX,
+                accepted: true,
+                uptime: uptime(),
+            })
+            .map_err(|_| "invalid-message")?,
+        )
+        .map_err(|_| "executor-pipe")?;
+        let mut simulated = Ledger::default();
         loop {
             let bytes = receive.recv_timeout(Duration::from_millis(25));
             if stop.load(Ordering::SeqCst) || witness.as_ref().is_some_and(|w| w.stopped()) {
@@ -477,6 +834,12 @@ pub fn run_child(
             sequence = sequence.checked_add(1).ok_or("sequence-exhausted")?;
             *heartbeat.lock().map_err(|_| "executor-failed")? = Instant::now();
             request.source.point(0., 0.)?;
+            if sealed_source
+                .as_ref()
+                .is_some_and(|source| source != &request.source)
+            {
+                return Err("custody-source-changed");
+            }
             if let Some(action) = &request.action {
                 action.validate()?;
             }
@@ -517,22 +880,11 @@ pub fn run_child(
             .map_err(|_| "executor-pipe")?;
             result?;
         }
-    })();
+    });
     stop.store(true, Ordering::SeqCst);
-    if !probe {
-        loop {
-            let released = match (input.lock(), source.lock()) {
-                (Ok(mut input), Ok(source)) => source
-                    .as_ref()
-                    .is_none_or(|source| input.cleanup(source).is_ok()),
-                _ => false,
-            };
-            if released {
-                break;
-            }
-            std::thread::sleep(Duration::from_millis(100));
-        }
-    }
+    // Exactly one owner settles native input and publishes the terminal. It is
+    // independent of a blocked ordinary stdout writer and exits only afterwards.
+    let _ = cleanup_owner.join();
     outcome
 }
 

@@ -214,7 +214,7 @@ impl NativeStop {
             }),
         }
     }
-    pub(crate) fn session_flag(&self) -> Result<crate::cancellation::SessionStop, &'static str> {
+    pub fn session_flag(&self) -> Result<crate::cancellation::SessionStop, &'static str> {
         if self.probe || self.stop.load(Ordering::SeqCst) {
             return Err("native-stop-unavailable");
         }
@@ -224,7 +224,7 @@ impl NativeStop {
         }
         Ok(session)
     }
-    pub(crate) fn executor_stop(&self) -> Result<Arc<StopEvent>, &'static str> {
+    pub fn executor_stop(&self) -> Result<Arc<StopEvent>, &'static str> {
         if self.probe {
             return Err("native-stop-unavailable");
         }

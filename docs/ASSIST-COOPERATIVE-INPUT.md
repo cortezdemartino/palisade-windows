@@ -7,6 +7,11 @@ delivery arbitration, connected runtime and native UI remain **Planned / Not Ver
 The packaged endpoint does not advertise `localYield`.
 Existing local-activity termination and production feature switches remain unchanged.
 
+RC-3 connects [monitor-owned normal executor custody](evidence/2026-11-13-rc3-executor-custody.md),
+including child terminal, actual exit and logical mirror settlement. These prove
+process/ledger disposition only. They do not resolve the physical host DOWN versus
+helper UP race or qualify cooperative delivery; localYield remains false.
+
 ## Canonical contract
 
 The protocol sources originate at `e45cc8f20b3060e8231ecafc29c2417ee6f42040` and are unchanged in the read-only frozen revision `01ae58565dd29dce692bace6d09834c5efdbff69`.

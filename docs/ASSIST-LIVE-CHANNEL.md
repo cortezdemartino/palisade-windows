@@ -2,6 +2,15 @@
 
 ## Persistent enrollment endpoint, private version 3
 
+RC-3 adds a dedicated monitor custody side channel and independent coordinator
+cancellation event. Normal executors are monitor-created and wait for sealed ARM;
+their terminal reader is separate from ordinary Step/Ack. The normal runtime
+factory uses this connection, while public grant/session execution is still
+unconnected. Version3's scope remains conservative; no page protocol or physical
+input guarantee is added. Probe-only hold/release and pre-ARM cancellation test
+the actual executor transport without OS input, even in all-feature builds.
+[Proof requirements and remaining work](evidence/2026-11-13-rc3-executor-custody.md).
+
 The explicit `endpoint: true, ownedTree: true` trusted-main option negotiates
 version 3 and the existing retained monitor/coordinator. Canonical native-v1
 operations have a closed typed private representation. One launch owns the

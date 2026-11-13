@@ -1,5 +1,19 @@
 # Validation
 
+## November 13 RC-3 executor custody
+
+The [normal executor custody evidence](evidence/2026-11-13-rc3-executor-custody.md)
+separates real Windows process/handle/event verification from fake-input and
+physical/device acceptance. Actual compiled Probe cases cover successive
+generations, held shutdown, pre-ARM cancellation and coordinator death. Native
+ledger completion requires both receipts and actual exit. Full candidate counts
+are 226 app tests, 217 Rust tests per configuration, 38 process groups per
+configuration plus visibility, five new packaged-helper custody cases, 30 packaged
+Electron cases and 14 fake-input peer cases. NSIS, package integrity, capture
+components and dependency audits passed. Exact-SHA CI is recorded in #1 after execution.
+Full RC-3, genuine service
+enrollment and all 30 real native acceptance cases remain Not Verified or unfinished.
+
 ## November 10 U1 offline native foundation
 
 The inactive update library passed 18 native tests per configuration, strict
