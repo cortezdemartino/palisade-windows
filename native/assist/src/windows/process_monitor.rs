@@ -73,6 +73,15 @@ struct Answer {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum ResultKind {
+    CaptureSetup {
+        enabled: bool,
+    },
+    CaptureSource {
+        accepted: bool,
+    },
+    LocalIce {
+        candidates: Vec<crate::capture::LocalCandidate>,
+    },
     Native {
         document: u32,
         answer: crate::endpoint::Answer,
@@ -114,6 +123,10 @@ enum ResultKind {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
+    CaptureSetup,
+    CaptureSource,
+    InspectLocalIce,
+    SourceStop,
     Native,
     Hello,
     Pulse,
@@ -128,6 +141,16 @@ enum Kind {
 impl Kind {
     fn of(command: &Command) -> Self {
         match command {
+            Command::CaptureSetup { .. } => Self::CaptureSetup,
+            Command::CaptureSource { .. } => Self::CaptureSource,
+            Command::InspectLocalIce { .. } => Self::InspectLocalIce,
+            Command::Native {
+                operation:
+                    crate::endpoint::Operation::CaptureStop { .. }
+                    | crate::endpoint::Operation::CaptureCancel { .. }
+                    | crate::endpoint::Operation::PeerClose { .. },
+                ..
+            } => Self::SourceStop,
             Command::Native { .. } => Self::Native,
             Command::Hello { .. } => Self::Hello,
             Command::Pulse {} => Self::Pulse,
@@ -144,6 +167,7 @@ impl Kind {
 #[derive(Default)]
 struct State {
     pending: BTreeMap<u32, Kind>,
+    starting: BTreeMap<u32, super::source_stop::SourceKey>,
     challenge: Option<String>,
     terminal: Option<Answer>,
 }
@@ -178,6 +202,9 @@ fn validated(
         .remove(&answer.sequence)
         .ok_or("monitor-correlation")?;
     let valid = match (&kind, &mut answer.result) {
+        (Kind::CaptureSetup, ResultKind::CaptureSetup { .. })
+        | (Kind::CaptureSource, ResultKind::CaptureSource { .. })
+        | (Kind::InspectLocalIce, ResultKind::LocalIce { .. }) => endpoint,
         (
             Kind::Hello,
             ResultKind::Hello {
@@ -221,7 +248,7 @@ fn validated(
         (Kind::Pulse, ResultKind::Pulse {})
         | (Kind::ProbeWait, ResultKind::ProbeWait {})
         | (Kind::ProbeDescendant, ResultKind::ProbeDescendant {}) => true,
-        (Kind::Native, ResultKind::Native { .. }) => endpoint,
+        (Kind::Native | Kind::SourceStop, ResultKind::Native { .. }) => endpoint,
         (Kind::ProbeStopHolder, ResultKind::ProbeStopHolder { pid, coordinator }) => {
             *pid > 0 && *coordinator > 0 && pid != coordinator
         }
@@ -281,7 +308,7 @@ pub fn endpoint_coordinator(
     response: usize,
     urgent: usize,
 ) -> Result<(), &'static str> {
-    let _parent = Parent::validate_executor(parent, probe)?;
+    let verified_parent = Parent::validate_executor(parent, probe)?;
     let roles = [job, stop, request, response, urgent];
     if roles
         .iter()
@@ -291,7 +318,13 @@ pub fn endpoint_coordinator(
         return Err("tree-handles");
     }
     let custody = unsafe {
-        super::process_input::custody::Client::inherited(request, response, urgent, probe)?
+        super::process_input::custody::Client::inherited(
+            request,
+            response,
+            urgent,
+            verified_parent,
+            probe,
+        )?
     };
     super::live::run_endpoint(parent, probe, InheritedTree::open(job, stop)?, custody)
 }
@@ -415,6 +448,8 @@ fn run_inner(
         .try_clone_to_owned()
         .map_err(|_| "monitor-process-handle")?;
     let mut tree = Some(tree);
+    let sources = Arc::new(super::source_stop::SourceStops::default());
+    let application = parent.query_handle()?;
     let custody = custody_pipes
         .map(|pipes| {
             super::process_input::custody::Monitor::start(
@@ -424,22 +459,31 @@ fn run_inner(
                 stop.clone(),
                 pipes,
                 probe,
+                super::process_input::custody::Context {
+                    sources: sources.clone(),
+                },
             )
         })
         .transpose()?;
     let signals = Arc::new(Signals::default());
     let finished = Arc::new(AtomicBool::new(false));
     let state = Arc::new(Mutex::new(State::default()));
+    let capture_enabled = Arc::new(AtomicBool::new(false));
+    let capacity = if endpoint {
+        crate::live::ENDPOINT_OUTPUT_CAPACITY
+    } else {
+        OUTPUT_CAPACITY
+    };
     let guard = Arc::new(Mutex::new(Watchdog::new(
         Arc::new(AtomicBool::new(false)),
         super::lease::now()?,
         Instant::now(),
     )));
-    let (commands, incoming) = mpsc::sync_channel::<Vec<u8>>(OUTPUT_CAPACITY);
+    let (commands, incoming) = mpsc::sync_channel::<Vec<u8>>(capacity);
     let (outputs, outgoing) = mpsc::sync_channel::<(
         Answer,
         Option<mpsc::SyncSender<Result<(), &'static str>>>,
-    )>(OUTPUT_CAPACITY);
+    )>(capacity);
     let (writer_signals, writer_stop) = (signals.clone(), stop.clone());
     let input_writer = thread::spawn(move || {
         let mut pipe = child.input;
@@ -480,6 +524,70 @@ fn run_inner(
     });
     let (read_signals, read_stop, read_state, read_guard) =
         (signals.clone(), stop.clone(), state.clone(), guard.clone());
+    // Socket ownership queries must not share a worker with consent or custody.
+    // Retain the verified application object; never accept a caller-supplied PID.
+    let (inspection, inspect_receive) = mpsc::sync_channel::<(u32, Vec<u16>)>(1);
+    let (inspect_signals, inspect_stop, inspect_state, inspect_output) = (
+        signals.clone(),
+        stop.clone(),
+        state.clone(),
+        outputs.clone(),
+    );
+    let inspector = thread::spawn(move || {
+        while unsafe { WaitForSingleObject(inspect_stop.handle_for_query(), 0) } == WAIT_TIMEOUT {
+            let (sequence, ports) = match inspect_receive.recv_timeout(Duration::from_millis(10)) {
+                Ok(value) => value,
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(_) => break,
+            };
+            let outcome = (|| {
+                if unsafe { WaitForSingleObject(application.as_raw_handle(), 0) } != WAIT_TIMEOUT {
+                    return Err("application-ended");
+                }
+                let candidates = if probe {
+                    Vec::new()
+                } else {
+                    super::local_ice::inspect(
+                        unsafe { GetProcessId(application.as_raw_handle()) },
+                        &ports,
+                        false,
+                    )?
+                };
+                if unsafe { WaitForSingleObject(inspect_stop.handle_for_query(), 0) }
+                    != WAIT_TIMEOUT
+                {
+                    return Err("custody-stopped");
+                }
+                if unsafe { WaitForSingleObject(application.as_raw_handle(), 0) } != WAIT_TIMEOUT {
+                    return Err("application-ended");
+                }
+                let answer = Answer {
+                    sequence,
+                    result: ResultKind::LocalIce { candidates },
+                };
+                let answer = validated(
+                    &mut *inspect_state.lock().map_err(|_| "monitor-state")?,
+                    answer,
+                    probe,
+                    endpoint,
+                )?
+                .ok_or("monitor-inspection")?;
+                inspect_output
+                    .try_send((answer, None))
+                    .map_err(|_| "monitor-output-full")
+            })();
+            if outcome.is_err() {
+                if unsafe { WaitForSingleObject(inspect_stop.handle_for_query(), 0) }
+                    != WAIT_OBJECT_0
+                {
+                    fail(&inspect_signals, &inspect_stop);
+                }
+                break;
+            }
+        }
+    });
+    let read_sources = sources.clone();
+    let read_capture = capture_enabled.clone();
     thread::spawn(move || {
         let mut ingress = if endpoint {
             Ingress::endpoint(probe)
@@ -499,16 +607,35 @@ fn run_inner(
                 }
                 {
                     let mut state = read_state.lock().map_err(|_| "monitor-state")?;
-                    if state.pending.len() >= OUTPUT_CAPACITY {
+                    if state.pending.len() >= capacity
+                        || (endpoint
+                            && kind != Kind::Shutdown
+                            && state.pending.len() >= capacity - 1)
+                    {
                         return Err("monitor-capacity");
                     }
-                    if !matches!(kind, Kind::Hello | Kind::Pulse | Kind::Shutdown)
-                        && state
-                            .pending
-                            .values()
-                            .filter(|k| !matches!(k, Kind::Hello | Kind::Pulse | Kind::Shutdown))
-                            .count()
-                            >= crate::live::ORDINARY_CAPACITY
+                    if !matches!(
+                        kind,
+                        Kind::Hello
+                            | Kind::Pulse
+                            | Kind::Shutdown
+                            | Kind::SourceStop
+                            | Kind::InspectLocalIce
+                    ) && state
+                        .pending
+                        .values()
+                        .filter(|k| {
+                            !matches!(
+                                k,
+                                Kind::Hello
+                                    | Kind::Pulse
+                                    | Kind::Shutdown
+                                    | Kind::SourceStop
+                                    | Kind::InspectLocalIce
+                            )
+                        })
+                        .count()
+                        >= crate::live::ORDINARY_CAPACITY
                     {
                         return Err("monitor-capacity");
                     }
@@ -520,12 +647,58 @@ fn run_inner(
                             .handshake(Instant::now())?;
                     }
                     state.pending.insert(request.sequence, kind);
+                    match &request.command {
+                        Command::Native {
+                            document,
+                            operation: crate::endpoint::Operation::CaptureStart { operation, .. },
+                        } if read_capture.load(Ordering::SeqCst) => {
+                            let key = super::source_stop::SourceKey {
+                                document: *document,
+                                operation: operation.clone(),
+                            };
+                            if read_sources.begin(&key).is_ok() {
+                                state.starting.insert(request.sequence, key);
+                            }
+                        }
+                        Command::Native {
+                            document,
+                            operation:
+                                crate::endpoint::Operation::CaptureStop { operation }
+                                | crate::endpoint::Operation::CaptureCancel { operation },
+                        } => {
+                            read_sources.stop(&super::source_stop::SourceKey {
+                                document: *document,
+                                operation: operation.clone(),
+                            })?;
+                        }
+                        _ => (),
+                    }
                 }
                 if kind == Kind::Pulse {
                     read_guard
                         .lock()
                         .map_err(|_| "monitor-watchdog")?
                         .touch(Instant::now());
+                }
+                if let Command::InspectLocalIce { ports } = request.command {
+                    if ports.is_empty()
+                        || ports.len() > 64
+                        || ports.contains(&0)
+                        || ports
+                            .iter()
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .len()
+                            != ports.len()
+                    {
+                        return Err("invalid-inspection");
+                    }
+                    inspection
+                        .try_send((request.sequence, ports))
+                        .map_err(|_| "monitor-inspection-full")?;
+                    // The coordinator still validates the same ordered sequence,
+                    // but its reader neither queues work nor sends a duplicate.
+                    commands.try_send(bytes).map_err(|_| "monitor-input-full")?;
+                    continue;
                 }
                 commands.try_send(bytes).map_err(|_| "monitor-input-full")?;
                 if kind == Kind::Shutdown {
@@ -572,6 +745,7 @@ fn run_inner(
     let (response_signals, response_stop, response_state) =
         (signals.clone(), stop.clone(), state.clone());
     let response_writer = outputs.clone();
+    let response_sources = sources.clone();
     let reader = thread::spawn(move || {
         let mut pipe = child.output;
         let result = (|| {
@@ -580,6 +754,26 @@ fn run_inner(
             {
                 let answer: Answer =
                     serde_json::from_slice(&bytes).map_err(|_| "monitor-child-json")?;
+                {
+                    let mut state = response_state.lock().map_err(|_| "monitor-state")?;
+                    if let Some(key) = state.starting.remove(&answer.sequence) {
+                        if !matches!(
+                            answer.result,
+                            ResultKind::Native {
+                                answer: crate::endpoint::Answer::Ok { .. },
+                                ..
+                            }
+                        ) {
+                            response_sources.stop(&key)?;
+                        }
+                    }
+                    if let ResultKind::CaptureSetup { enabled } = &answer.result {
+                        if state.pending.get(&answer.sequence) != Some(&Kind::CaptureSetup) {
+                            return Err("monitor-correlation");
+                        }
+                        capture_enabled.store(*enabled && !probe, Ordering::SeqCst);
+                    }
+                }
                 let answer = validated(
                     &mut *response_state.lock().map_err(|_| "monitor-state")?,
                     answer,
@@ -613,6 +807,7 @@ fn run_inner(
     // Coordinator death closes authority before awaiting any survivor. Job
     // zero cannot itself wake an input holder that is waiting for this event.
     stop.revoke()?;
+    inspector.join().map_err(|_| "monitor-inspection-join")?;
     if wait_code(&process)? != Some(0) {
         signals.fail();
     }

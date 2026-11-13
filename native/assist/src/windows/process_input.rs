@@ -614,7 +614,13 @@ pub fn run_owned_child(parent_pid: u32, probe: bool) -> Result<(), &'static str>
     if spec.tag == 0 || (!probe && spec.owner == 0) || spec.stop == spec.owner {
         return Err("custody-bootstrap");
     }
-    let roles = [spec.coordinator, spec.global, spec.arm];
+    if !probe && spec.source_stop == 0 {
+        return Err("source-stop-required");
+    }
+    let mut roles = vec![spec.coordinator, spec.global, spec.arm];
+    if spec.source_stop != 0 {
+        roles.push(spec.source_stop);
+    }
     if roles
         .iter()
         .enumerate()
@@ -639,6 +645,11 @@ pub fn run_owned_child(parent_pid: u32, probe: bool) -> Result<(), &'static str>
     }
     let mut witness = ExecutorWitness::retain(&parent, spec.stop)?;
     witness.others = vec![coordinator, global];
+    if spec.source_stop != 0 {
+        witness
+            .others
+            .push(unsafe { custody::adopt(spec.source_stop, false)? });
+    }
     let _owner = if probe {
         None
     } else {

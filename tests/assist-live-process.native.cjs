@@ -11,6 +11,25 @@ const binary = process.env.PALISADE_ASSIST_TEST_BINARY || path.resolve('.assist/
 const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('src/assist/guardian-integrity.json');
 const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: randomBytes(32).toString('base64url') };
 const canonical = (op, fields = {}) => ({ p: 'palisade.assist.native', v: 1, id: randomBytes(12).toString('base64url'), op, ...fields });
+test('actual endpoint refuses capture activation in probes and reserves source/peer Stop under a full ordinary budget', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    assert.equal(await channel.configureCapture(true), false);
+    await channel.request(canonical('hello', { versions: [1] }), 4);
+    await assert.rejects(channel.selectCapture({ operation: 'capture_fixture_01', source: 'screen:0:0', display: '1',
+      bounds: { x: 0, y: 0, width: 100, height: 100, generation: 1 } }, 4), { code: 'capture-unavailable' });
+    assert.deepEqual(await channel.inspectLocalIce([12345]), { candidates: [] });
+    const ordinary = Array.from({ length: 8 }, () => channel.probeWait(10000).catch(error => error));
+    assert.deepEqual(await channel.inspectLocalIce([12345]), { candidates: [] });
+    // These acknowledgements are from urgent readers while the first bounded
+    // ordinary fixture is still waiting. Shutdown then cancels all eight.
+    assert.deepEqual(await channel.request(canonical('capture.stop', { operation: 'capture_fixture_01' }), 4), {});
+    assert.deepEqual(await channel.request(canonical('peer.close', { session: 'session_fixture_01' }), 4), {});
+    await channel.close(); await Promise.all(ordinary);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
 
 test('actual endpoint owns normal executor transport, terminal receipt and mirror across probe generations', async () => {
   const lifecycle = createAssistLifecycle();

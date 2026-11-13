@@ -11,6 +11,7 @@ pub const PROTOCOL: &str = "palisade.assist.live";
 pub const MAX_FRAME: usize = 65_536;
 pub const ORDINARY_CAPACITY: usize = 8;
 pub const OUTPUT_CAPACITY: usize = 10;
+pub const ENDPOINT_OUTPUT_CAPACITY: usize = 13;
 
 #[derive(Default)]
 pub struct Signals {
@@ -54,6 +55,16 @@ pub struct Request {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
+    CaptureSetup {
+        enabled: bool,
+    },
+    CaptureSource {
+        document: u32,
+        selection: crate::capture::Selection,
+    },
+    InspectLocalIce {
+        ports: Vec<u16>,
+    },
     Hello {
         protocol: String,
         version: u32,
@@ -137,6 +148,13 @@ impl Ingress {
                     signals.revoke();
                 }
                 Command::Native { .. } if self.version != 3 => return Err("operation-unavailable"),
+                Command::CaptureSetup { .. }
+                | Command::CaptureSource { .. }
+                | Command::InspectLocalIce { .. }
+                    if self.version != 3 =>
+                {
+                    return Err("operation-unavailable");
+                }
                 Command::ProbeWait { milliseconds }
                     if !self.probe || *milliseconds == 0 || *milliseconds > 10_000 =>
                 {
@@ -176,6 +194,15 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    CaptureSetup {
+        enabled: bool,
+    },
+    CaptureSource {
+        accepted: bool,
+    },
+    LocalIce {
+        candidates: Vec<crate::capture::LocalCandidate>,
+    },
     Native {
         document: u32,
         answer: crate::endpoint::Answer,
@@ -230,6 +257,39 @@ mod tests {
     }
     fn hello() -> serde_json::Value {
         json!({"type":"hello","protocol":PROTOCOL,"version":1,"challenge":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"})
+    }
+    #[test]
+    fn source_and_inspection_commands_are_private_v3_only_and_never_accept_page_authority() {
+        for command in [
+            json!({"type":"capture-setup","enabled":true}),
+            json!({"type":"capture-source","document":0,"selection":{"operation":"capture_fixture_01","source":"window:123:0","display":null,"bounds":null}}),
+            json!({"type":"inspect-local-ice","ports":[12345]}),
+        ] {
+            for version in [1, 2] {
+                let signals = Signals::default();
+                let mut ingress = if version == 1 {
+                    Ingress::new(true)
+                } else {
+                    Ingress::owned(true)
+                };
+                let mut greeting = hello();
+                greeting["version"] = version.into();
+                ingress.accept(&wire(0, greeting), &signals).unwrap();
+                assert!(ingress.accept(&wire(1, command.clone()), &signals).is_err());
+            }
+        }
+        assert!(
+            serde_json::from_value::<Command>(
+                json!({"type":"capture-setup","enabled":true,"approved":true})
+            )
+            .is_err()
+        );
+        assert!(
+            serde_json::from_value::<Command>(
+                json!({"type":"inspect-local-ice","ports":[12345],"pid":123})
+            )
+            .is_err()
+        );
     }
     #[test]
     fn endpoint_dispatch_requires_its_own_version_and_private_handshake() {

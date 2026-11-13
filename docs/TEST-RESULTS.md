@@ -1,5 +1,14 @@
 # Validation
 
+## November 13 RC-3 source and session integration
+
+The [source/session continuation](evidence/2026-11-13-rc3-source-session.md)
+records qualified capture, source-scoped Stop, retained grant/session dispatch
+and the independent review corrections. Real service, native consent, physical
+input and all 30 cross-client cases remain Not Verified. This is not full Assist
+or production activation. Final candidate counts and exact-SHA CI are in that
+evidence record and Windows #1.
+
 ## November 13 RC-3 executor custody
 
 The [normal executor custody evidence](evidence/2026-11-13-rc3-executor-custody.md)

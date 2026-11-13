@@ -42,6 +42,7 @@ pub use crate::input::InputProfile;
 pub struct RuntimeOwner {
     pub(crate) stop: crate::cancellation::SessionStop,
     pub(crate) custody: Arc<super::process_input::custody::Client>,
+    pub(crate) source: super::capture::Binding,
 }
 /// Prepared before authority and cloned into urgent readers/watchdogs. Calling
 /// either method signals the retained native event and uses atomics, without
@@ -56,6 +57,25 @@ pub struct RuntimeRevoker {
     files: Option<super::files::FileRevoker>,
 }
 impl RuntimeRevoker {
+    #[cfg(test)]
+    pub(crate) fn no_authority() -> Self {
+        Self {
+            stop: Arc::new(AtomicBool::new(false)).into(),
+            input_stop: Arc::new(AtomicBool::new(false)),
+            executor_stop: None,
+            ready: Arc::new(AtomicBool::new(false)),
+            lease_cancel: Arc::new(AtomicBool::new(false)),
+            files: None,
+        }
+    }
+    #[cfg(test)]
+    pub(crate) fn input_stopped(&self) -> bool {
+        self.input_stop.load(Ordering::SeqCst)
+    }
+    #[cfg(test)]
+    pub(crate) fn session_stopped(&self) -> bool {
+        self.stop.is_stopped()
+    }
     pub fn suspend_input(&self) {
         self.input_stop.store(true, Ordering::SeqCst);
         self.ready.store(false, Ordering::SeqCst);
@@ -87,6 +107,7 @@ pub struct StreamRuntime {
     files: Option<Arc<SessionFiles>>,
     lease_cancel: Arc<AtomicBool>,
     cleanup_failed: bool,
+    expected_track: String,
 }
 fn with_live_gate<T>(
     gate: &Mutex<SessionGate>,
@@ -178,7 +199,9 @@ impl StreamRuntime {
         if owner.custody.probe() {
             return Err("native-runtime-unqualified");
         }
-        let stop = owner.stop.descendant();
+        let source_key = owner.source.key.clone();
+        let expected_track = format!("palisade-capture:{}", source_key.operation);
+        let stop = owner.stop.scoped(Arc::new(owner.source));
         let custody = owner.custody;
         enrollment.bind_session(&stop)?;
         if stop.is_stopped() || grants.is_empty() || grants.len() > 8 {
@@ -234,6 +257,8 @@ impl StreamRuntime {
             }),
         );
         let lease_cancel = poller.cancel_flag();
+        let worker_facts = poller.facts_reader();
+        let worker_expected_track = expected_track.clone();
         let (work, receive) = mpsc::sync_channel(1);
         let ready = Arc::new(AtomicBool::new(false));
         let input_stop = Arc::new(AtomicBool::new(false));
@@ -251,6 +276,17 @@ impl StreamRuntime {
             let mut active_epoch = None;
             let mut quiet_since = Instant::now();
             loop {
+                if worker_facts
+                    .lock()
+                    .map(|facts| {
+                        facts.as_ref().is_some_and(|facts| {
+                            facts.stream_track_name.as_deref() != Some(&worker_expected_track)
+                        })
+                    })
+                    .unwrap_or(true)
+                {
+                    worker_stop.revoke();
+                }
                 let invalid = lease::now()
                     .and_then(|now| {
                         worker_gate
@@ -311,8 +347,11 @@ impl StreamRuntime {
                             let (reservation, registration, start_epoch) = {
                                 let mut gate = worker_gate.lock().map_err(|_| "endpoint-failed")?;
                                 let reservation = gate.reserve_executor()?;
-                                let registration =
-                                    reservation.custody(&gate.binding().session, source.clone());
+                                let registration = reservation.custody(
+                                    &gate.binding().session,
+                                    source.clone(),
+                                    source_key.clone(),
+                                );
                                 (reservation, registration, gate.input_epoch())
                             };
                             let child = match ProcessInput::spawn_monitored(
@@ -507,9 +546,33 @@ impl StreamRuntime {
             files,
             lease_cancel,
             cleanup_failed: false,
+            expected_track,
+        })
+    }
+    pub(crate) fn source_confirmed(&self) -> Result<bool, &'static str> {
+        if self.ended() {
+            return Err("revoked");
+        }
+        match self.poller.as_ref().and_then(LeasePoller::service_facts) {
+            None => Ok(false),
+            Some(facts) if facts.stream_track_name.as_deref() == Some(&self.expected_track) => {
+                Ok(true)
+            }
+            Some(_) => {
+                self.revoker().revoke();
+                Err("source-mismatch")
+            }
+        }
+    }
+    pub(crate) fn admit(&mut self, signed: &SignedStreamGrant) -> Result<(), &'static str> {
+        with_live_gate(&self.gate, &self.stop, |gate| {
+            gate.admit(signed, lease::now()?)
         })
     }
     pub fn request_consent(&mut self, id: &str) -> Result<(), &'static str> {
+        if !self.source_confirmed()? {
+            return Err("source-unconfirmed");
+        }
         if self.stop.is_stopped() || self.prompts.contains_key(id) || self.prompts.len() >= 8 {
             return Err("consent-unavailable");
         }
@@ -584,9 +647,15 @@ impl StreamRuntime {
     /// Called exclusively with the DTLS fingerprint observed by the app-owned
     /// gateway, not an SDP string or boolean supplied by the hosted page.
     pub fn observed_peer(&self, fingerprint: &str) -> Result<(), &'static str> {
+        if !self.source_confirmed()? {
+            return Err("source-unconfirmed");
+        }
         with_live_gate(&self.gate, &self.stop, |gate| gate.verify_peer(fingerprint))
     }
     pub fn packet(&self, packet: String) -> Result<(), &'static str> {
+        if !self.source_confirmed()? {
+            return Err("source-unconfirmed");
+        }
         if packet.len() > 16_384 {
             return Err("too-large");
         }

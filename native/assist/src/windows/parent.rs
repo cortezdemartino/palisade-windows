@@ -69,6 +69,15 @@ impl Parent {
         Ok(observer)
     }
     pub(crate) fn wait_handle(&self) -> Result<std::os::windows::io::OwnedHandle, &'static str> {
+        self.retain_handle(PROCESS_SYNCHRONIZE)
+    }
+    pub(crate) fn query_handle(&self) -> Result<std::os::windows::io::OwnedHandle, &'static str> {
+        self.retain_handle(PROCESS_SYNCHRONIZE | PROCESS_QUERY_LIMITED_INFORMATION)
+    }
+    fn retain_handle(
+        &self,
+        rights: u32,
+    ) -> Result<std::os::windows::io::OwnedHandle, &'static str> {
         use std::os::windows::io::FromRawHandle;
         let mut handle = ptr::null_mut();
         // Duplicate this exact validated process, never reopen a reported PID.
@@ -78,7 +87,7 @@ impl Parent {
                 self.0,
                 GetCurrentProcess(),
                 &mut handle,
-                PROCESS_SYNCHRONIZE,
+                rights,
                 0,
                 0,
             )

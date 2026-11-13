@@ -1,4 +1,5 @@
 pub mod activity;
+pub(crate) mod capture;
 pub mod consent;
 pub mod custody_probe;
 pub mod endpoint;
@@ -21,3 +22,4 @@ pub mod process_monitor;
 mod process_stop;
 pub mod process_tree;
 pub mod runtime;
+pub(crate) mod source_stop;

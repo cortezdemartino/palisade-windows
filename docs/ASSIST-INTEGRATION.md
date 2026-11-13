@@ -1,5 +1,11 @@
 # Windows Assist integration
 
+Current RC-3 progress: [qualified capture and retained session dispatch](evidence/2026-11-13-rc3-source-session.md).
+Native source approval, source-scoped cancellation and grant offers are connected
+to the existing components. Public activation remains off. Authenticated peer,
+Profile 2 negotiation, reacquisition and resource dispatch remain Windows work;
+genuine service/native-device acceptance has not passed.
+
 ## Current integration status, November 9
 
 The canonical companion is frozen at `01ae58565dd29dce692bace6d09834c5efdbff69`.

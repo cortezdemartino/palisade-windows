@@ -78,12 +78,12 @@ pub struct Binding {
     pub helper_transport: String,
     pub endpoint: String,
 }
-fn track(v: &str) -> bool {
+pub(crate) fn track(v: &str) -> bool {
     v.strip_prefix("TR_").is_some_and(|v| {
         (4..=64).contains(&v.len()) && v.bytes().all(|c| c.is_ascii_alphanumeric())
     })
 }
-fn room(v: &str) -> bool {
+pub(crate) fn room(v: &str) -> bool {
     let Some(v) = v.strip_prefix('!') else {
         return false;
     };

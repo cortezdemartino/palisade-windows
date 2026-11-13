@@ -4,19 +4,30 @@
 
 Continue from the [normal executor custody checkpoint](evidence/2026-11-13-rc3-executor-custody.md).
 Starting SHA: `b0720e3e69e238dd637106d60e19c0eca8e68203`.
+Custody checkpoint `4ce232e20c8bf07f7f222ffc2f69a1cea7409a95` passed
+[exact-SHA Windows CI](https://github.com/cortezdemartino/palisade-windows/actions/runs/43496422587).
 Private v3 now supplies the monitor-owned normal executor transport: reservation,
 sealed source/ARM, retained handoff, child terminal and coordinator mirror evidence.
 The runtime factory's existing gate reservation uses it. Direct cancellation
 bypasses ordinary custody work. Missing Native evidence retains ownership.
 Do not recreate the custody registry, executor or grant/lease verifiers.
 
-Next: canonical grant.offer into one persistent session registry, native source
-binding/protected consent, then peer, reacquisition and resources. These remain
-Windows work. Real-service enrollment and all 30 real acceptance cases are Not
+The [capture/session continuation](evidence/2026-11-13-rc3-source-session.md)
+connects the qualified build's isolated media provider to native source approval,
+root-owned source Stop events, and canonical grant.offer to retained per-session
+StreamRuntime/SessionGate/LeasePoller ownership. Input/resources remain compiled
+out of normal packaged builds; peer operations still refuse activation. This is
+source/process integration, not an accepted live Assist session.
+
+Next: authenticated peer and Profile 2 negotiation, fresh-grant reacquisition,
+extension resources and real-service qualification. These remain Windows work.
+Real-service enrollment and all 30 real acceptance cases are Not
 Verified. Existing #5 still needs the approved disposable device/service and public
-issuer pin. Companion `f2aa2634d8580fd082a1fa793b149374d3e3323f` is read-only;
+issuer pin. Companion `33e07ee158194adc1be547d838f79cdb8c38d6b0` is read-only;
 six frozen sources, nine fixture families and manifest are unchanged. No separate
-enrollment-only harness was found. Keep all sensitive flags and localYield false.
+enrollment-only harness was found. Public flags/localYield remain false. The
+explicit qualification profile can report capture only after native setup;
+input, resources and cooperative capability declarations remain false.
 Verify the exact pushed-SHA CI linked from #1. No release, signing, installation
 or production activation is authorized.
 

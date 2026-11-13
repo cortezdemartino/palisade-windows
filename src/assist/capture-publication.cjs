@@ -14,6 +14,7 @@ function createCapturePublication({
     disposed = false,
     failed = false;
   const retired = new Set();
+  const settling = new Set();
   const fail = (code) => {
     throw new NativeBridgeError(code);
   };
@@ -34,35 +35,45 @@ function createCapturePublication({
     operation.ended = true;
     active = null;
     operation.scope.signal.removeEventListener("abort", operation.abort);
-    // Invalidate child authority before releasing the source or telling the page.
-    // This callback must revoke synchronously; native cleanup can finish later.
-    try {
-      onInvalidate(operation.snapshot);
-    } catch {
+    // Close main-owned admission immediately. A native fence acknowledgement
+    // may be asynchronous; never report terminal success before it arrives.
+    let fence;
+    const failedFence = () => {
       failed = true;
       state = "failed";
       reason = "error";
-      // The eventual live coordinator supplies independent global revocation.
-      // No resource/input authority is owned by this capture-only adapter.
-      try {
-        onFatal();
-      } catch {}
-    }
+      try { onFatal(); } catch {}
+    };
     try {
-      capture.stop();
-    } finally {
+      fence = onInvalidate(operation.snapshot, { operation: operation.id, room: operation.room });
+    } catch {
+      failedFence();
+    }
+    try { capture.stop(); } catch { failedFence(); }
+    const publish = () => {
       operation.scope.emit({
         event: "capture.status",
         operation: operation.id,
         state,
         reason,
       });
+    };
+    if (fence && typeof fence.then === "function") {
+      const completion = Promise.resolve(fence).then(() => { publish(); return true; }, () => {
+        failedFence(); publish(); throw new NativeBridgeError("stopped");
+      });
+      settling.add(completion);
+      void completion.finally(() => settling.delete(completion)).catch(() => {});
+      return completion;
     }
+    publish();
     return true;
   }
   async function dispatch(request, scope) {
     if (!enabled || disposed || failed) fail("capture-unavailable");
     if (request.op === "capture.start") {
+      if (settling.size) await Promise.all([...settling]);
+      if (failed || disposed) fail("capture-unavailable");
       if (retired.has(request.operation)) fail("stale-operation");
       if (active || capture.busy() || retired.size >= 128) fail("busy");
       if (scope.signal.aborted) fail("cancelled");
@@ -117,7 +128,7 @@ function createCapturePublication({
         return { operation: operation.id };
       } catch (error) {
         if (active === operation)
-          finish(operation, "cancelled", "picker-cancelled");
+          await finish(operation, "cancelled", "picker-cancelled");
         throw error instanceof NativeBridgeError
           ? error
           : new NativeBridgeError("cancelled");
@@ -149,7 +160,7 @@ function createCapturePublication({
       });
       return {};
     }
-    finish(
+    await finish(
       operation,
       request.op === "capture.cancel" ? "cancelled" : "stopped",
       request.op === "capture.cancel" ? "picker-cancelled" : "local-stop",
@@ -157,7 +168,8 @@ function createCapturePublication({
     return {};
   }
   function stop(reason = "local-stop") {
-    if (active) finish(active, "stopped", reason);
+    if (active) return finish(active, "stopped", reason);
+    if (settling.size) return Promise.all([...settling]);
   }
   function dispose() {
     if (disposed) return;

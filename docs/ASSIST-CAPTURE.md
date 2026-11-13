@@ -1,6 +1,10 @@
 # Isolated Windows capture
 
-Status: **Experimental, inactive**. This component has passed app-owned Windows fixtures. It is not connected to the hosted application or qualified for cross-client encrypted screen sharing.
+Status: **Experimental**. Public builds remain inactive. The explicit isolated
+qualification build now connects the canonical native bridge to the existing
+provider/picker and native source verification. This has not been qualified for
+real Windows-to-web encrypted screen sharing.
+[Current implementation and evidence](evidence/2026-11-13-rc3-source-session.md).
 
 The hosted session continues to deny generic display capture. The internal capture coordinator reuses the existing local source picker, requires a visible trusted main window, rechecks the selected source, and creates a separate sandboxed provider in an ephemeral partition. No source is selected automatically. The provider receives only the exact selected source, with audio disabled.
 
@@ -10,7 +14,7 @@ Both peers verify the actual remote certificate against the other owned peer's f
 
 Fresh challenges use monotonic deadlines. Only one challenge is outstanding per peer, and delayed inspection cannot extend the original deadline. Main independently destroys the provider if a peer freezes, crashes, navigates, disappears or fails validation. The provider also expires without main heartbeats. Cancellation before readiness cannot revive sharing. Closing the selected fixture window ends capture and clears source state. Closing or hiding the owner stops the operation. Repeated operations use distinct state and nonces; stale replies cannot stop a newer operation.
 
-The capture-publication component implements canonical capture.start/bind/cancel/stop and status/events through the existing strict native bridge. It binds the native source to an operation and room, accepts one tentative track SID, rejects rebinds, and invalidates matching child authority before source teardown. It owns no input/resource authority itself. The live coordinator must provide synchronous child revocation and independent fail-closed cleanup; production wiring is still unfinished. An old source/provider load failure, crash or queued timer cannot stop its replacement.
+The capture-publication component implements canonical capture.start/bind/cancel/stop and status/events through the existing strict native bridge. It binds the native source to an operation and room, accepts one tentative track SID, and rejects rebinds. Native verification finishes before starting the media provider. On stop, main closes its media path immediately and waits for the exact root source fence before reporting terminal success. This acknowledgement does not prove native input cleanup; retained custody does that separately. An old source/provider load failure, crash or queued timer cannot stop its replacement. Unknown cancellations create bounded terminal tombstones, so a delayed start cannot reuse a previously acknowledged stop.
 
 The track SID is a page claim. A capture.bind acknowledgement is not independent proof that the selected source produced the published track. Native grants still require the native enrollment tuple, exact source/room/stream binding, independent service verification, a fresh lease and native local consent. A window share cannot silently authorize desktop-wide input. Ending child Assist must leave its parent group stream intact.
 

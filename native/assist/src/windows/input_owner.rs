@@ -7,6 +7,8 @@ use windows_sys::Win32::{
 };
 
 pub struct InputOwner(HANDLE);
+#[cfg(test)]
+pub(crate) static APPROVAL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 impl InputOwner {
     fn name() -> Result<String, &'static str> {
         let mut session = 0;

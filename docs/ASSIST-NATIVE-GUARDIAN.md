@@ -5,8 +5,14 @@
 [RC-3 executor custody](evidence/2026-11-13-rc3-executor-custody.md) now connects
 the normal process-input factory to monitor-owned creation, sealed ARM, dedicated
 child terminal and positive mirror settlement. Partial/unacknowledged handoffs
-block replacement and retain the exact owner. Live grant/session, native capture,
-protected consent, peer and resource integration are still unfinished.
+block replacement and retain the exact owner.
+
+The [source/session continuation](evidence/2026-11-13-rc3-source-session.md)
+adds root-owned source cancellation, native verification of app-selected screen
+geometry/window ownership, and retained canonical grant/session dispatch. Source
+loss ends its descendant sessions without revoking unrelated launch scopes.
+Input remains unavailable in normal builds. Authenticated peer, reacquisition,
+resource integration and actual service/device acceptance are unfinished.
 
 The [RC-2 endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md) connects
 the actual application-owned monitor and persistent coordinator to canonical
@@ -15,9 +21,11 @@ explicit private-v3 endpoint cleanup scope. One launch retains the operational
 key and enrollment replay history. The isolated qualification build fixes its
 HTTPS origin, independent issuer pin and storage namespace at build time.
 
-This does not complete native session execution. Live
-StreamRuntime/source/lease/peer integration remains
-unfinished. All sensitive feature declarations are false and public startup
+This does not complete native session execution. The existing StreamRuntime,
+source and lease components are connected at source level, but their positive
+service/consent/peer workflow remains unverified. The explicit qualification
+profile can declare capture after native setup; input/resource/cooperative
+declarations remain false and public startup
 remains disabled. Existing consent dialogs are not qualified against synthetic
 Win32 button commands from a same-integrity local process; native and physical
 acceptance remain separate from the passing no-authority process tests.

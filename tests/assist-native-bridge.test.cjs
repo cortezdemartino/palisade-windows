@@ -14,6 +14,41 @@ const status = {
   capture: { operation: null, state: "idle", trackSid: null },
   controller: { session: null, state: "idle" },
 };
+test('bridge peer.close during a pending grant fences only that session through the actual runtime adapter', async () => {
+  const grants = new Map(), requests = [];
+  let closed = 0;
+  const native = {
+    request: async request => {
+      requests.push(request);
+      if (request.op === 'hello') return { version: 1, features: { capture: false, clipboard: false, files: false, input: false } };
+      if (request.op === 'grant.offer') { const pending = deferred(); grants.set(request.session, pending); return pending.promise; }
+      return request.op === 'status' ? status : {};
+    },
+    close: async () => { closed++; }, wait: () => new Promise(() => {}),
+  };
+  const context = { module: { exports: {} },
+    require: name => name === './live-channel.cjs' ? { openLiveChannel: async () => native }
+      : name === './native-protocol.cjs' ? contract : require(name) };
+  vm.runInNewContext(fs.readFileSync(require.resolve('../src/assist/native-runtime.cjs'), 'utf8'), context);
+  const runtime = context.module.exports.createNativeRuntime({ lifecycle: {} });
+  await runtime.ready;
+  const t = setup({ dispatch: runtime.dispatch, stopAll: runtime.stopAll });
+  await t.connect(DOC); await t.request('hello', { versions: [1] });
+  const first = t.request('grant.offer', { session: 'session_first_01', grant: '{}' });
+  const second = t.request('grant.offer', { session: 'session_other_01', grant: '{}' });
+  await turn(); assert.equal(grants.size, 2);
+  assert.equal((await t.request('peer.close', { session: 'session_first_01' })).ok, true);
+  assert.equal((await first).error, 'cancelled');
+  assert.equal(closed, 0);
+  grants.get('session_first_01').resolve({ signature: 'A'.repeat(86) });
+  grants.get('session_other_01').resolve({ signature: 'A'.repeat(86) });
+  assert.equal((await second).ok, true);
+  assert.equal((await t.request('status')).ok, true);
+  assert.equal(requests.filter(request => request.op === 'peer.close').length, 1);
+  assert.equal(closed, 0);
+  t.bridge.dispose(); await runtime.stopAll(); assert.equal(closed, 1);
+});
+
 test('first document navigation invalidates witnesses without ending the unbound native launch', async () => {
   const t = setup();
   t.contents.emit('did-start-navigation', {}, 'https://palisade.onyxops.org/', false, true);

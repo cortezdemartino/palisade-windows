@@ -64,13 +64,14 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
   }
   function send(command, timeoutMs = 2500, safety = false) {
     if (closed || !child || (!safety && revoked) || sequence >= 0xffffffff || writeBlocked ||
-        (!safety && [...pending.values()].filter(v => !['pulse', 'shutdown'].includes(v.type)).length >= CAPACITY)) return Promise.reject(unavailable());
+        pending.size >= (endpoint ? 13 : 10) || (endpoint && command.type !== 'shutdown' && pending.size >= 12) ||
+        (!safety && [...pending.values()].filter(v => !v.safety && !['pulse', 'shutdown'].includes(v.type)).length >= CAPACITY)) return Promise.reject(unavailable());
     const bytes = Buffer.from(JSON.stringify({ sequence, command }));
     if (!bytes.length || bytes.length > MAX_FRAME) return Promise.reject(unavailable());
     const id = sequence++, prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length);
     let resolve, reject;
     const answer = new Promise((done, fail) => { resolve = done; reject = fail; });
-    const entry = { type: command.type, document: command.document, operation: command.operation, release: command.release, resolve, reject, done: false, timer: null };
+    const entry = { type: command.type, safety, document: command.document, operation: command.operation, release: command.release, resolve, reject, done: false, timer: null };
     pending.set(id, entry);
     if (timeoutMs) entry.timer = setTimeout(() => {
       if (entry.done) return;
@@ -82,6 +83,11 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'capture-setup') return exact(result, ['type', 'enabled']) && result.type === entry.type && typeof result.enabled === 'boolean';
+    if (endpoint && entry.type === 'capture-source') return exact(result, ['type', 'accepted']) && result.type === entry.type && typeof result.accepted === 'boolean';
+    if (endpoint && entry.type === 'inspect-local-ice') return exact(result, ['type', 'candidates']) && result.type === 'local-ice' &&
+      Array.isArray(result.candidates) && result.candidates.length <= 64 && result.candidates.every(v => exact(v, ['port', 'address']) &&
+      Number.isInteger(v.port) && v.port > 0 && v.port <= 65535 && typeof v.address === 'string' && /^\d{1,3}(\.\d{1,3}){3}$/.test(v.address));
     if (entry.type === 'native' && endpoint) {
       if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'native' || result.document !== entry.document) return false;
       const answer = result.answer;
@@ -181,12 +187,26 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
         const canonical = nativeProtocol.parseRequest(request);
         if (canonical.op === 'stop' || !Number.isInteger(document) || document < 0 || document >= 0xffffffff) throw unavailable();
         const { p, v, id, ...operation } = canonical;
-        return send({ type: 'native', document, operation }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs).then(reply => {
+        if (revoked) throw unavailable();
+        return send({ type: 'native', document, operation }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs,
+          ['capture.stop', 'capture.cancel', 'peer.close'].includes(operation.op)).then(reply => {
           if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
           return reply.answer.result;
         });
       } catch (error) { return Promise.reject(error); }
     };
+    if (endpoint) {
+      api.configureCapture = enabled => typeof enabled === 'boolean' ? send({ type: 'capture-setup', enabled }).then(v => v.enabled) : Promise.reject(unavailable());
+      api.selectCapture = (selection, document) => {
+        if (!Number.isInteger(document) || document < 0 || document >= 0xffffffff) return Promise.reject(unavailable());
+        return send({ type: 'capture-source', document, selection }).then(v => {
+          if (!v.accepted) throw new nativeProtocol.NativeBridgeError('capture-unavailable');
+        });
+      };
+      api.inspectLocalIce = ports => Array.isArray(ports) && ports.length > 0 && ports.length <= 64 &&
+        new Set(ports).size === ports.length && ports.every(v => Number.isInteger(v) && v > 0 && v <= 65535)
+        && !revoked ? send({ type: 'inspect-local-ice', ports }, 2500, true).then(v => ({ candidates: v.candidates })) : Promise.reject(unavailable());
+    }
     if (probe) api.probeWait = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 10_000
       ? send({ type: 'probe-wait', milliseconds }, 12_000) : Promise.reject(unavailable());
     if (probe && ownedTree) api.probeDescendant = milliseconds => Number.isInteger(milliseconds) && milliseconds > 0 && milliseconds <= 2000

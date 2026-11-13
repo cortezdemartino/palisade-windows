@@ -5,8 +5,10 @@
 RC-3 adds a dedicated monitor custody side channel and independent coordinator
 cancellation event. Normal executors are monitor-created and wait for sealed ARM;
 their terminal reader is separate from ordinary Step/Ack. The normal runtime
-factory uses this connection, while public grant/session execution is still
-unconnected. Version3's scope remains conservative; no page protocol or physical
+factory uses this connection. The subsequent
+[source/session continuation](evidence/2026-11-13-rc3-source-session.md)
+wires qualified capture and grant offers into retained session ownership.
+Version3's scope remains conservative; no page protocol or physical
 input guarantee is added. Probe-only hold/release and pre-ARM cancellation test
 the actual executor transport without OS input, even in all-feature builds.
 [Proof requirements and remaining work](evidence/2026-11-13-rc3-executor-custody.md).
@@ -20,7 +22,8 @@ document. The initial blank document only invalidates connection witnesses.
 
 Only the explicit disposable qualification build starts this path. It embeds an
 independent test issuer pin and fixed HTTPS origin, isolates profile/native
-storage, and does not advertise sensitive capabilities. Public builds remain off.
+storage. It may advertise capture only after the native capture setup succeeds;
+input/resources/localYield stay false. Public builds remain off.
 See [the complete scope and evidence](evidence/2026-11-11-rc2-native-endpoint.md).
 
 The coordinator emits `endpoint-only` after revoking its record, canceling native
@@ -29,9 +32,21 @@ upgrade it to `endpoint-and-process-exit` after exact coordinator exit and close
 job admission/job zero. Main also joins the exact monitor. A channel-only terminal
 cannot satisfy version 3; this scope still cannot prove input or resource cleanup.
 
-Native grant/capture/peer/resource execution is not connected. Do not attach those
-components without their own retained cleanup witnesses and a deliberately
-negotiated scope. The original version 1/2 restrictions below remain in force.
+Private v3 adds capture-setup, capture-source and inspect-local-ice. These are
+trusted-main messages, never page operations. Exact source cancellation is
+signaled by the root reader; peer.close signals the retained session input
+revoker in the coordinator reader. Both bypass ordinary consent/HTTPS work.
+The root's separate bounded socket inspector retains the exact application
+process and consumes no ordinary coordinator/custody slot. The coordinator still
+validates each inspection frame's sequence without dispatch or duplicate reply.
+The 13-entry v3 response budget retains ordinary capacity eight, inspection and
+safety capacity, with one slot reserved for Shutdown. V1/v2 remain unchanged.
+
+Source Stop acknowledgement proves fencing, not child/mirror cleanup. The
+endpoint joins retained sessions before its terminal acknowledgement; the root
+still requires the original custody proof chain before final process completion.
+Authenticated peer and resource execution remain unfinished. The original
+version 1/2 restrictions below remain in force.
 
 ## Direct native stop checks
 

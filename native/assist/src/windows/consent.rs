@@ -322,6 +322,16 @@ pub(crate) fn confirm_issuer(text: &str, cancel: Arc<AtomicBool>) -> Result<bool
     Ok(unsafe { show(&context, text, "I compared the key") })
 }
 unsafe fn show(context: &Context, text: &str, allow_label: &str) -> bool {
+    // The same kernel-object lifetime excludes every Palisade input executor,
+    // including retained cleanup holders. No remote or cleanup-generated event
+    // may reach a sensitive UI. Busy input must be terminally stopped/settled
+    // by the coordinator first; never show the prompt alongside an injector.
+    let Ok(_input_exclusion) = super::input_owner::InputOwner::acquire() else {
+        return false;
+    };
+    if super::input::ordinary_desktop().is_err() {
+        return false;
+    }
     if context.cancelled() {
         return false;
     }
@@ -462,6 +472,31 @@ unsafe extern "system" fn procedure(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn owned_or_cleanup_pending_input_prevents_sensitive_ui_from_opening() {
+        let _serial = super::super::input_owner::APPROVAL_TEST_LOCK
+            .lock()
+            .unwrap();
+        let _input_owner = super::super::input_owner::InputOwner::acquire()
+            .expect("test requires an unused Palisade input slot");
+        let context = Context {
+            cancel: Arc::new(AtomicBool::new(false)),
+            session_stop: None,
+            input_stop: None,
+            result: Arc::new(Mutex::new(None)),
+            until: Instant::now() + Duration::from_secs(1),
+            alive: Cell::new(false),
+        };
+        assert!(!unsafe {
+            show(
+                &context,
+                "must never be displayed",
+                "must never be approved",
+            )
+        });
+        assert!(!context.alive.get());
+        assert!(context.result.lock().unwrap().is_none());
+    }
     fn context(
         session_stop: impl Into<crate::cancellation::SessionStop>,
         input_stop: Option<Arc<AtomicBool>>,

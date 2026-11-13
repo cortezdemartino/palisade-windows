@@ -137,6 +137,7 @@ fn seal_signals_independent_event_before_any_rpc_progress() {
         failed: Arc::new(AtomicBool::new(false)),
         mode: Mode::Probe,
         urgent: urgent.clone(),
+        monitor: None,
     };
     let worker = thread::spawn(move || client.seal());
     // The actor has not consumed the request and cannot produce a reply yet.

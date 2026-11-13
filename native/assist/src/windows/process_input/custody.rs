@@ -30,10 +30,14 @@ pub(crate) struct Registration {
     pub slot: u64,
     pub execution: u64,
     pub source: Source,
+    pub source_key: Option<super::super::source_stop::SourceKey>,
 }
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum Request {
+    Source {
+        key: super::super::source_stop::SourceKey,
+    },
     Spawn {
         registration: Registration,
         tag: usize,
@@ -62,6 +66,10 @@ struct Message {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum Answer {
+    Source {
+        key: super::super::source_stop::SourceKey,
+        stop: usize,
+    },
     Spawned {
         ticket: Ticket,
         process: usize,
@@ -98,6 +106,7 @@ pub(super) struct Bootstrap {
     pub global: usize,
     pub arm: usize,
     pub source: Source,
+    pub source_stop: usize,
 }
 fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, &'static str> {
     serde_json::to_vec(value).map_err(|_| "custody-encoding")
@@ -228,10 +237,12 @@ enum ReplyKind {
     Spawn,
     Observe,
     Done,
+    Source,
 }
 impl ReplyKind {
     fn of(request: &Request) -> Self {
         match request {
+            Request::Source { .. } => Self::Source,
             Request::Spawn { .. } => Self::Spawn,
             Request::Observe { .. } => Self::Observe,
             _ => Self::Done,
@@ -241,6 +252,7 @@ impl ReplyKind {
         matches!(
             (self, answer),
             (_, Answer::Refused {})
+                | (Self::Source, Answer::Source { .. })
                 | (Self::Spawn, Answer::Spawned { .. })
                 | (Self::Observe, Answer::Observed { .. })
                 | (Self::Done, Answer::Done {})
@@ -261,6 +273,7 @@ pub(crate) struct Client {
     failed: Arc<AtomicBool>,
     mode: Mode,
     urgent: Arc<StopEvent>,
+    monitor: Option<Mutex<Parent>>,
 }
 impl Client {
     pub(crate) fn probe(&self) -> bool {
@@ -271,6 +284,7 @@ impl Client {
         request: usize,
         response: usize,
         urgent: usize,
+        monitor: Parent,
         probe: bool,
     ) -> Result<Arc<Self>, &'static str> {
         if request == response || request == urgent || response == urgent {
@@ -326,6 +340,7 @@ impl Client {
             failed,
             mode: if probe { Mode::Probe } else { Mode::Native },
             urgent,
+            monitor: Some(Mutex::new(monitor)),
         }))
     }
     fn call(&self, command: Request) -> Result<Answer, &'static str> {
@@ -361,6 +376,26 @@ impl Client {
         match self.call(Request::Seal {})? {
             Answer::Done {} => Ok(()),
             _ => Err("custody-response"),
+        }
+    }
+    pub(crate) fn source(
+        &self,
+        key: &super::super::source_stop::SourceKey,
+    ) -> Result<Arc<super::super::source_stop::SourceWitness>, &'static str> {
+        match self.call(Request::Source { key: key.clone() })? {
+            Answer::Source {
+                key: observed,
+                stop,
+            } if observed == *key => {
+                let parent = self
+                    .monitor
+                    .as_ref()
+                    .ok_or("custody-parent")?
+                    .lock()
+                    .map_err(|_| "custody-parent")?;
+                super::super::source_stop::SourceWitness::retain(&parent, stop)
+            }
+            _ => Err("custody-source"),
         }
     }
     pub fn spawn(
@@ -614,6 +649,10 @@ pub(crate) struct Monitor {
     state: Arc<Mutex<State>>,
     global: Arc<StopEvent>,
     coordinator: Arc<OwnedHandle>,
+    sources: Arc<super::super::source_stop::SourceStops>,
+}
+pub(crate) struct Context {
+    pub sources: Arc<super::super::source_stop::SourceStops>,
 }
 impl Monitor {
     pub fn start(
@@ -623,6 +662,7 @@ impl Monitor {
         global: Arc<StopEvent>,
         pipes: Pipes,
         probe: bool,
+        context: Context,
     ) -> Result<Self, &'static str> {
         let state = Arc::new(Mutex::new(State {
             registry: Registry::new(random()?, image.digest()),
@@ -637,6 +677,8 @@ impl Monitor {
         let retained_coordinator = coordinator.clone();
         let shared = state.clone();
         let stop = global.clone();
+        let sources = context.sources;
+        let source_stops = sources.clone();
         thread::spawn(move || {
             let mut input = pipes.receive;
             let mut output = pipes.send;
@@ -653,7 +695,8 @@ impl Monitor {
                     sequence = sequence
                         .checked_add(1)
                         .ok_or("custody-sequence-exhausted")?;
-                    let answer = handle(&shared, &coordinator, &stop, request.command);
+                    let answer =
+                        handle(&shared, &coordinator, &stop, &source_stops, request.command);
                     let result = match answer {
                         Ok(answer) => answer,
                         Err(_) => Answer::Refused {},
@@ -699,10 +742,12 @@ impl Monitor {
             state,
             global,
             coordinator: retained_coordinator,
+            sources,
         })
     }
     pub fn close(&self) -> Result<(), &'static str> {
         let mut failed = self.global.revoke().is_err();
+        failed |= self.sources.close().is_err();
         if unsafe { WaitForSingleObject(self.coordinator.as_raw_handle(), 0) } != WAIT_OBJECT_0 {
             return Err("custody-coordinator-alive");
         }
@@ -876,6 +921,7 @@ fn handle(
     shared: &Mutex<State>,
     coordinator: &OwnedHandle,
     global: &StopEvent,
+    sources: &super::super::source_stop::SourceStops,
     request: Request,
 ) -> Result<Answer, &'static str> {
     if matches!(request, Request::Seal {}) {
@@ -883,6 +929,15 @@ fn handle(
     }
     let mut state = shared.lock().map_err(|_| "custody-state")?;
     match request {
+        Request::Source { key } => {
+            if unsafe { WaitForSingleObject(global.handle_for_query(), 0) } != WAIT_TIMEOUT {
+                return Err("custody-stopped");
+            }
+            Ok(Answer::Source {
+                stop: sources.event(&key)?.raw(),
+                key,
+            })
+        }
         Request::Spawn {
             registration,
             tag,
@@ -910,6 +965,11 @@ fn handle(
                 return Err("custody-handoff-pending");
             }
             registration.source.point(0., 0.)?;
+            let source_event = match (&registration.source_key, state.mode) {
+                (Some(key), _) => Some(sources.event(key)?),
+                (None, Mode::Probe) => None,
+                _ => return Err("source-required"),
+            };
             let nonce = random()?;
             let mode = state.mode;
             let ticket = state.registry.reserve(
@@ -948,16 +1008,37 @@ fn handle(
                     true,
                 )?;
                 let global_read = global.reader()?;
-                Ok((stop, owner_copy, arm_read, arm_write, coor, global_read))
+                let source_read = source_event
+                    .as_ref()
+                    .map(|event| event.reader())
+                    .transpose()?;
+                Ok((
+                    stop,
+                    owner_copy,
+                    arm_read,
+                    arm_write,
+                    coor,
+                    global_read,
+                    source_read,
+                ))
             })();
-            let (stop, owner_copy, arm_read, arm_write, coor, global_read) = match prepared {
-                Ok(value) => value,
-                Err(error) => {
-                    state.registry.stop(&ticket)?;
-                    return Err(error);
-                }
-            };
+            let (stop, owner_copy, arm_read, arm_write, coor, global_read, source_read) =
+                match prepared {
+                    Ok(value) => value,
+                    Err(error) => {
+                        state.registry.stop(&ticket)?;
+                        return Err(error);
+                    }
+                };
             state.registry.begin_spawn(&ticket)?;
+            let mut inherited = vec![
+                arm_read.as_handle(),
+                coor.as_handle(),
+                global_read.as_handle(),
+            ];
+            if let Some(source) = &source_read {
+                inherited.push(source.as_handle());
+            }
             let launched = {
                 let s = &mut *state;
                 s.tree.launch_custody(
@@ -971,11 +1052,7 @@ fn handle(
                             "native".into()
                         },
                     ],
-                    &[
-                        arm_read.as_handle(),
-                        coor.as_handle(),
-                        global_read.as_handle(),
-                    ],
+                    &inherited,
                 )
             };
             let (child, error) = match launched {
@@ -1044,6 +1121,9 @@ fn handle(
                 global: global_read.as_raw_handle() as usize,
                 arm: arm_read.as_raw_handle() as usize,
                 source: registration.source,
+                source_stop: source_read
+                    .as_ref()
+                    .map_or(0, |source| source.as_raw_handle() as usize),
             };
             // Publish the original owner before bootstrap/query/transfer can fail.
             let result = (|| {

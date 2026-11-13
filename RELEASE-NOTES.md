@@ -5,9 +5,13 @@
 - Connect the inactive Assist normal executor to monitor-owned creation and
   generation-bound child/mirror cleanup evidence.
 - Retain uncertain process-handle handoffs and keep Stop independent of ordinary
-  custody requests. No Assist capabilities or production switches are enabled.
-- Full Assist enrollment/session/capture/consent/peer/resource integration and
-  disposable-device acceptance remain unfinished.
+  custody requests. No production Assist switches are enabled.
+- Connect qualified Assist capture to native source verification and retained
+  grant/session ownership. Keep source and helper cancellation independent of
+  unrelated sessions, and retain terminal status until the native fence arrives.
+- Keep Palisade input and cleanup outside sensitive approval interfaces.
+  Authenticated peer, reacquisition, resource integration and disposable-device
+  acceptance remain unfinished. Public Assist remains disabled.
 
 ## 0.3.4
 

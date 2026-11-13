@@ -13,6 +13,7 @@ function createIsolatedCapture({
   enumerate = (options) => desktopCapturer.getSources(options),
   choose = chooseSource,
   onState = () => {},
+  onSelect = async () => {},
 }) {
   const consumer = getContents(),
     parent = getWindow();
@@ -97,6 +98,8 @@ function createIsolatedCapture({
           permitted,
         });
         if (!selected || !permitted()) throw Error('Capture selection cancelled');
+        await onSelect(selected, { publicOperation });
+        if (!permitted()) throw Error('Capture selection cancelled');
         const stream = await hop.start({ kind: 'desktop', id: selected.id }, { publicOperation });
         if (!permitted()) {
           // stop() already invalidated this hop. Late completion must not stop a successor.

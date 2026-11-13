@@ -41,7 +41,7 @@ async function main() {
       'Isolated capture component fixtures passed with release file-protocol restrictions.',
     );
   } finally {
-    await unlocked(() => flipFuses(binary, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }));
+    await unlocked(() => flipFuses(binary, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }), binary);
   }
 }
 main().catch((error) => {

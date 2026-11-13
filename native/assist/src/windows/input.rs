@@ -147,9 +147,9 @@ fn target(source: &Source, keyboard: bool) -> Result<(), &'static str> {
         result
     }
 }
-struct DpiScope(DPI_AWARENESS_CONTEXT);
+pub(crate) struct DpiScope(DPI_AWARENESS_CONTEXT);
 impl DpiScope {
-    fn enter() -> Result<Self, &'static str> {
+    pub(crate) fn enter() -> Result<Self, &'static str> {
         let old =
             unsafe { SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
         if old.is_null() {

@@ -20,6 +20,13 @@ Version 0.2.4 adds a manual update check alongside the manager, live polling sta
 
 ## Assist availability
 
+The separate disposable qualification build now connects native screen/window
+selection to the isolated capture provider. It has no production activation
+toggle. Capture requires an app-owned picker; a window share grants no desktop
+input scope. Native input, resources and cooperative input remain unavailable
+in the maintenance package. Real cross-client acceptance is pending.
+[Current qualification scope](evidence/2026-11-13-rc3-source-session.md).
+
 This candidate has no native Assist capture setting or source chooser. Capture remains denied pending the Electron permission-path review and lifecycle qualification. The v1 description API reports unavailable. Do not interpret the existing microphone setting or notification test as screen-sharing consent. See [ASSIST-INTEGRATION.md](ASSIST-INTEGRATION.md).
 
 The packaged guardian foundation has no activation toggle and is not started by normal application use. Its inclusion does not change the unavailable Assist report or grant any device permissions. Full Assist controls remain unavailable until the canonical authority and native acceptance gates are complete.

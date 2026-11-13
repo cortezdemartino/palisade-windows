@@ -216,6 +216,8 @@ function createMainWindow(profile, startupVerified) {
   if (nativeEndpointEnabled && app.isPackaged && startupVerified) {
     if (!nativeAssistRuntime) nativeAssistRuntime = createNativeRuntime({ lifecycle: assistLifecycle,
       ...packagedGuardianPaths(process.resourcesPath),
+      captureOptions: qualification ? { getContents: () => contents, getWindow: () => window, screen,
+        enumerate: options => desktopCapturer.getSources(options), choose: chooseSource } : null,
       onStatus: status => { nativeAssistStatus = status; refreshDeviceSettings?.(); updateTrayMenu(); } });
     void nativeAssistRuntime.ready.catch(() => {});
     nativeAssistBridge = installNativeBridge(contents, { enabled: true,

@@ -18,6 +18,6 @@ async function main() {
     const evidence = JSON.parse(await fs.readFile(output, 'utf8'));
     if (evidence.passed !== true || evidence.electron !== '44.7.2' || evidence.inputInjected !== false || evidence.cases.length !== 14)
       throw Error('Missing exact-runtime peer evidence');
-  } finally { await unlocked(() => flipFuses(binary, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 })); }
+  } finally { await unlocked(() => flipFuses(binary, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }), binary); }
 }
 main().catch(error => { console.error(error.message); process.exitCode = 1; });

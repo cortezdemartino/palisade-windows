@@ -96,8 +96,6 @@ fn run_inner(
         Parent::validate(parent_pid, probe)?
     };
     let signals = Arc::new(Signals::default());
-    let mut native_endpoint = endpoint
-        .then(|| super::endpoint::Endpoint::with_custody(probe, signals.cancellation(), custody));
     let live_stop = match &tree {
         Some(tree) => crate::cancellation::SessionStop::monitored(
             signals.cancellation(),
@@ -105,13 +103,22 @@ fn run_inner(
         ),
         None => signals.cancellation().into(),
     };
+    let mut native_endpoint = endpoint.then(|| {
+        super::endpoint::Endpoint::with_custody(probe, signals.cancellation(), custody)
+            .monitored(live_stop.clone())
+    });
+    let safety = native_endpoint.as_ref().map(|endpoint| endpoint.safety());
     let finished = Arc::new(AtomicBool::new(false));
     let guard = Arc::new(Mutex::new(Watchdog::new(
         Arc::new(AtomicBool::new(false)),
         super::lease::now()?,
         Instant::now(),
     )));
-    let (output, outgoing) = mpsc::sync_channel::<Output>(OUTPUT_CAPACITY);
+    let (output, outgoing) = mpsc::sync_channel::<Output>(if endpoint {
+        crate::live::ENDPOINT_OUTPUT_CAPACITY
+    } else {
+        OUTPUT_CAPACITY
+    });
     let writer_signals = signals.clone();
     thread::spawn(move || {
         let mut pipe = std::io::stdout().lock();
@@ -224,6 +231,10 @@ fn run_inner(
                         guard.lock().map_err(|_| "watchdog")?.touch(Instant::now());
                         emit(&read_output, request.sequence, Reply::Pulse, &read_signals)?;
                     }
+                    Command::InspectLocalIce { .. } if endpoint => {
+                        // Validated and answered by the independently scheduled
+                        // root inspector. Consume its sequence, no ordinary work.
+                    }
                     Command::Shutdown {} => {
                         // Ingress has already revoked, before either lock or dispatch.
                         *read_shutdown.lock().map_err(|_| "live-state")? = Some((
@@ -232,6 +243,42 @@ fn run_inner(
                         ));
                         read_signals.shutdown();
                         return Ok::<(), &'static str>(());
+                    }
+                    Command::Native {
+                        document,
+                        operation:
+                            crate::endpoint::Operation::CaptureStop { .. }
+                            | crate::endpoint::Operation::CaptureCancel { .. },
+                    } => {
+                        // The root has already signaled the exact source event.
+                        // A blocked ordinary worker cannot delay cancellation.
+                        emit(
+                            &read_output,
+                            request.sequence,
+                            Reply::Native {
+                                document: *document,
+                                answer: crate::endpoint::Answer::ok(serde_json::json!({})),
+                            },
+                            &read_signals,
+                        )?;
+                    }
+                    Command::Native {
+                        document,
+                        operation: crate::endpoint::Operation::PeerClose { session },
+                    } => {
+                        safety
+                            .as_ref()
+                            .ok_or("endpoint-unavailable")?
+                            .close_input(*document, session)?;
+                        emit(
+                            &read_output,
+                            request.sequence,
+                            Reply::Native {
+                                document: *document,
+                                answer: crate::endpoint::Answer::ok(serde_json::json!({})),
+                            },
+                            &read_signals,
+                        )?;
                     }
                     _ => ordinary.try_send(request).map_err(|_| "live-queue-full")?,
                 }
@@ -243,6 +290,9 @@ fn run_inner(
     });
     let outcome = (|| {
         while !signals.closing() {
+            if let Some(endpoint) = &mut native_endpoint {
+                endpoint.poll();
+            }
             let request = match receive.recv_timeout(Duration::from_millis(10)) {
                 Ok(request) => request,
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
@@ -260,6 +310,33 @@ fn run_inner(
                 continue;
             }
             match request.command {
+                Command::CaptureSetup { enabled } => {
+                    let enabled = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-unavailable")?
+                        .configure_capture(enabled);
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::CaptureSetup { enabled },
+                        &signals,
+                    )?;
+                }
+                Command::CaptureSource {
+                    document,
+                    selection,
+                } => {
+                    let accepted = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-unavailable")?
+                        .select_capture(document, selection);
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::CaptureSource { accepted },
+                        &signals,
+                    )?;
+                }
                 Command::Native {
                     document,
                     operation,
@@ -395,7 +472,7 @@ fn run_inner(
         // cleanup and crash-surviving ownership must precede a broader proof.
         signals.revoke();
         if let Some(endpoint) = &mut native_endpoint {
-            endpoint.revoke();
+            endpoint.cleanup()?;
         }
         if signals.failed() {
             return Err("live-failed");

@@ -12,7 +12,7 @@ function deferred() {
   });
   return { promise, resolve };
 }
-function fixture(enumerate, start) {
+function fixture(enumerate, start, onSelect) {
   const timers = [],
     contents = Object.assign(new EventEmitter(), {
       mainFrame: {},
@@ -70,10 +70,32 @@ function fixture(enumerate, start) {
     inspect: () => {},
     enumerate,
     choose: async () => 'window:11:0',
+    onSelect,
   });
   return { capture, timers, starts: () => starts, stops: () => stops };
 }
 const sources = [{ id: 'window:11:0', name: 'Owned fixture' }];
+test('native selection must finish before any media starts and a late approval cannot revive cancellation', async () => {
+  const approval = deferred();
+  let selected = 0;
+  const h = fixture(async () => sources, null, async () => { selected++; await approval.promise; });
+  const result = assert.rejects(h.capture.request({ publicOperation: 'capture_native_01' }), /cancelled/);
+  await turn();
+  assert.equal(selected, 1);
+  assert.equal(h.starts(), 0);
+  h.capture.stop();
+  approval.resolve();
+  await result;
+  await turn();
+  assert.equal(h.starts(), 0);
+  h.capture.dispose();
+});
+test('native source refusal never creates a media path', async () => {
+  const h = fixture(async () => sources, null, async () => { throw Error('Native refusal'); });
+  await assert.rejects(h.capture.request(), /Native refusal/);
+  assert.equal(h.starts(), 0);
+  h.capture.dispose();
+});
 test('cancelled hung enumeration settles promptly and its timer cannot stop a successor', async () => {
   const old = deferred();
   let calls = 0;

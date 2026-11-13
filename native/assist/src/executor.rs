@@ -35,12 +35,14 @@ impl ExecutorReservation {
         &self,
         session: &str,
         source: Source,
+        source_key: crate::windows::source_stop::SourceKey,
     ) -> crate::windows::process_input::custody::Registration {
         crate::windows::process_input::custody::Registration {
             session: session.into(),
             slot: self.instance,
             execution: self.identity.0,
             source,
+            source_key: Some(source_key),
         }
     }
 }

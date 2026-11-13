@@ -11,6 +11,7 @@ pub struct SessionStop {
     session: Arc<AtomicBool>,
     witness: Option<Arc<dyn StopWitness>>,
     parent: Option<Arc<SessionStop>>,
+    local_witness: Option<Arc<dyn StopWitness>>,
 }
 /// Native-owned liveness only. It never creates permission or cleanup proof.
 pub(crate) trait StopWitness: Send + Sync {
@@ -23,6 +24,7 @@ impl SessionStop {
             session: Arc::new(AtomicBool::new(false)),
             witness: None,
             parent: None,
+            local_witness: None,
         }
     }
     pub(crate) fn monitored(launch: Arc<AtomicBool>, witness: Arc<dyn StopWitness>) -> Self {
@@ -40,6 +42,12 @@ impl SessionStop {
             ..Self::child(self.launch.clone())
         }
     }
+    pub(crate) fn scoped(&self, witness: Arc<dyn StopWitness>) -> Self {
+        Self {
+            local_witness: Some(witness),
+            ..self.descendant()
+        }
+    }
     pub fn is_stopped(&self) -> bool {
         if self.session.load(Ordering::SeqCst) {
             return true;
@@ -50,6 +58,14 @@ impl SessionStop {
             .parent
             .as_ref()
             .is_some_and(|parent| parent.is_stopped())
+        {
+            self.revoke();
+            return true;
+        }
+        if self
+            .local_witness
+            .as_ref()
+            .is_some_and(|witness| witness.stopped())
         {
             self.revoke();
             return true;

@@ -8,9 +8,15 @@ generations require child terminal, actual exit and settled mirror. Ambiguous
 handoffs and missing evidence retain ownership. Real Probe process verification
 does not qualify physical input.
 
-RC-3 is unfinished. Connect the existing persistent runtime to canonical grants,
-native capture/source corroboration, protected consent and authenticated peers;
-then fresh-grant reacquisition and extension resources. Genuine enrollment needs
+The [source/session continuation](evidence/2026-11-13-rc3-source-session.md)
+connects canonical grant offers to retained runtimes, native capture provenance,
+source-scoped Stop and service track-name corroboration before consent. Qualified
+capture is wired through the existing isolated provider; public capture stays off.
+Palisade-owned input/cleanup cannot coexist with sensitive picker/consent UI.
+This does not authenticate physical consent against arbitrary same-user automation.
+
+RC-3 is unfinished. Complete authenticated peer/Profile 2 negotiation, fresh-grant
+reacquisition and extension resources. Genuine enrollment needs
 the isolated service/device prerequisites in #5. All 30 real cases, integrated
 review and owner release gates remain independent. Production switches are unchanged.
 

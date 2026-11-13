@@ -215,3 +215,35 @@ test("old source-loss callbacks cannot end a later publication", async () => {
   assert.equal(t.stopped(), 1);
   t.publication.dispose();
 });
+test("terminal capture status waits for the native source fence while media stops immediately", async () => {
+  const fence = deferred();
+  const t = setup({ onInvalidate: () => fence.promise });
+  const { scope } = await t.start();
+  let finished = false;
+  const stopping = t.publication.dispatch({ op: "capture.stop", operation: "capture_fixture_01" }, t.makeScope()).then(() => { finished = true; });
+  assert.equal(t.stopped(), 1);
+  assert.equal(scope.events.at(-1).state, "live");
+  await turn();
+  assert.equal(finished, false);
+  const successor = t.start("capture_after_fence");
+  await turn();
+  assert.equal(t.starts.length, 1);
+  fence.resolve();
+  await stopping;
+  await successor;
+  assert.equal(scope.events.at(-1).state, "stopped");
+  t.publication.dispose();
+});
+test("a failed asynchronous native fence reports failure and blocks successor capture", async () => {
+  let reject, fatal = 0;
+  const fence = new Promise((_done, fail) => { reject = fail; });
+  const t = setup({ onInvalidate: () => fence, onFatal: () => { fatal++; } });
+  const { scope } = await t.start();
+  const stopping = assert.rejects(t.publication.dispatch({ op: "capture.stop", operation: "capture_fixture_01" }, t.makeScope()), { code: "stopped" });
+  reject(Error("lost native source receipt"));
+  await stopping;
+  assert.equal(scope.events.at(-1).state, "failed");
+  assert.equal(fatal, 1);
+  await assert.rejects(t.start("capture_after_failed_fence"), { code: "capture-unavailable" });
+  t.publication.dispose();
+});

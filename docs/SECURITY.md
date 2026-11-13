@@ -1,5 +1,12 @@
 # Security model
 
+The [RC-3 source/session continuation](evidence/2026-11-13-rc3-source-session.md)
+binds qualified capture to root-owned source cancellation and retained native
+session authority. Native consent/pickers exclude Palisade input and cleanup
+holders. This does not authenticate physical consent against arbitrary local
+automation. Unfinished peer/resource/reacquisition integration and all real
+service/device acceptance remain separate gates. Public activation is unchanged.
+
 U1 authenticates human-readable notes with a separate Ed25519 domain and exact v3
 payload digest. History is display-only, bounded and reverified; current updates
 retain the full packaged signing-key history. Neither cache files nor unsigned

@@ -736,6 +736,9 @@ fn dialog(
     default_name: Option<&str>,
     cancel: &Cancellation,
 ) -> Result<Option<PathBuf>, &'static str> {
+    cancel.live()?;
+    super::input::ordinary_desktop()?;
+    let _input_exclusion = super::input_owner::InputOwner::acquire()?;
     unsafe {
         let mut buffer = vec![0u16; 32768];
         if let Some(name) = default_name {

@@ -42,7 +42,7 @@ async function main() {
     }
     console.log('Window controls, unread observer and permission boundaries pass with release file-protocol restrictions.');
   } finally {
-    await unlocked(() => flipFuses(executable, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }));
+    await unlocked(() => flipFuses(executable, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }), executable);
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });

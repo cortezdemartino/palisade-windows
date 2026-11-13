@@ -1,6 +1,7 @@
 //! Verification/state core and dormant Windows adapters. Production activation
 //! requires the separate native integration and device-qualification gates.
 pub mod cancellation;
+pub mod capture;
 pub mod cleanup;
 pub mod cooperative;
 pub mod custody;

@@ -79,6 +79,11 @@ From v0.2.5, incoming unread increases request native Windows taskbar flashing w
 
 ## Assist in the Windows client
 
+The separate disposable test build has an experimental screen/window picker.
+It stops sharing when its source or native helper ends. This is qualification
+work, not a feature enabled in the installed maintenance release. Native control,
+clipboard and file workflows still require further integration and acceptance.
+
 Native Assist screen/window sharing is not supported in this release. Use an approved browser for enabled browser Assist; Windows viewing has not been qualified. A desktop capture denial is expected and must not be bypassed. The client exposes no remote keyboard/mouse capability. See [the integration status and browser workflow](ASSIST-INTEGRATION.md).
 
 ## Full Assist availability

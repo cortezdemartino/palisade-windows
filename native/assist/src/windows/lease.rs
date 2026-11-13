@@ -274,6 +274,9 @@ impl LeasePoller {
     pub(crate) fn cancel_flag(&self) -> Arc<AtomicBool> {
         self.cancel.clone()
     }
+    pub(crate) fn facts_reader(&self) -> Arc<Mutex<Option<ServiceFacts>>> {
+        self.facts.clone()
+    }
     pub fn service_facts(&self) -> Option<ServiceFacts> {
         if self.cancel.load(Ordering::SeqCst) {
             return None;

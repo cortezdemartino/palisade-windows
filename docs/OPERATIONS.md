@@ -15,6 +15,12 @@ receipts while diagnosing the failure. See [the native updater guide](NATIVE-UPD
 
 ## Assist process ownership checks
 
+The [RC-3 source/session checkpoint](evidence/2026-11-13-rc3-source-session.md)
+adds private source fencing and independent socket inspection to the retained
+endpoint. Source Stop and peer.close acknowledgements mean admission is fenced;
+they are not positive child/mirror cleanup evidence. A failed final proof still
+blocks quit/update. Sensitive Cargo features and public activation remain off.
+
 `npm run test:assist-process` exercises both the existing private channel and the explicit owned-process monitor against the default release helper and the all-features debug helper. These fixtures have no input, enrollment or clipboard authority. The owned monitor negotiates `channel-and-process-exit`; it does not prove held-input release and cannot be used to enable Assist. A crash or invalid proof retains failed quit/update ownership. Diagnose the failed holder; do not force-complete it or kill a real cleanup process to install an update. [Current evidence, failed attempts and runtime prerequisites](evidence/2026-11-08-process-monitor.md).
 
 ## Requirements

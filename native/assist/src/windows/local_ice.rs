@@ -1,6 +1,6 @@
 //! Read-only ownership proof for a capture hop that must stay on this device.
 //! Root identity is the already validated creator, never a renderer-supplied PID.
-use serde::Serialize;
+pub use crate::capture::LocalCandidate;
 use std::{
     collections::{BTreeMap, BTreeSet},
     mem::{size_of, zeroed},
@@ -12,11 +12,6 @@ use windows_sys::Win32::{
     Networking::WinSock::AF_INET,
     System::{Diagnostics::ToolHelp::*, RemoteDesktop::ProcessIdToSessionId, Threading::*},
 };
-#[derive(Serialize)]
-pub struct LocalCandidate {
-    pub port: u16,
-    pub address: String,
-}
 struct Handle(HANDLE);
 impl Drop for Handle {
     fn drop(&mut self) {
