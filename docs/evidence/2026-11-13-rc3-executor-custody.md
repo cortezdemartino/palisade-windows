@@ -186,3 +186,20 @@ No signing, release, installer execution, personal-device input acceptance,
 production issuer setup or feature activation is performed. Production issuer #47,
 TURN #48, Firefox #49, integrated review #33 and device acceptance #5 remain separate.
 Full RC-3 is unfinished and is not waiting only on web.
+
+## CI fixture correction
+
+The first pushed checkpoint `6c728ea27c5ebcee97e76855ee8cc9ea4b49703c`
+failed [Windows CI43492625137](https://github.com/cortezdemartino/palisade-windows/actions/runs/43492625137).
+Four existing PowerShell-based pipe fixtures never produced their preparation
+markers within 15 seconds. The discarded shell diagnostics do not establish the
+specific host cause; this is not a passed candidate run.
+
+The fixtures now use a fixed no-authority actor in the native test executable.
+It validates the creator, registers with a bounded private preparation marker,
+emits the same valid/invalid ACKs, and records actual EOF cleanup. The unit-runner
+preamble is consumed only by fixture setup; the production ACK parser is unchanged.
+Missing stdout is simulated after creator validation. No shell startup, command
+interpreter or forced input-holder termination is needed. The native three-second
+startup deadline and all malformed/cleanup assertions remain unchanged. The extra
+test actor makes the native suite total 218 per configuration after this correction.

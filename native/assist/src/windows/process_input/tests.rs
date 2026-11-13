@@ -204,63 +204,130 @@ impl Drop for Fixture {
         let _ = fs::remove_dir(&self.directory);
     }
 }
-// A fixed BCL-only process, with no hooks, native input or arbitrary commands.
-// It records that EOF cleanup ran, so a forced kill cannot pass these tests.
+// A fixed native test actor, with no hooks, input or command interpreter. Its
+// private marker is startup synchronization, not an executor READY/receipt.
+#[test]
+fn pipe_process_fixture() {
+    use std::io::{Read, Write};
+    let Ok(mode) = std::env::var("PALISADE_FENCE_TEST_MODE") else {
+        return;
+    };
+    assert!(
+        [
+            "silent",
+            "quiet",
+            "denied",
+            "wrong",
+            "malformed",
+            "gated",
+            "ready"
+        ]
+        .contains(&mode.as_str())
+    );
+    let parent = Parent::validate_executor(
+        std::env::var("PALISADE_FENCE_TEST_PARENT")
+            .unwrap()
+            .parse()
+            .unwrap(),
+        true,
+    )
+    .unwrap();
+    // The unit-test runner has its own stdout banner. The fixture preparer
+    // consumes only this bounded private preamble before testing strict ACKs.
+    std::io::stdout()
+        .write_all(b"palisade-pipe-fixture\n")
+        .unwrap();
+    std::io::stdout().flush().unwrap();
+    fs::write(
+        std::env::var_os("PALISADE_FENCE_TEST_READY").unwrap(),
+        "ready",
+    )
+    .unwrap();
+    if !["silent", "quiet"].contains(&mode.as_str()) {
+        let payload = match mode.as_str() {
+            "denied" => br#"{"sequence":4294967295,"accepted":false,"uptime":1}"#.as_slice(),
+            "wrong" => br#"{"sequence":0,"accepted":true,"uptime":1}"#,
+            "malformed" => br#"{"extra":true}"#,
+            _ => br#"{"sequence":4294967295,"accepted":true,"uptime":1}"#,
+        };
+        write_frame(&mut std::io::stdout().lock(), payload).unwrap();
+    }
+    let mut bytes = [0; 1024];
+    while std::io::stdin().read(&mut bytes).unwrap() != 0 {}
+    if mode == "gated" {
+        let allow = PathBuf::from(std::env::var_os("PALISADE_FENCE_TEST_ALLOW").unwrap());
+        let until = Instant::now() + Duration::from_secs(10);
+        while !allow.exists() {
+            assert!(parent.alive());
+            assert!(Instant::now() < until);
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+    fs::write(
+        std::env::var_os("PALISADE_FENCE_TEST_RELEASED").unwrap(),
+        "released-after-eof",
+    )
+    .unwrap();
+}
+// Records real EOF cleanup, so forced process termination cannot pass the tests.
 fn fixture(mode: &str, stdout: bool) -> (Child, Fixture) {
     let files = fixture_files();
-    let script = r#"
-$ErrorActionPreference = 'Stop'
-$mode = $env:PALISADE_FENCE_TEST_MODE
-$output = [Console]::OpenStandardOutput()
-if ($mode -ne 'silent' -and $mode -ne 'quiet') {
-  $payload = switch ($mode) {
-    'denied' { '{"sequence":4294967295,"accepted":false,"uptime":1}' }
-    'wrong' { '{"sequence":0,"accepted":true,"uptime":1}' }
-    'malformed' { '{"extra":true}' }
-    default { '{"sequence":4294967295,"accepted":true,"uptime":1}' }
-  }
-  $bytes = [Text.Encoding]::UTF8.GetBytes($payload)
-  $header = [BitConverter]::GetBytes([uint32]$bytes.Length)
-  $output.Write($header,0,$header.Length)
-  $output.Write($bytes,0,$bytes.Length)
-  $output.Flush()
-}
-[IO.File]::WriteAllText($env:PALISADE_FENCE_TEST_READY,'ready')
-$inputPipe = [Console]::OpenStandardInput()
-$buffer = New-Object byte[] 1024
-while ($inputPipe.Read($buffer,0,$buffer.Length) -ne 0) {}
-if ($mode -eq 'gated') {
-  $limit = [DateTime]::UtcNow.AddSeconds(10)
-  while (-not [IO.File]::Exists($env:PALISADE_FENCE_TEST_ALLOW)) {
-    if ([DateTime]::UtcNow -ge $limit) { exit 90 }
-    [Threading.Thread]::Sleep(5)
-  }
-} else { [Threading.Thread]::Sleep(100) }
-[IO.File]::WriteAllText($env:PALISADE_FENCE_TEST_RELEASED,'released-after-eof')
-"#;
-    let mut child = Command::new("powershell.exe")
-        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "windows::process_input::tests::pipe_process_fixture",
+            "--nocapture",
+            "--quiet",
+        ])
         .env("PALISADE_FENCE_TEST_MODE", mode)
+        .env("PALISADE_FENCE_TEST_PARENT", std::process::id().to_string())
         .env("PALISADE_FENCE_TEST_READY", &files.ready)
         .env("PALISADE_FENCE_TEST_RELEASED", &files.released)
         .env("PALISADE_FENCE_TEST_ALLOW", &files.allow)
         .stdin(Stdio::piped())
-        .stdout(if stdout {
-            Stdio::piped()
-        } else {
-            Stdio::null()
-        })
+        .stdout(Stdio::piped())
         .stderr(Stdio::null())
         .creation_flags(windows_sys::Win32::System::Threading::CREATE_NO_WINDOW)
         .spawn()
         .unwrap();
+    let mut output = child.stdout.take().unwrap();
+    let (send, receive) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        use std::io::Read;
+        let result = (|| {
+            let mut preamble = Vec::new();
+            loop {
+                let mut byte = [0];
+                output
+                    .read_exact(&mut byte)
+                    .map_err(|_| "fixture preamble EOF")?;
+                preamble.push(byte[0]);
+                if preamble.len() > 1024 {
+                    return Err("fixture preamble too large");
+                }
+                if preamble.ends_with(b"palisade-pipe-fixture\n") {
+                    return Ok(output);
+                }
+            }
+        })();
+        let _ = send.send(result);
+    });
     // Prepare the independent fixture before measuring the native three-second
     // startup deadline. This neither changes that deadline nor fabricates ACKs.
     let until = Instant::now() + Duration::from_secs(15);
+    child.stdout = Some(
+        receive
+            .recv_timeout(Duration::from_secs(15))
+            .expect("fixture registration timed out")
+            .expect("fixture registration failed"),
+    );
     while !files.ready.exists() {
         assert!(child.try_wait().unwrap().is_none(), "fixture failed");
         assert!(Instant::now() < until, "fixture startup failed");
         thread::sleep(Duration::from_millis(5));
+    }
+    if !stdout {
+        drop(child.stdout.take());
     }
     (child, files)
 }
