@@ -139,7 +139,7 @@ test('local preload exposes only fixed controls and strips Electron events from 
 test('tray close stays silent, explicit notification click restores the app, and Quit really exits', async () => {
   const notices = []; const externalSettings = []; let diagnosticText;
   let hidden = 0, shown = 0, focused = 0, reloaded = 0, reloadAnswer = 1, appMenu, trayMenu, openSettings, deviceAction, failSave = false;
-  const prompts = [];
+  const prompts = [], openedSections = []; let manualChecks = 0;
   const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() { reloaded++; }, focus: () => focused++ });
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
   let flushCookies, storageFlushed = false;
@@ -159,7 +159,7 @@ test('tray close stays silent, explicit notification click restores the app, and
     Menu: { getApplicationMenu: () => ({ items: [{ submenu: { popup: (options) => { settingsPopup = options; } } }] }), buildFromTemplate: (value) => value, setApplicationMenu: (value) => { appMenu = value; } }, dialog: { showMessageBox: async (...args) => { prompts.push(args.at(-1)); return { response: reloadAnswer }; } }, shell: { openExternal: async url => { externalSettings.push(url); } } };
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'), process: { platform: 'win32', arch: 'x64', versions: { electron: '44.7.2' } }, require(name) {
     if (name === 'electron') return electron;
-    if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote }; } };
+    if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote, showSettings: section => openedSections.push(section) }; } };
     if (name === './windows-notification-branding.cjs') return { APP_ID: 'org.onyxops.palisade', ensureNotificationBranding: async () => {} };
     if (name === './windows-app-registration.cjs') return require('../src/windows-app-registration.cjs');
     if (name === './chat-notifications.cjs') return { installChatNotifications() {} };
@@ -173,7 +173,7 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './assist/guardian.cjs') return require('../src/assist/guardian.cjs');
     if (name === './assist/lifecycle.cjs') return require('../src/assist/lifecycle.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() { if (failSave) throw Error('simulated write failure'); } };
-    if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {}, onQuit() {} }) };
+    if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check(manual) { if (manual) manualChecks++; }, onQuit() {} }) };
     if (name === './updates/native-helper.cjs') return { createNativeHelper: () => ({ status: async () => ({ state: 'idle' }) }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');
     return require(name);
@@ -199,6 +199,8 @@ test('tray close stays silent, explicit notification click restores the app, and
   assert.ok(appMenu[0].submenu.some((item) => item.label === 'Updates'));
   assert.ok(trayMenu.some((item) => item.label === 'Settings'));
   assert.ok(!trayMenu.some((item) => item.label === 'Open Update Manager'));
+  appMenu[0].submenu.find(item => item.label === 'Check for updates').click();
+  assert.equal(openedSections.at(-1), 'updates'); assert.equal(manualChecks, 1);
   deviceAction('help-guide'); deviceAction('help-issues');
   assert.deepEqual(externalSettings.slice(-2), ['https://github.com/cortezdemartino/palisade-windows/blob/main/docs/USER-GUIDE.md', 'https://github.com/cortezdemartino/palisade-windows/issues']);
   deviceAction('reload-client'); await new Promise(resolve => setImmediate(resolve));
@@ -216,7 +218,8 @@ test('tray close stays silent, explicit notification click restores the app, and
   window.emit('minimize'); assert.equal(hidden, 2); assert.equal(notices.length, 0);
   deviceAction('notification-test'); await new Promise(resolve => setImmediate(resolve));
   assert.equal(notices.length, 1);
-  notices[0].emit('click'); assert.equal(shown, 1); assert.equal(focused, 1);
+  const shownBeforeNotice = shown, focusedBeforeNotice = focused;
+  notices[0].emit('click'); assert.equal(shown, shownBeforeNotice + 1); assert.equal(focused, focusedBeforeNotice + 1);
   let granted;
   profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: remote.getURL(), isMainFrame: true });
   assert.equal(granted, true);

@@ -432,7 +432,7 @@ function createApplicationMenu() {
           { label: 'Updates', click: openUpdateSettings },
           { label: "What's new", click: () => openDeviceSettings('whats-new') },
           { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => void requestReload() },
-          { label: 'Check for updates', click: () => void updaterController?.check(true) },
+          { label: 'Check for updates', click: () => { openUpdateSettings(); void updaterController?.check(true); } },
           { label: 'About Palisade', click: () => openDeviceSettings('about') },
           { type: 'separator' },
           { label: exitWaiting ? 'Quit pending: stopping assistance' : 'Quit Palisade', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
