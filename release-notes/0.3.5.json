@@ -1,0 +1,14 @@
+{
+  "schema": 1,
+  "version": "0.3.5",
+  "locale": "en",
+  "title": "Clearer Windows settings",
+  "summary": "Palisade reorganizes Windows Settings into six familiar categories with clearer navigation, readable controls and simpler tray menus.",
+  "sections": [
+    { "category": "improved", "items": ["Find startup and tray preferences, notifications and permissions, updates, release notes, support, and account settings guidance in separate categories.", "Keep navigation visible while settings content scrolls. Smaller windows and enlarged text use a compact layout.", "Use labelled switches, keyboard navigation, restored focus, high-contrast colors and reduced motion.", "Use built-in updates normally, with Update Manager available under Having trouble updating? for repair."] },
+    { "category": "fixed", "items": ["Checking for updates from the application menu opens the Updates page so the result stays visible.", "Reload asks before interrupting calls. Failed preference saves retain the previous choice and show an error.", "Release history initially selects the installed version when verified notes are saved, and explains missing or offline notes."] },
+    { "category": "security", "items": ["Preserve signed update verification, device permission restrictions and existing account/session storage. Inactive Assist components include stronger cleanup tracking; Assist remains disabled."] },
+    { "category": "limitations", "items": ["Actual Windows display-scaling changes, Narrator and installed-upgrade/session-preservation acceptance remain unverified. Automated layout, persistence and packaged-app checks passed."] }
+  ],
+  "compatibility": ["Windows 10 and 11 on x64. Existing desktop preferences and application identity are retained.", "Update Manager v1.0.1 remains the optional recovery application. Full Assist is unavailable."]
+}

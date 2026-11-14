@@ -1,7 +1,8 @@
 # Palisade for Windows
 
-The current candidate adds built-in downloads, restart controls and
-signed release notes. **Settings > Updates** manages installation;
+Version 0.3.5 reorganizes Windows Settings into six categories with clearer
+navigation, readable controls and simpler tray menus. Built-in downloads,
+restart controls and signed release notes are retained. **Settings > Updates** manages installation;
 **What's new** shows verified release history. Installed
 upgrade qualification is pending.
 See [release-note format and signing](docs/RELEASE-NOTES-FORMAT.md).
@@ -51,7 +52,7 @@ npm run test:update-policy
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.3.4-x64.exe`. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.3.5-x64.exe`. Official release manifests require the separately held release signing key.
 
 ## Updates
 

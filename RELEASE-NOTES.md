@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased
+## 0.3.5
 
 - Reorganize Windows Settings into six categories with persistent navigation,
   readable controls, keyboard navigation and layouts for smaller windows.
