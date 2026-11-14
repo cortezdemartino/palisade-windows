@@ -49,6 +49,7 @@ let updaterController = null;
 let updateStatus = 'Updates: idle';
 let notificationBranding = Promise.resolve();
 let notificationStatus = 'No desktop notifications sent yet.';
+let deviceFeedback = '', deviceFeedbackError = false;
 const assistLifecycle = createAssistLifecycle();
 // The live native coordinator must register its own retained child-exit holder
 // before admitting authority. This holder covers the existing capture lifecycle.
@@ -166,8 +167,12 @@ function createMainWindow(profile, startupVerified) {
   const desktop = createDesktopWindow({ partition: PARTITION, icon, nativeAssist: nativeEndpointEnabled && app.isPackaged && startupVerified,
     onSettings: () => ({ keepRunningInTray, launchOnLogin: app.getLoginItemSettings().openAtLogin,
       loginAvailable: app.isPackaged && !qualification, version: app.getVersion(), updateStatus, notificationStatus, nativeAssistStatus,
+      architecture: process.arch, electronVersion: process.versions.electron,
+      managerAvailable: app.isPackaged && !qualification,
+      buildKind: qualification ? 'qualification' : app.isPackaged ? 'installed' : 'development', deviceFeedback, deviceFeedbackError,
       ...updaterController?.notesState?.() }),
     onDeviceAction: (action) => {
+      deviceFeedback = ''; deviceFeedbackError = false;
       try {
       if (action === 'tray-on' || action === 'tray-off') trayPreferenceItem().click({ checked: action === 'tray-on' });
       else if ((action === 'login-on' || action === 'login-off') && app.isPackaged && !qualification) {
@@ -182,7 +187,16 @@ function createMainWindow(profile, startupVerified) {
           'Electron ' + process.versions.electron, 'Tray: ' + keepRunningInTray,
           'Launch on login: ' + app.getLoginItemSettings().openAtLogin, updateStatus,
         ].join('\n'));
-      } else if (action === 'reload-client') mainContents?.reload();
+        deviceFeedback = 'Troubleshooting information copied.';
+      } else if (action === 'reload-client') void requestReload();
+      else if (action === 'help-guide' || action === 'help-issues') {
+        const destination = action === 'help-guide'
+          ? 'https://github.com/cortezdemartino/palisade-windows/blob/main/docs/USER-GUIDE.md'
+          : 'https://github.com/cortezdemartino/palisade-windows/issues';
+        void shell.openExternal(destination).catch(() => {
+          deviceFeedback = 'The support page could not be opened. Try again.'; deviceFeedbackError = true; refreshDeviceSettings?.();
+        });
+      }
       else if (action === 'updates') void updaterController?.openManager();
       else if (action === 'check-updates') void updaterController?.check(true);
       else if (action === 'update-download') void updaterController?.downloadUpdate();
@@ -198,6 +212,7 @@ function createMainWindow(profile, startupVerified) {
         updaterController?.settingsChanged();
       }
       } catch {
+        deviceFeedback = 'The action could not be completed. Try again.'; deviceFeedbackError = true;
         void dialog.showMessageBox(window, { type: 'error', message: 'The device setting could not be applied. Try again.', buttons: ['OK'] });
       }
     },
@@ -312,8 +327,20 @@ async function askToOpenExternal(value) {
 }
 
 function openUpdateSettings() {
-  openWindow();
-  showDeviceSettings?.('about');
+  openDeviceSettings('updates');
+}
+function openDeviceSettings(section) { openWindow(); showDeviceSettings?.(section); }
+let reloadPrompt;
+function requestReload() {
+  if (reloadPrompt) return reloadPrompt;
+  reloadPrompt = dialog.showMessageBox(window, { type: 'question', title: 'Reload Palisade?',
+    message: 'Reload Palisade?', detail: 'Calls and screen sharing may disconnect. Your account data stays on this PC.',
+    buttons: ['Reload', 'Cancel'], defaultId: 1, cancelId: 1, noLink: true }).then(answer => {
+      if (answer?.response === 0 && !mainContents?.isDestroyed()) mainContents?.reload();
+    }).catch(() => {
+      deviceFeedback = 'Reload could not be started. Try again.'; deviceFeedbackError = true; refreshDeviceSettings?.();
+    }).finally(() => { reloadPrompt = null; });
+  return reloadPrompt;
 }
 
 function openWindow() {
@@ -361,6 +388,7 @@ function trayPreferenceItem() {
       desktopSettings = saveSettings(app.getPath('userData'), { keepRunningInTray: item.checked });
       keepRunningInTray = item.checked;
     } catch {
+      deviceFeedback = 'The tray preference could not be saved. Your previous choice is unchanged.'; deviceFeedbackError = true;
       void dialog.showMessageBox({ type: 'error', message: 'Could not save desktop settings.', buttons: ['OK'] });
     }
     updateTrayMenu();
@@ -377,18 +405,12 @@ function updateTrayMenu() {
       ...(exitWaiting ? [{ label: 'Quit pending: stopping assistance', enabled: false }] : []),
       ...(nativeEndpointEnabled ? [{ label: nativeAssistStatus, enabled: false },
         { label: 'Stop assistance', click: () => { void nativeAssistRuntime?.stopAll().catch(() => {}); } }] : []),
-      { label: 'Stop screen sharing and reload Palisade', enabled: assistCapture?.busy() === true, click: () => assistCapture?.stop() },
-      trayPreferenceItem(),
+      ...(assistCapture?.busy() === true ? [{ label: 'Stop screen sharing and reload Palisade', click: () => assistCapture?.stop() }] : []),
       { type: 'separator' },
-      { label: 'Send test notification', click: () => notifyDesktop('Desktop notifications are available while Palisade is open or in the tray.') },
-      { label: updateStatus, enabled: false },
-      { label: "Updates & What's New", click: openUpdateSettings },
-      {
-        label: 'Check for Updates', click: () => void updaterController?.check(true),
-      },
-      {
-        label: 'Open Update Manager', click: () => void updaterController?.openManager(),
-      },
+      ...(['available', 'staged', 'downloading', 'verifying', 'failed', 'awaiting-safe-restart', 'deferred', 'installing'].includes(updaterController?.notesState?.().updatePhase)
+        ? [{ label: updateStatus, enabled: false }] : []),
+      { label: 'Updates', click: openUpdateSettings },
+      { label: 'Settings', click: () => openDeviceSettings() },
       { type: 'separator' },
       {
         label: 'Quit Palisade',
@@ -406,21 +428,14 @@ function createApplicationMenu() {
       {
         label: 'Palisade',
         submenu: [
-          { label: updateStatus, enabled: false },
-          { label: "Updates & What's New", click: openUpdateSettings },
-          { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => mainContents?.reload() },
-          { label: 'Check for Updates', click: () => void updaterController?.check(true) },
-          { label: 'Open Update Manager', click: () => void updaterController?.openManager() },
-          trayPreferenceItem(),
-          { label: 'Launch on login', type: 'checkbox', enabled: app.isPackaged && !qualification,
-            checked: app.getLoginItemSettings().openAtLogin,
-            click: (item) => { app.setLoginItemSettings({ openAtLogin: item.checked }); createApplicationMenu(); } },
-          { label: 'About Palisade', click: () => void dialog.showMessageBox({
-            type: 'info', title: 'About Palisade', message: `Palisade ${app.getVersion()}`,
-            detail: 'Windows x64 desktop client\nCopyright 2026 Onyx Operations Group\nApache-2.0. Palisade trademarks remain with their owner.', buttons: ['OK'],
-          }) },
+          { label: 'Settings', click: () => openDeviceSettings() },
+          { label: 'Updates', click: openUpdateSettings },
+          { label: "What's new", click: () => openDeviceSettings('whats-new') },
+          { label: 'Reload Palisade', accelerator: 'CmdOrCtrl+R', click: () => void requestReload() },
+          { label: 'Check for updates', click: () => void updaterController?.check(true) },
+          { label: 'About Palisade', click: () => openDeviceSettings('about') },
           { type: 'separator' },
-          { label: exitWaiting ? 'Quit pending: stopping assistance' : 'Quit', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
+          { label: exitWaiting ? 'Quit pending: stopping assistance' : 'Quit Palisade', accelerator: 'CmdOrCtrl+Q', click: () => app.quit() },
         ],
       },
       {

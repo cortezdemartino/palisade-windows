@@ -1,7 +1,8 @@
 # Palisade for Windows
 
-Version 0.3.4 adds built-in downloads, restart controls and
-signed release notes in local **Updates & What's New** settings. Installed
+The current candidate adds built-in downloads, restart controls and
+signed release notes. **Settings > Updates** manages installation;
+**What's new** shows verified release history. Installed
 upgrade qualification is pending.
 See [release-note format and signing](docs/RELEASE-NOTES-FORMAT.md).
 
@@ -16,6 +17,8 @@ Palisade's Windows desktop client runs the existing Palisade service in a restri
 ## Features
 
 - Dedicated application window, single-instance behavior and system tray
+- Accessible Windows Settings with General, Notifications & permissions, Updates,
+  What's new, About & support, and Account & workspaces categories
 - Windows Start/Search registration and user-selected Start/taskbar pinning; silent minimize-to-tray behavior
 - Existing Palisade account and Matrix device support
 - Sandboxed web renderer without Node.js integration; narrow versioned Assist description API
@@ -52,7 +55,7 @@ The installer is written to `out/Palisade-Setup-0.3.4-x64.exe`. Official release
 
 ## Updates
 
-The candidate checks for updates on launch, every six hours and after an overdue wake. It downloads verified releases in the background by default. Use **Check now** or **Restart to update** in **Updates & What's New**. Update Manager remains available for manual repair. Published versions through v0.3.3 use their existing update flow.
+The candidate checks for updates on launch, every six hours and after an overdue wake. It downloads verified releases in the background by default. Use **Check now** or **Restart to update** in **Settings > Updates**. Update Manager remains available under **Having trouble updating?** for manual repair. Published versions through v0.3.3 use their existing update flow.
 
 The signing key is separate from Windows Authenticode. A GitHub account is not required to download updates from this public repository. If signature or integrity checks fail, the current version remains installed.
 
@@ -65,6 +68,7 @@ The repository contains no backend service, web assets or Matrix authentication 
 - [Assist resolution plan and engineering defaults](docs/ASSIST-RESOLUTION-PLAN.md)
 - [M4G-WINDOWS checkpoint report](docs/M4G-WINDOWS-REPORT.md)
 - [User guide](docs/USER-GUIDE.md)
+- [Windows settings](docs/DEVICE-SETTINGS.md)
 - [Build and release operations](docs/OPERATIONS.md)
 - [Signing, authenticated key rotation and recovery](docs/UPDATE-SIGNING.md)
 - [Security notes](docs/SECURITY.md)

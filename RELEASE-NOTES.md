@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reorganize Windows Settings into six categories with persistent navigation,
+  readable controls, keyboard navigation and layouts for smaller windows.
+- Give Updates and What's new separate homes. Move repair access under Updates
+  and troubleshooting tools under About & support.
+- Simplify tray and application menus, explain Close versus Quit, and confirm
+  reload before interrupting calls. Preserve existing preferences and account data.
 - Connect the inactive Assist normal executor to monitor-owned creation and
   generation-bound child/mirror cleanup evidence.
 - Retain uncertain process-handle handoffs and keep Stop independent of ordinary

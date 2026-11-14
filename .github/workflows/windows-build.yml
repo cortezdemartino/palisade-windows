@@ -81,10 +81,13 @@ jobs:
             npm run test:assist-peer
             if ($LASTEXITCODE -ne 0) { throw 'Owned remote input transport checks failed.' }
           } finally { Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR -ErrorAction SilentlyContinue }
-      - name: Upload installer
+      - name: Upload installer and UI evidence
         uses: actions/upload-artifact@v4
         with:
           name: palisade-windows-${{ github.sha }}
-          path: out/Palisade-Setup-*.exe
+          path: |
+            out/Palisade-Setup-*.exe
+            out/settings-ux/*.png
+            out/settings-ux-result.json
           if-no-files-found: error
           retention-days: 14

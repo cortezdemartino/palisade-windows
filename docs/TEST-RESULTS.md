@@ -1,5 +1,19 @@
 # Validation
 
+## November 14 Windows Settings and shell UX
+
+243 application tests pass. The packaged-source Electron suite passes all ten
+Settings scenario groups plus the existing window-control, registration,
+notification, native-runtime, shutdown and permission-boundary fixtures.
+All 30 existing permission-boundary cases remain passing. NSIS packaging,
+update/native package integrity, isolated capture (including 12 negatives),
+14 fake-input peer cases and the production dependency audit pass.
+Eleven Settings screenshots were captured and visually inspected.
+[Detailed commands, evidence and limitations](evidence/2026-11-14-windows-ux-1.md).
+Actual Windows scaling changes, Narrator and an installed upgrade were not
+executed. Exact-SHA Windows CI is recorded in enhancement #10 after completion.
+No Assist capability, updater trust anchor or persisted setting format changed.
+
 ## November 13 RC-3 source and session integration
 
 The [source/session continuation](evidence/2026-11-13-rc3-source-session.md)

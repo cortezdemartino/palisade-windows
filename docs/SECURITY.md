@@ -22,6 +22,13 @@ The Windows client is a desktop wrapper around the official Palisade web applica
 
 ## Desktop boundary
 
+Windows Settings remains in the isolated app-owned controls view. Its support
+links and Return to Palisade action accept no page-supplied destinations, paths
+or arguments. Account/workspace navigation remains in the hosted application.
+The UX reorganization changes neither permission grants nor updater trust.
+Verified release notes still render as bounded text. See
+[the Settings boundary and verification](DEVICE-SETTINGS.md).
+
 The Electron renderer is sandboxed, runs without Node integration or a page-accessible preload bridge, and can navigate only within `https://palisade.onyxops.org`. External HTTPS links require confirmation before opening in the system browser. Non-HTTPS schemes, camera access, screen capture and privileged device APIs are blocked. Standard TLS validation remains enabled.
 
 The desktop client uses its own persistent browser partition. It does not use Windows DPAPI or the TPM to independently protect Matrix tokens or cryptographic material. Signing out or revoking a session remains essential after device loss.

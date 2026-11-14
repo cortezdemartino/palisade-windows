@@ -9,7 +9,7 @@
 </head>
 <body>
   <nav class="controls" aria-label="Window controls">
-    <button id="settings" aria-label="Desktop settings" title="Desktop settings"><svg class="icon" aria-hidden="true"
+    <button id="settings" aria-label="Settings" title="Settings"><svg class="icon" aria-hidden="true"
   xmlns="http://www.w3.org/2000/svg"
   width="24"
   height="24"
@@ -82,52 +82,76 @@
 </svg>
 </button>
   </nav>
-  <section id="device-settings" aria-labelledby="settings-title" hidden>
-    <header><h1 id="settings-title">Device settings</h1><button id="dismiss-settings" title="Close device settings" aria-label="Close device settings">×</button></header>
-    <p class="subtitle">Palisade on this Windows device</p>
-    <nav class="settings-tabs" aria-label="Settings sections">
-      <button class="tab selected" data-section="general" aria-pressed="true">General</button>
-      <button class="tab" data-section="permissions" aria-pressed="false">Permissions</button>
-      <button class="tab" data-section="about" aria-pressed="false">Updates &amp; What's New</button>
-    </nav>
-    <div id="section-general" class="settings-section">
-      <label class="setting"><span>Keep running in the tray<small>Stay available when minimized or closed.</small></span><input id="tray-setting" type="checkbox"></label>
-      <label class="setting"><span>Launch on login<small>Open Palisade when you sign in to Windows.</small></span><input id="login-setting" type="checkbox"></label>
-      <div class="setting"><span>Notification test<small><span id="notification-status">Send a native Windows notification.</span></small></span><button class="action" id="test-notification">Send test</button></div>
-      <p class="hint">Changes apply immediately. Message alerts also depend on your Palisade conversation preferences.</p>
-    </div>
-    <div id="section-permissions" class="settings-section" hidden>
-      <div class="setting"><span>Windows notifications<small>Choose banners, sounds and Do Not Disturb settings.</small></span><button class="action" id="notification-settings">Open</button></div>
-      <div class="setting"><span>Microphone access<small>Review Windows microphone privacy permissions.</small></span><button class="action" id="microphone-settings">Open</button></div>
-      <p class="hint">Only the Palisade website can request microphone audio and notifications. Camera, screen capture and other device permissions are blocked.</p>
-      <p class="hint">This panel does not grant Windows permissions or change your account settings.</p>
-    </div>
-    <div id="section-about" class="settings-section" hidden>
-      <p class="hint" id="assist-native-status" role="status" aria-live="polite">Native endpoint unavailable</p>
-      <div class="setting"><span>Stable updates<small id="update-status" role="status" aria-live="polite"></small></span><button class="action" id="check-updates">Check now</button></div>
-      <p class="hint">Latest available version: <span id="latest-version">Not checked</span></p>
-      <p class="hint">Last successful check: <time id="last-update-check">Never</time></p>
-      <progress id="update-progress" max="100" value="0" aria-label="Update download progress" hidden></progress>
-      <div class="update-actions" aria-label="Update actions">
-        <button class="action" id="update-download" hidden>Download</button>
-        <button class="action" id="update-restart" hidden>Restart to update</button>
-        <button class="action" id="update-cancel" hidden>Cancel</button>
-        <button class="action" id="update-snooze">Pause for 24 hours</button>
-        <button class="action" id="open-updates">Open Update Manager</button>
+  <section id="device-settings" role="dialog" aria-labelledby="settings-title" hidden>
+    <header class="settings-header"><div><h1 id="settings-title">Settings</h1><p class="subtitle">Windows preferences for this PC</p></div><button id="dismiss-settings" title="Close settings (Esc)" aria-label="Close settings">×</button></header>
+    <div class="settings-layout">
+      <label class="compact-navigation" for="settings-category">Category<select id="settings-category" aria-controls="settings-content"><option value="general">General</option><option value="permissions">Notifications &amp; permissions</option><option value="updates">Updates</option><option value="whats-new">What's new</option><option value="about">About &amp; support</option><option value="account">Account &amp; workspaces</option></select></label>
+      <nav class="settings-tabs" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
+        <button id="tab-general" class="tab selected" role="tab" data-section="general" aria-selected="true" aria-controls="section-general" tabindex="0">General</button>
+        <button id="tab-permissions" class="tab" role="tab" data-section="permissions" aria-selected="false" aria-controls="section-permissions" tabindex="-1">Notifications &amp; permissions</button>
+        <button id="tab-updates" class="tab" role="tab" data-section="updates" aria-selected="false" aria-controls="section-updates" tabindex="-1">Updates</button>
+        <button id="tab-whats-new" class="tab" role="tab" data-section="whats-new" aria-selected="false" aria-controls="section-whats-new" tabindex="-1">What's new</button>
+        <button id="tab-about" class="tab" role="tab" data-section="about" aria-selected="false" aria-controls="section-about" tabindex="-1">About &amp; support</button>
+        <button id="tab-account" class="tab" role="tab" data-section="account" aria-selected="false" aria-controls="section-account" tabindex="-1">Account &amp; workspaces</button>
+      </nav>
+      <div class="settings-content" id="settings-content">
+        <section id="section-general" class="settings-section" role="tabpanel" aria-labelledby="tab-general" tabindex="0">
+          <h2>General</h2><p class="section-intro">Choose how Palisade opens and stays available.</p>
+          <div class="setting"><label for="login-setting">Open Palisade when Windows starts<small id="login-description">Opens automatically when you sign in to Windows. Off by default.</small></label><input id="login-setting" type="checkbox" role="switch" aria-describedby="login-description"></div>
+          <p class="hint" id="login-unavailable" hidden>Available when Palisade is installed. This option is unavailable in development and qualification builds.</p>
+          <div class="setting"><label for="tray-setting">Keep Palisade in the system tray<small id="tray-description">Minimizing or closing the window keeps Palisade running, so you can receive messages.</small></label><input id="tray-setting" type="checkbox" role="switch" aria-describedby="tray-description"></div>
+          <aside class="notice"><h3>Close the window or quit?</h3><p id="close-behavior">With the tray option on, Close hides the window. To exit completely, choose Quit Palisade from the tray menu.</p><p>These preferences apply immediately on this PC.</p></aside>
+        </section>
+        <section id="section-permissions" class="settings-section" role="tabpanel" aria-labelledby="tab-permissions" tabindex="0" hidden>
+          <h2>Notifications &amp; permissions</h2><p class="section-intro">Windows controls device access. Palisade controls which conversations notify you.</p>
+          <div class="setting"><div>Test a desktop notification<small id="notification-status" role="status" aria-live="polite">No desktop notifications sent yet.</small></div><button class="action" id="test-notification">Send test notification</button></div>
+          <div class="setting"><div>Windows notifications<small>Banners and sounds may be silenced by Do Not Disturb. Review Palisade in Windows notification settings.</small></div><button class="action" id="notification-settings" aria-label="Open Windows notification settings">Open Windows settings</button></div>
+          <div class="setting"><div>Microphone access<small>Allow microphone access in Windows, then respond to Palisade's permission request when using voice.</small></div><button class="action" id="microphone-settings">Open microphone settings</button></div>
+          <aside class="notice"><h3>Conversation preferences</h3><p>For muted conversations and account notification preferences, use Account settings in Palisade. These Windows controls do not change them.</p><p>This panel cannot grant device access. Camera and general screen-capture requests remain blocked in the standard Windows client.</p></aside>
+        </section>
+        <section id="section-updates" class="settings-section" role="tabpanel" aria-labelledby="tab-updates" tabindex="0" hidden>
+          <h2>Updates</h2><p class="section-intro">Keep Palisade up to date on this PC.</p>
+          <div class="update-card"><div class="setting"><div><strong id="update-status" role="status" aria-live="polite">Checking update availability</strong><small>Installed: <span id="installed-version"></span> · Latest: <span id="latest-version">Not checked</span></small></div><button class="action primary" id="check-updates">Check now</button></div>
+            <p class="hint">Last successful check: <time id="last-update-check">Never</time></p>
+            <progress id="update-progress" max="100" value="0" aria-label="Update download progress" hidden></progress>
+            <div class="update-actions" aria-label="Update actions"><button class="action primary" id="update-download" hidden>Download update</button><button class="action primary" id="update-restart" hidden>Restart to update</button><button class="action" id="update-cancel" hidden>Cancel download</button><button class="action" id="update-snooze">Pause for 24 hours</button></div>
+            <p class="hint" id="update-unavailable" hidden>Built-in installation is unavailable in this build. In an installed copy, use Update Manager below if repair is needed.</p>
+          </div>
+          <h3 class="group-title">Automatic updates</h3>
+          <div class="setting"><label for="update-auto-check">Check for updates automatically<small>Checks when Palisade opens and every six hours while running.</small></label><input id="update-auto-check" type="checkbox" role="switch"></div>
+          <div class="setting"><label for="update-auto-download">Download updates in the background<small>Downloads a verified update when one is found. Downloading does not restart Palisade.</small></label><input id="update-auto-download" type="checkbox" role="switch"></div>
+          <div class="setting"><label for="update-install-on-quit">Install a ready update when I quit<small>Installs and reopens Palisade after a safe quit. Postponed while screen sharing is active. Closing to the tray does not install updates.</small></label><input id="update-install-on-quit" type="checkbox" role="switch"></div>
+          <details id="update-history"><summary>Installation history</summary><ul id="update-history-list"></ul></details>
+          <details class="recovery"><summary>Having trouble updating?</summary><p>Check your connection and try again. If built-in updating is unavailable or keeps failing, Update Manager can repair the installed app. It asks before closing Palisade.</p><button class="action" id="open-updates">Open Update Manager</button></details>
+        </section>
+        <section id="section-whats-new" class="settings-section" role="tabpanel" aria-labelledby="tab-whats-new" tabindex="0" hidden>
+          <h2>What's new</h2><p class="section-intro">Release summaries and details verified by Palisade. Saved verified notes are available offline.</p>
+          <p id="notes-status" class="notice" role="status" aria-live="polite"></p>
+          <p id="notes-current-hint" class="hint" hidden></p>
+          <label class="release-selector" for="release-version">Release history<select id="release-version" disabled><option value="">No verified notes saved yet</option></select></label>
+          <article id="release-notes" aria-label="Verified release notes"><p class="hint">Check for updates to look for verified release notes.</p></article>
+          <button class="action section-link" id="view-updates">Go to Updates</button>
+        </section>
+        <section id="section-about" class="settings-section" role="tabpanel" aria-labelledby="tab-about" tabindex="0" hidden>
+          <h2>About &amp; support</h2><p class="section-intro">Palisade for Windows</p>
+          <dl class="build-details"><div><dt>Version</dt><dd id="about-version"></dd></div><div><dt>Build</dt><dd id="build-details">Windows desktop</dd></div><div><dt>Desktop runtime</dt><dd id="runtime-details">Not available</dd></div></dl>
+          <div class="setting"><div>Assist<small id="assist-native-status" role="status" aria-live="polite">Assist isn't available in this build.</small></div></div>
+          <p class="hint">Remote control is not enabled in the standard Windows app. This status does not grant anyone access to your PC.</p>
+          <h3 class="group-title">Troubleshooting</h3>
+          <div class="setting"><div>Reload Palisade<small>Reconnects the hosted app. Calls and screen sharing may be interrupted.</small></div><button class="action" id="reload-client">Reload Palisade</button></div>
+          <div class="setting"><div>Troubleshooting information<small>Copies app/runtime versions, desktop preferences and update status. Excludes accounts, messages, credentials and profile paths.</small></div><button class="action" id="copy-diagnostics" aria-label="Copy troubleshooting information">Copy information</button></div>
+          <div class="support-links"><button class="action" id="help-guide">Read the user guide</button><button class="action" id="help-issues">Get support on GitHub</button></div><p class="hint">Support links open in your browser.</p>
+          <p class="legal">© 2026 Onyx Operations Group · Apache-2.0.<br>Palisade trademarks remain with their owner.</p>
+        </section>
+        <section id="section-account" class="settings-section" role="tabpanel" aria-labelledby="tab-account" tabindex="0" hidden>
+          <h2>Account &amp; workspaces</h2><p class="section-intro">Managed inside Palisade, rather than in Windows settings.</p>
+          <div class="notice"><h3>Account settings</h3><p>Open <strong>Account and security</strong> in Palisade's sidebar, then choose <strong>Account settings</strong> for your profile and account preferences.</p></div>
+          <div class="notice"><h3>Workspace settings</h3><p>Open <strong>Workspace options</strong> beside the workspace name. Your role determines which settings you can change.</p></div>
+          <p class="hint">Account and workspace settings stay with the hosted app. Desktop preferences here affect only this PC.</p><button class="action section-link" id="back-to-palisade">Return to Palisade</button>
+        </section>
       </div>
-      <p class="hint" id="update-unavailable" hidden>Built-in installation is unavailable. Use Update Manager for repair.</p>
-      <label class="setting"><span>Check automatically<small>Check on launch and every six hours.</small></span><input id="update-auto-check" type="checkbox"></label>
-      <label class="setting"><span>Download in the background</span><input id="update-auto-download" type="checkbox"></label>
-      <label class="setting"><span>Install and reopen when I quit<small>Applies a ready update when assistance is inactive.</small></span><input id="update-install-on-quit" type="checkbox"></label>
-      <details id="update-history"><summary>Installation history</summary><ul id="update-history-list"></ul></details>
-      <p id="notes-status" class="hint" role="status" aria-live="polite"></p>
-      <label class="release-selector">Release history<select id="release-version" aria-label="Choose release notes"><option value="">No verified notes cached</option></select></label>
-      <article id="release-notes" aria-label="Verified release notes"></article>
-      <div class="setting"><span>Reload Palisade<small>Reload the page if the connection is interrupted.</small></span><button class="action" id="reload-client">Reload</button></div>
-      <div class="setting"><span>Support diagnostics<small>Copy app and system versions, tray and login settings, and update status. No account or message data.</small></span><button class="action" id="copy-diagnostics">Copy</button></div>
     </div>
-    <p id="settings-feedback" role="status" aria-live="polite"></p>
-    <footer>Version <span id="device-version"></span></footer>
+    <footer><span id="settings-feedback" role="status" aria-live="polite"></span><span class="version-footer">Palisade <span id="device-version"></span></span></footer>
   </section>
 </body>
 </html>

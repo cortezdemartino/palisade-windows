@@ -6,7 +6,21 @@ if (controls) {
   document.getElementById('maximize').addEventListener('click', () => controls.maximize());
   document.getElementById('close').addEventListener('click', () => controls.close());
   document.getElementById('dismiss-settings').addEventListener('click', () => controls.settings());
-  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !document.getElementById('device-settings').hidden) controls.settings(); });
+  const panel = document.getElementById('device-settings');
+  document.addEventListener('keydown', (event) => {
+    if (panel.hidden) return;
+    if (event.key === 'Escape') { event.preventDefault(); controls.settings(); }
+    if (event.key === 'Tab') {
+      const items = [...panel.querySelectorAll('button,input,select,summary,[tabindex="0"]')]
+        .filter(item => !item.disabled && item.tabIndex >= 0 && item.getClientRects().length);
+      const first = items[0], last = items.at(-1);
+      if (event.shiftKey && (document.activeElement === first || !panel.contains(document.activeElement))) {
+        event.preventDefault(); last?.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !panel.contains(document.activeElement))) {
+        event.preventDefault(); first?.focus();
+      }
+    }
+  });
   document.getElementById('tray-setting').addEventListener('change', (event) => controls.setTray(event.target.checked));
   document.getElementById('login-setting').addEventListener('change', (event) => controls.setLogin(event.target.checked));
   document.getElementById('test-notification').addEventListener('click', () => controls.testNotification());
@@ -27,7 +41,7 @@ if (controls) {
     const target = document.getElementById('release-notes');
     target.replaceChildren();
     const note = releaseHistory.find((item) => item.version === versionSelector.value);
-    if (!note) return;
+    if (!note) { const empty = document.createElement('p'); empty.className = 'hint'; empty.textContent = 'No verified release notes are saved yet. Check for updates to look for notes.'; target.append(empty); return; }
     const append = (parent, tag, value) => {
       const element = document.createElement(tag); element.textContent = value; parent.append(element); return element;
     };
@@ -46,43 +60,81 @@ if (controls) {
     target.append(details);
   }
   versionSelector.addEventListener('change', renderNotes);
-  function selectSection(tab) {
+  const tabs = [...document.querySelectorAll('[data-section]')];
+  const scroller = document.getElementById('settings-content'), scrollPositions = new Map();
+  let selectedSection = 'general';
+  const categorySelector = document.getElementById('settings-category');
+  function focusCategory() { (categorySelector.getClientRects().length ? categorySelector : document.querySelector(`[data-section="${selectedSection}"]`)).focus(); }
+  function selectSection(tab, focus = false) {
+    if (!tab) return;
+    scrollPositions.set(selectedSection, scroller.scrollTop);
     document.querySelectorAll('[data-section]').forEach((button) => {
       const selected = button === tab;
       button.classList.toggle('selected', selected);
-      button.setAttribute('aria-pressed', String(selected));
+      button.setAttribute('aria-selected', String(selected));
+      button.tabIndex = selected ? 0 : -1;
       document.getElementById('section-' + button.dataset.section).hidden = !selected;
     });
+    selectedSection = tab.dataset.section;
+    categorySelector.value = selectedSection;
+    scroller.scrollTop = scrollPositions.get(selectedSection) || 0;
     feedback.textContent = '';
+    if (focus) focusCategory();
   }
-  document.querySelectorAll('[data-section]').forEach(tab => tab.addEventListener('click', () => selectSection(tab)));
-  for (const [id, action] of [['notification-settings', 'notificationSettings'], ['microphone-settings', 'microphoneSettings'], ['copy-diagnostics', 'copyDiagnostics'], ['reload-client', 'reloadClient']]) {
+  categorySelector.addEventListener('change', () => selectSection(document.querySelector(`[data-section="${categorySelector.value}"]`)));
+  tabs.forEach(tab => {
+    tab.addEventListener('click', () => selectSection(tab));
+    tab.addEventListener('keydown', event => {
+      const step = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 0;
+      let next = step ? tabs[(tabs.indexOf(tab) + step + tabs.length) % tabs.length] : event.key === 'Home' ? tabs[0] : event.key === 'End' ? tabs.at(-1) : null;
+      if (next) { event.preventDefault(); selectSection(next, true); }
+    });
+  });
+  const narrow = window.matchMedia('(max-width:620px)');
+  const orientation = () => document.querySelector('.settings-tabs').setAttribute('aria-orientation', narrow.matches ? 'horizontal' : 'vertical');
+  narrow.addEventListener('change', orientation); orientation();
+  document.getElementById('view-updates').addEventListener('click', () => selectSection(document.getElementById('tab-updates'), true));
+  document.getElementById('back-to-palisade').addEventListener('click', () => controls.backToPalisade());
+  for (const [id, action] of [['notification-settings', 'notificationSettings'], ['microphone-settings', 'microphoneSettings'], ['copy-diagnostics', 'copyDiagnostics'], ['reload-client', 'reloadClient'], ['help-guide', 'helpGuide'], ['help-issues', 'helpIssues']]) {
     document.getElementById(id).addEventListener('click', () => {
+      lastFeedback = null;
       controls[action]();
-      feedback.textContent = id === 'copy-diagnostics' ? 'Diagnostic summary requested.' : id === 'reload-client' ? 'Reloading Palisade…' : 'Opening Windows settings…';
+      feedback.textContent = id === 'copy-diagnostics' ? 'Copying troubleshooting information…' : id === 'reload-client' ? 'Reload requested.' : id.startsWith('help-') ? 'Opening your browser…' : 'Opening Windows settings…';
     });
   }
-  let historyKey;
+  let historyKey, wasOpen = false, lastFeedback;
   const unsubscribe = controls.onState((state) => {
     const { maximized } = state;
     document.getElementById('device-settings').hidden = !state.settingsOpen;
-    if (state.settingsOpenTo === 'about') selectSection(document.querySelector('[data-section="about"]'));
+    if (state.settingsOpenTo) selectSection(document.querySelector(`[data-section="${state.settingsOpenTo}"]`), true);
+    if (state.settingsOpen && !wasOpen) focusCategory();
+    if (!state.settingsOpen && wasOpen && !state.returnToApp) document.getElementById('settings').focus();
+    wasOpen = state.settingsOpen;
     document.getElementById('tray-setting').checked = state.keepRunningInTray;
     document.getElementById('login-setting').checked = state.launchOnLogin;
     document.getElementById('login-setting').disabled = !state.loginAvailable;
+    document.getElementById('login-unavailable').hidden = state.loginAvailable;
+    document.getElementById('close-behavior').textContent = state.keepRunningInTray
+      ? 'Close and Minimize hide the window in the system tray. To exit completely, choose Quit Palisade from the tray menu.'
+      : 'Close exits Palisade after assistance cleanup and profile saving. Minimize keeps it on the taskbar.';
     document.getElementById('device-version').textContent = state.version;
-    document.getElementById('update-status').textContent = state.updateStatus;
+    document.getElementById('installed-version').textContent = state.version;
+    document.getElementById('about-version').textContent = state.version;
+    document.getElementById('build-details').textContent = `Windows ${state.architecture || 'x64'} · ${state.buildKind || 'desktop'} build`;
+    document.getElementById('runtime-details').textContent = state.electronVersion ? 'Electron ' + state.electronVersion : 'Not available';
+    document.getElementById('update-status').textContent = (state.updateStatus || 'Update status unavailable').replace(/^Updates:\s*/, '');
     document.getElementById('latest-version').textContent = state.latestVersion || 'Not checked';
     const lastCheck = document.getElementById('last-update-check');
     lastCheck.textContent = state.lastUpdateCheck ? new Date(state.lastUpdateCheck).toLocaleString() : 'Never';
     const meter = document.getElementById('update-progress');
     meter.hidden = !['downloading', 'verifying'].includes(state.updatePhase);
     meter.value = state.updateProgress || 0;
+    meter.setAttribute('aria-valuetext', state.updatePhase === 'verifying' ? 'Verifying the installer' : `${state.updateProgress || 0}% downloaded`);
     document.getElementById('update-unavailable').hidden = state.updaterAvailable;
     document.getElementById('check-updates').disabled = state.updateBusy;
-    document.getElementById('open-updates').disabled = state.updateBusy;
+    document.getElementById('open-updates').disabled = state.updateBusy || !state.managerAvailable;
     for (const [id, shown, label] of [
-      ['update-download', state.updateCanDownload, state.updatePhase === 'failed' ? 'Retry download' : 'Download'],
+      ['update-download', state.updateCanDownload, state.updatePhase === 'failed' ? 'Retry download' : 'Download update'],
       ['update-restart', state.updateCanRestart, state.updatePhase === 'failed' ? 'Retry restart' : 'Restart to update'],
     ]) {
       const action = document.getElementById(id);
@@ -91,6 +143,7 @@ if (controls) {
       action.textContent = label;
     }
     document.getElementById('update-cancel').hidden = !state.updateCancelable;
+    document.getElementById('update-cancel').textContent = state.updatePhase === 'downloading' ? 'Cancel download' : state.updatePhase === 'checking' ? 'Cancel check' : 'Cancel update';
     updatesPaused = state.updatesPaused;
     const snooze = document.getElementById('update-snooze');
     snooze.textContent = updatesPaused ? 'Resume updates' : 'Pause for 24 hours';
@@ -119,6 +172,9 @@ if (controls) {
       }
     }
     document.getElementById('notes-status').textContent = state.notesStatus;
+    const currentNotesHint = document.getElementById('notes-current-hint');
+    currentNotesHint.hidden = !(state.releaseHistory?.length && !state.releaseHistory.some(note => note.version === state.version));
+    currentNotesHint.textContent = `Verified notes for installed version ${state.version} aren't saved. Choose another release below.`;
     if (JSON.stringify(releaseHistory) !== JSON.stringify(state.releaseHistory)) {
       const selected = versionSelector.value;
       releaseHistory = state.releaseHistory || [];
@@ -128,11 +184,19 @@ if (controls) {
         option.textContent = `Palisade ${note.version}`; versionSelector.append(option);
       }
       if (releaseHistory.some((note) => note.version === selected)) versionSelector.value = selected;
+      else if (releaseHistory.some(note => note.version === state.version)) versionSelector.value = state.version;
+      if (!releaseHistory.length) { const option = document.createElement('option'); option.value = ''; option.textContent = 'No verified notes saved yet'; versionSelector.append(option); }
       versionSelector.disabled = !releaseHistory.length;
       renderNotes();
     }
     document.getElementById('notification-status').textContent = state.notificationStatus;
-    document.getElementById('assist-native-status').textContent = state.nativeAssistStatus || 'Native endpoint unavailable';
+    document.getElementById('assist-native-status').textContent = !state.nativeAssistStatus || state.nativeAssistStatus === 'Native endpoint unavailable'
+      ? "Assist isn't available in this build." : state.nativeAssistStatus;
+    if (state.deviceFeedback !== lastFeedback) {
+      lastFeedback = state.deviceFeedback;
+      feedback.textContent = state.deviceFeedback || '';
+      feedback.dataset.error = String(state.deviceFeedbackError === true);
+    }
     const button = document.getElementById('maximize');
     button.dataset.maximized = String(maximized);
     button.title = maximized ? 'Restore' : 'Maximize';

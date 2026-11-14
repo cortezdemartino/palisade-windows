@@ -2,21 +2,81 @@
 
 ## Scope and layout
 
-Desktop controls occupy a separate 36-pixel strip above the hosted page, with no title text. The strip provides window dragging and disappears in fullscreen. The gear before the window buttons opens a local panel. General contains the saved tray preference, Windows login registration and notification test. Permissions opens the fixed Windows notification and microphone settings pages and explains the client's permission boundaries. Updates & What's New provides the installed version, update progress, installation history, signed release notes and manual recovery through Update Manager.
+Open **Settings** using the gear beside the window buttons, the tray menu or the
+Palisade application menu. The app-owned panel keeps navigation visible while
+its content scrolls. It remembers the category and scroll position while the
+application is running. Close it with its close button, the gear or Escape.
 
-Settings apply immediately. Login remains disabled by default. Existing tray choices, installation identity and the persistent Palisade browser partition are preserved. Notification delivery remains subject to Windows and conversation preferences. The panel never claims to override operating system permissions.
+| Category | Contents |
+| --- | --- |
+| General | Open when Windows starts; keep running in the tray; Close versus Quit explanation |
+| Notifications & permissions | Notification test; Windows notification and microphone settings; conversation-preference explanation |
+| Updates | Installed/latest versions; check, download, cancel and restart; pause; automatic preferences; installation history; optional Manager repair |
+| What's new | Authenticated release summaries, dates, details and saved release history, including offline/unavailable states |
+| About & support | Version/build/runtime; truthful Assist status; reload; copy troubleshooting information; fixed guide/support links |
+| Account & workspaces | Where to find the hosted app's account and workspace settings; Return to Palisade |
 
-## Security and recovery
+Desktop preferences apply immediately on this PC. Startup remains off by default.
+With the tray option on, Minimize and Close hide the window and keep notifications
+available. Use **Quit Palisade** to exit completely. With the option off, Minimize
+keeps the taskbar window and Close prepares the app to exit. Closing to the tray
+never triggers the install-on-quit preference.
 
-The hosted website has no privileged device-settings bridge. Only the isolated local controls view can issue the fixed actions. The local protocol serves a fixed allowlist of interface files from the application archive. Navigation, subframe commands, arbitrary URLs and arbitrary file requests are denied. Diagnostics contain app/runtime versions, architecture, tray/login choices and update status, excluding account identifiers, paths, message contents and credentials. No profile clearing or destructive reset action is offered.
+The panel uses the companion's graphite surfaces, blue accent, 4-pixel spacing and
+familiar controls. Wide layouts use side tabs; narrower layouts use rows of tabs.
+On very short, enlarged-text layouts, a labelled category selector preserves room
+for content. The native window minimum is 640 by 440 device-independent pixels.
+The Settings close button and navigation remain available while content scrolls.
+Arrow keys and Home/End move between tabs; Tab/Shift+Tab stay in Settings while it
+is open. Reopening restores focus to the chosen category. Normal closing returns
+focus to the gear; **Return to Palisade** returns keyboard focus to the hosted app.
 
-The candidate checks and downloads in the background by default. The user can change those preferences, pause for 24 hours, or cancel the current download. Restart is confirmed by default. Installing when quitting is optional. Both a native update and the manual Manager action wait for application exit preparation. Failed preparation leaves Palisade open and postpones the handoff. A pending quit appears in the application or tray menu.
+## Updates, notes and recovery
+
+Updates uses the built-in signed updater as the normal workflow. Downloading an
+update does not install or restart it. Restart asks for confirmation and waits for
+safe assistance cleanup and profile saving. The optional ready-update-on-quit
+preference reopens Palisade after installation; it is postponed while a screen
+share is active. Pause lasts 24 hours. Preference changes preserve the current
+updater operation's existing safety rules.
+
+**Having trouble updating?** contains **Open Update Manager**, for installed-app
+repair. Manager is no longer duplicated in the tray and top-level application
+menu. It still confirms exit and uses the same cleanup/integrity barriers.
+
+What's new reuses authenticated release-note history. It initially selects the
+installed release when saved, retains an explicit selection while state refreshes,
+and renders summaries/details as text. Missing current-version notes, empty saved
+history and offline states are explained. No unsigned fallback was added.
+
+## Security and support
+
+The hosted website has no desktop-settings bridge. Only the isolated app-owned
+controls view can send the fixed actions. Support destinations are fixed GitHub
+URLs; notification and microphone destinations are the existing fixed Windows
+URIs. No page-controlled URL, file path or general navigation command is accepted.
+Account/workspace settings remain hosted; no unsupported route was invented.
+
+Copy troubleshooting information includes app/runtime versions, architecture,
+tray/startup choices and update status. It excludes accounts, message contents,
+credentials and profile paths. Reload asks before interrupting calls or sharing.
+Save/apply failures report an error and retain the previous saved preference.
+No settings file migration, reset or profile clearing is required.
+
+Windows and conversation preferences still govern notification delivery. The test
+reports Windows acceptance rather than promising a visible banner. This panel
+cannot grant OS access or change account-level notification settings.
 
 ## Verification
 
-Unit tests cover sender validation, settings actions, fixed Windows destinations, diagnostic fields and manager dependency substitution. The Windows smoke test loads the packaged archive with release file-protocol restrictions, checks each icon's visible pixels, switches panel sections, exercises a tray setting, dispatches diagnostics and verifies panel closing and window actions. The release workflow requires these checks before signing and publishing.
-
-Version 0.2.4 adds a manual update check alongside the manager, live polling status, and notification delivery status. Automatic checks never install an update. A separate isolated preload observes unread badges without exposing desktop controls to the hosted page. It sends counts only, which drive the red unread markings and generic native notifications.
+`npm run test:window-controls` includes the actual Electron Settings fixture,
+against source or the packaged archive. It exercises every category/action,
+progress/disabled/offline states, text-only notes, focus and real Chromium key
+input, minimum-size layout, text enlargement, emulated high DPI/forced colors,
+reduced motion and the accessibility tree. Screenshots are captured and inspected;
+unit tests also cover persistence, atomic-write failure and sender isolation.
+Physical DPI switching and a manual Narrator session are separate from emulation.
+See [the UX evidence](evidence/2026-11-14-windows-ux-1.md).
 
 ## Assist availability
 

@@ -16,7 +16,7 @@ test('Tabler controls reserve a separate strip and reject untrusted window comma
       session, mainFrame: { url: '' }, sent: [],
       setWindowOpenHandler(fn) { this.open = fn; },
       isDestroyed() { return this.closed === true; }, close() { this.closed = true; },
-      getURL() { return this.mainFrame.url; },
+      getURL() { return this.mainFrame.url; }, focus() {},
       loadURL(url) { this.mainFrame.url = url; this.emit('did-finish-load'); return Promise.resolve(); },
       send(...args) { this.sent.push(args); }, insertCSS: async () => 'drag-style',
     });
@@ -72,17 +72,27 @@ test('Tabler controls reserve a separate strip and reject untrusted window comma
   assert.equal(granted, false); assert.equal(controls.webContents.session.check(), false);
   const emit = (sender, frame, action) => ipcMain.emit('palisade:window-control', { sender, senderFrame: frame }, action);
   emit(view.webContents, view.webContents.mainFrame, 'settings'); assert.equal(deviceActions.length, 0);
+  emit(view.webContents, view.webContents.mainFrame, 'help-guide'); assert.equal(deviceActions.length, 0);
   emit(view.webContents, view.webContents.mainFrame, 'close'); assert.equal(owner.closeRequested, undefined);
   emit(controls.webContents, {}, 'close'); assert.equal(owner.closeRequested, undefined);
   const frame = controls.webContents.mainFrame, url = frame.url;
   frame.url = 'https://evil.test/'; emit(controls.webContents, frame, 'close'); assert.equal(owner.closeRequested, undefined); frame.url = url;
   emit(controls.webContents, frame, 'execute'); assert.equal(owner.closeRequested, undefined);
+  emit(controls.webContents, frame, 'https://evil.test'); assert.equal(deviceActions.length, 0);
   emit(controls.webContents, frame, 'settings'); assert.equal(controls.webContents.sent.at(-1)[1].settingsOpen, true);
   emit(controls.webContents, frame, 'tray-off'); assert.equal(deviceActions[0], 'tray-off');
   emit(controls.webContents, frame, 'settings'); assert.equal(controls.webContents.sent.at(-1)[1].settingsOpen, false);
   emit(controls.webContents, frame, 'minimize'); assert.equal(owner.minimized, true);
   emit(controls.webContents, frame, 'maximize'); assert.equal(owner.maximized, true);
   assert.equal(controls.webContents.sent.at(-1)[1].maximized, true);
+  result.showSettings('updates');
+  assert.equal(controls.webContents.sent.at(-1)[1].settingsOpenTo, 'updates');
+  assert(controls.bounds.width > 400);
+  result.showSettings('https://evil.test');
+  assert.equal(controls.webContents.sent.at(-1)[1].settingsOpenTo, '');
+  emit(controls.webContents, frame, 'back-to-palisade');
+  assert.equal(controls.webContents.sent.at(-1)[1].settingsOpen, false);
+  assert.equal(controls.webContents.sent.at(-1)[1].returnToApp, true);
   emit(controls.webContents, frame, 'maximize'); assert.equal(owner.maximized, false);
   emit(controls.webContents, frame, 'close'); assert.equal(owner.closeRequested, true);
   owner.size = [1400, 900]; owner.emit('resize');
@@ -98,7 +108,7 @@ test('local preload exposes only fixed controls and strips Electron events from 
   ipcRenderer.send = (...args) => sent.push(args);
   const context = { require: () => ({ ipcRenderer, contextBridge: { exposeInMainWorld: (name, value) => { assert.equal(name, 'desktopControls'); bridge = value; } } }) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/window-controls-preload.cjs'), 'utf8'), context);
-  assert.equal(Object.keys(bridge).sort().join(','), 'cancelUpdate,checkForUpdates,close,copyDiagnostics,downloadUpdate,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,restartForUpdate,setLogin,setTray,setUpdatePreference,setUpdatesPaused,settings,testNotification');
+  assert.equal(Object.keys(bridge).sort().join(','), 'backToPalisade,cancelUpdate,checkForUpdates,close,copyDiagnostics,downloadUpdate,helpGuide,helpIssues,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,restartForUpdate,setLogin,setTray,setUpdatePreference,setUpdatesPaused,settings,testNotification');
   bridge.minimize(); bridge.maximize(); bridge.close();
   assert.equal(sent.map((args) => args[1]).join(','), 'minimize,maximize,close');
   const received = []; const unsubscribe = bridge.onState((...args) => received.push(args));
@@ -128,8 +138,9 @@ test('local preload exposes only fixed controls and strips Electron events from 
 
 test('tray close stays silent, explicit notification click restores the app, and Quit really exits', async () => {
   const notices = []; const externalSettings = []; let diagnosticText;
-  let hidden = 0, shown = 0, focused = 0, appMenu, trayMenu, openSettings, deviceAction;
-  const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() {}, focus: () => focused++ });
+  let hidden = 0, shown = 0, focused = 0, reloaded = 0, reloadAnswer = 1, appMenu, trayMenu, openSettings, deviceAction, failSave = false;
+  const prompts = [];
+  const remote = Object.assign(new EventEmitter(), { isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', setWindowOpenHandler() {}, loadURL: async () => {}, reload() { reloaded++; }, focus: () => focused++ });
   const window = Object.assign(new EventEmitter(), { getContentSize: () => [1000, 700], hide: () => hidden++, show: () => shown++, focus() {}, isMinimized: () => false, isDestroyed: () => false });
   let flushCookies, storageFlushed = false;
   const cookies = new Promise(resolve => { flushCookies = resolve; });
@@ -145,7 +156,7 @@ test('tray close stays silent, explicit notification click restores the app, and
   class Notice extends EventEmitter { static isSupported() { return true; } constructor(options) { super(); this.options = options; } show() { notices.push(this); } }
   class Tray extends EventEmitter { setToolTip() {} setContextMenu(menu) { this.menu = menu; trayMenu = menu; } }
   const electron = { app, powerMonitor: new EventEmitter(), screen: new EventEmitter(), clipboard: { writeText: text => { diagnosticText = text; } }, Notification: Notice, Tray, nativeImage: { createFromPath: () => ({}) }, session: { fromPartition: () => profile },
-    Menu: { getApplicationMenu: () => ({ items: [{ submenu: { popup: (options) => { settingsPopup = options; } } }] }), buildFromTemplate: (value) => value, setApplicationMenu: (value) => { appMenu = value; } }, dialog: { showMessageBox: async () => ({ response: 1 }) }, shell: { openExternal: async url => { externalSettings.push(url); } } };
+    Menu: { getApplicationMenu: () => ({ items: [{ submenu: { popup: (options) => { settingsPopup = options; } } }] }), buildFromTemplate: (value) => value, setApplicationMenu: (value) => { appMenu = value; } }, dialog: { showMessageBox: async (...args) => { prompts.push(args.at(-1)); return { response: reloadAnswer }; } }, shell: { openExternal: async url => { externalSettings.push(url); } } };
   const context = { module: { exports: {} }, __dirname: path.join(__dirname, '../src'), process: { platform: 'win32', arch: 'x64', versions: { electron: '44.7.2' } }, require(name) {
     if (name === 'electron') return electron;
     if (name === './desktop-window.cjs') return { createDesktopWindow: ({ onSettings, onDeviceAction }) => { openSettings = onSettings; deviceAction = onDeviceAction; return { window, contents: remote }; } };
@@ -161,7 +172,7 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './assist/native-runtime.cjs') return { createNativeRuntime() { throw Error('Production runtime must remain disabled'); } };
     if (name === './assist/guardian.cjs') return require('../src/assist/guardian.cjs');
     if (name === './assist/lifecycle.cjs') return require('../src/assist/lifecycle.cjs');
-    if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() {} };
+    if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() { if (failSave) throw Error('simulated write failure'); } };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check() {}, onQuit() {} }) };
     if (name === './updates/native-helper.cjs') return { createNativeHelper: () => ({ status: async () => ({ state: 'idle' }) }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');
@@ -174,14 +185,30 @@ test('tray close stays silent, explicit notification click restores the app, and
   deviceAction('tray-off');
   assert.equal(openSettings().keepRunningInTray, false);
   deviceAction('tray-on');
+  failSave = true; deviceAction('tray-off');
+  assert.equal(openSettings().keepRunningInTray, true);
+  assert.equal(openSettings().deviceFeedbackError, true);
+  assert.match(openSettings().deviceFeedback, /previous choice is unchanged/);
+  failSave = false;
   deviceAction('notification-settings'); deviceAction('microphone-settings');
   assert.deepEqual(externalSettings, ['ms-settings:notifications', 'ms-settings:privacy-microphone']);
   deviceAction('copy-diagnostics');
   assert.match(diagnosticText, /Palisade 0.2.2/);
   assert.doesNotMatch(diagnosticText, /fixture-profile|palisade.onyxops.org|token|session/i);
-  assert.ok(appMenu[0].submenu.some((item) => item.label === 'Minimize and close to tray'));
-  assert.ok(appMenu[0].submenu.some((item) => item.label === 'Open Update Manager'));
-  assert.ok(trayMenu.some((item) => item.label === 'Open Update Manager'));
+  assert.ok(appMenu[0].submenu.some((item) => item.label === 'Settings'));
+  assert.ok(appMenu[0].submenu.some((item) => item.label === 'Updates'));
+  assert.ok(trayMenu.some((item) => item.label === 'Settings'));
+  assert.ok(!trayMenu.some((item) => item.label === 'Open Update Manager'));
+  deviceAction('help-guide'); deviceAction('help-issues');
+  assert.deepEqual(externalSettings.slice(-2), ['https://github.com/cortezdemartino/palisade-windows/blob/main/docs/USER-GUIDE.md', 'https://github.com/cortezdemartino/palisade-windows/issues']);
+  deviceAction('reload-client'); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reloaded, 0);
+  assert.equal(prompts.at(-1).cancelId, 1);
+  reloadAnswer = 0;
+  const priorPrompts = prompts.length;
+  deviceAction('reload-client'); appMenu[0].submenu.find(item => item.label === 'Reload Palisade').click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reloaded, 1); assert.equal(prompts.length, priorPrompts + 1);
   let prevented = false;
   window.emit('close', { preventDefault: () => { prevented = true; } });
   await new Promise(resolve => setImmediate(resolve));
@@ -197,7 +224,7 @@ test('tray close stays silent, explicit notification click restores the app, and
   assert.equal(granted, false);
   profile.request(remote, 'notifications', (value) => { granted = value; }, { requestingUrl: 'https://evil.test/', isMainFrame: true });
   assert.equal(granted, false);
-  const quit = appMenu[0].submenu.find((item) => item.label === 'Quit');
+  const quit = appMenu[0].submenu.find((item) => item.label === 'Quit Palisade');
   assert.equal(quit.accelerator, 'CmdOrCtrl+Q'); quit.click();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(storageFlushed, true);

@@ -13,6 +13,26 @@ disposable VM before approving the candidate for release. A failed install
 may need an official Manager repair. Keep the existing profile and stage
 receipts while diagnosing the failure. See [the native updater guide](NATIVE-UPDATER.md).
 
+## Windows Settings checks
+
+The normal Windows build includes the six-category Settings fixture in
+`npm run test:window-controls`. It opens isolated app-owned views, records actions
+and captures screenshots without changing Windows preferences or using accounts.
+To check the packaged Settings sources after `npm run package:win`:
+
+```powershell
+npm run verify:update-package
+npm run verify:assist-package
+$env:PALISADE_WINDOW_SMOKE_ASAR = (Resolve-Path out/win-unpacked/resources/app.asar).Path
+try { npm run test:window-controls } finally { Remove-Item Env:PALISADE_WINDOW_SMOKE_ASAR }
+```
+
+Inspect `out/settings-ux/*.png` as well as `out/settings-ux-result.json`.
+Windows CI uploads these with the installer artifact. They use display fixtures,
+not production release metadata. Layout, text zoom and emulated DPI/contrast
+checks do not replace physical scaling or screen-reader acceptance.
+See [the UX evidence](evidence/2026-11-14-windows-ux-1.md).
+
 ## Assist process ownership checks
 
 The [RC-3 source/session checkpoint](evidence/2026-11-13-rc3-source-session.md)

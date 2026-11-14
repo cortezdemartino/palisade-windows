@@ -69,13 +69,14 @@ app.whenReady().then(async () => {
   await controls.executeJavaScript("document.getElementById('notification-settings').click()");
   await pause(100);
   assert.equal(deviceActions.at(-1), 'notification-settings');
-  await controls.executeJavaScript("document.querySelector('[data-section=about]').click()");
+  await controls.executeJavaScript("document.querySelector('[data-section=whats-new]').click()");
   assert.equal(await controls.executeJavaScript("document.getElementById('latest-version').textContent"), '0.3.0');
   assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes h2').textContent"), "What's New in Palisade 0.3.0");
   assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes img') === null"), true);
   assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes li').textContent"), 'Text only: <img src=x onerror=alert(1)>');
   await controls.executeJavaScript("document.querySelector('#release-notes details summary').click()");
   assert.equal(await controls.executeJavaScript("document.querySelector('#release-notes details').open"), true);
+  await controls.executeJavaScript("document.querySelector('[data-section=updates]').click()");
   await controls.executeJavaScript("document.getElementById('check-updates').click()");
   await pause(100); assert.equal(deviceActions.at(-1), 'check-updates');
   assert.equal(await controls.executeJavaScript("document.getElementById('update-restart').hidden"), false);
@@ -89,6 +90,7 @@ app.whenReady().then(async () => {
   assert.equal(await controls.executeJavaScript("document.getElementById('update-restart').hidden"), true);
   await controls.executeJavaScript("document.getElementById('update-cancel').click()");
   await pause(100); assert.equal(deviceActions.at(-1), 'update-cancel');
+  await controls.executeJavaScript("document.querySelector('[data-section=about]').click()");
   await controls.executeJavaScript("document.getElementById('copy-diagnostics').click()");
   await pause(100);
   assert.equal(deviceActions.at(-1), 'copy-diagnostics');

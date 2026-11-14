@@ -46,7 +46,7 @@ function lockLocalContents(contents) {
 
 function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings = () => ({}), onDeviceAction = () => {} }) {
   const window = new BrowserWindow({
-    title: 'Palisade', width: 1240, height: 780, minWidth: 780, minHeight: 540,
+    title: 'Palisade', width: 1240, height: 780, minWidth: 640, minHeight: 440,
     backgroundColor: '#0d0f14', icon, show: false, autoHideMenuBar: true,
     frame: false, titleBarStyle: 'hidden',
     webPreferences: { ...SECURE_WEB_PREFERENCES, partition: 'palisade-window-chrome', javascript: false },
@@ -73,22 +73,23 @@ function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings
     // Reserve desktop controls space independently of the hosted app layout.
     const top = window.isFullScreen() ? 0 : CONTROLS_STRIP_HEIGHT;
     view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
-    const panelWidth = settingsOpen ? 400 : CONTROLS_WIDTH;
-    controls.setBounds({ x: Math.max(0, width - panelWidth - CONTROLS_RIGHT_INSET), y: 4, width: panelWidth, height: settingsOpen ? Math.min(560, height - 8) : CONTROLS_HEIGHT });
-    controls.setVisible(!window.isFullScreen());
+    const panelWidth = settingsOpen ? Math.min(920, width - 32) : CONTROLS_WIDTH;
+    controls.setBounds({ x: Math.max(0, width - panelWidth - CONTROLS_RIGHT_INSET), y: 4, width: panelWidth, height: settingsOpen ? Math.max(0, height - 8) : CONTROLS_HEIGHT });
+    controls.setVisible(!window.isFullScreen() || settingsOpen);
   };
-  const publishState = (openTo) => {
+  const publishState = (openTo, returnToApp = false) => {
     if (!controls.webContents.isDestroyed()) controls.webContents.send(STATE_CHANNEL, { ...onSettings(window),
-      maximized: window.isMaximized(), settingsOpen, settingsOpenTo: openTo === 'about' ? 'about' : '' });
+      maximized: window.isMaximized(), settingsOpen, returnToApp, settingsOpenTo: ['general', 'permissions', 'updates', 'whats-new', 'about', 'account'].includes(openTo) ? openTo : '' });
   };
   const onControl = (event, action) => {
     // No commands are accepted from the remote page, subframes, or a navigated local view.
     if (window.isDestroyed() || event.sender !== controls.webContents ||
         event.senderFrame !== controls.webContents.mainFrame || event.senderFrame?.url !== controlsUrl ||
         controls.webContents.getURL() !== controlsUrl) return;
-    if (action === 'settings') { settingsOpen = !settingsOpen; layout(); publishState(); }
+    if (action === 'settings') { settingsOpen = !settingsOpen; layout(); publishState('', !settingsOpen && window.isFullScreen()); if (!settingsOpen && window.isFullScreen()) view.webContents.focus(); }
+    else if (action === 'back-to-palisade') { settingsOpen = false; layout(); publishState('', true); view.webContents.focus(); }
     else if (['tray-on', 'tray-off', 'login-on', 'login-off', 'notification-test', 'updates', 'notification-settings',
-      'microphone-settings', 'copy-diagnostics', 'reload-client', 'check-updates', 'update-download', 'update-restart',
+      'microphone-settings', 'copy-diagnostics', 'reload-client', 'help-guide', 'help-issues', 'check-updates', 'update-download', 'update-restart',
       'update-cancel', 'update-snooze', 'update-resume', 'update-auto-check-on', 'update-auto-check-off',
       'update-auto-download-on', 'update-auto-download-off', 'update-install-on-quit-on', 'update-install-on-quit-off'].includes(action)) {
       onDeviceAction(action); publishState();
