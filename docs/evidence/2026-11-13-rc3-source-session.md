@@ -156,6 +156,31 @@ exact Windows open failure within the existing bounded retry window. Other
 paths, operations and permanent errors still fail; application/package fuses and
 security assertions are unchanged. Separate tests cover the retry boundary.
 
+### Exact-SHA CI correction
+
+The [first pushed candidate's CI](https://github.com/cortezdemartino/palisade-windows/actions/runs/43504865643)
+failed at the custody test `late_unadopted_reply_closes_full_bundle_without_arm`.
+That test checked whether numeric handle slots were invalid after closure.
+Concurrent Windows tests can reuse those slots; that assertion does not identify
+which kernel object remains open. The CI log alone did not prove a production
+leak or identify the object occupying the slot.
+
+The correction changes tests only. Three custody cleanup tests now verify the
+original randomly named event disappears, that the transferred writer's read end
+reaches broken-pipe EOF, and that the transferred reader's write end refuses a
+bounded byte. They deliberately allocate replacement objects after closure.
+Another negative test proves those pipe witnesses do not report completion while
+a reader or writer alias remains alive. No native cleanup rule was relaxed, no
+test was skipped and no production code changed. See Microsoft's
+[event objects](https://learn.microsoft.com/en-us/windows/win32/sync/event-objects)
+and [pipe inspection API](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-peeknamedpipe).
+
+After the correction, the complete local native checks passed again: formatting,
+strict all-target/all-feature Clippy and **228 tests per configuration** (174
+library + 54 integration), default and all features. Other source/package results
+above are unchanged. The correction's exact pushed-SHA CI outcome is recorded in
+Windows #1/#4 after execution.
+
 ## Remaining engineering and acceptance
 
 RC-3 is not complete. These are Windows implementation gaps, not web blockers:

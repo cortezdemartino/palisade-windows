@@ -12,6 +12,42 @@ fn open(raw: usize) -> bool {
     let mut flags = 0;
     unsafe { GetHandleInformation(raw as HANDLE, &mut flags) != 0 }
 }
+// Check original object lifetime, never whether a closed numeric slot has been
+// reused by another libtest thread. Only these tests know the random name.
+fn named_event() -> (OwnedHandle, Vec<u16>) {
+    let nonce: String = random()
+        .unwrap()
+        .iter()
+        .map(|v| format!("{v:02x}"))
+        .collect();
+    let name: Vec<u16> = format!(
+        "Local\\Palisade.Assist.Custody.Test.{}.{}",
+        std::process::id(),
+        nonce
+    )
+    .encode_utf16()
+    .chain(Some(0))
+    .collect();
+    unsafe {
+        SetLastError(0);
+        let raw = CreateEventW(ptr::null(), 1, 0, name.as_ptr());
+        assert!(!raw.is_null());
+        let owned = OwnedHandle::from_raw_handle(raw);
+        assert_ne!(GetLastError(), ERROR_ALREADY_EXISTS);
+        (owned, name)
+    }
+}
+fn event_gone(name: &[u16]) {
+    unsafe {
+        let raw = OpenEventW(SYNCHRONIZATION_SYNCHRONIZE, 0, name.as_ptr());
+        if raw.is_null() {
+            assert_eq!(GetLastError(), ERROR_FILE_NOT_FOUND);
+        } else {
+            drop(OwnedHandle::from_raw_handle(raw));
+            panic!("exact transferred event is still retained");
+        }
+    }
+}
 fn ticket() -> Ticket {
     Registry::new([1; 32], [2; 32])
         .reserve("session_fixture", 1, 1, [3; 32], Mode::Probe)
@@ -21,7 +57,7 @@ fn ticket() -> Ticket {
 #[test]
 fn partial_unpublished_transfer_failure_closes_every_prior_copy() {
     let coordinator = target();
-    let event = StopEvent::new().unwrap();
+    let (event, name) = named_event();
     let handles;
     {
         let mut transfers = Transfers {
@@ -30,10 +66,10 @@ fn partial_unpublished_transfer_failure_closes_every_prior_copy() {
         };
         handles = [
             transfers
-                .add(event.handle_for_query(), SYNCHRONIZATION_SYNCHRONIZE)
+                .add(event.as_raw_handle(), SYNCHRONIZATION_SYNCHRONIZE)
                 .unwrap(),
             transfers
-                .add(event.handle_for_query(), SYNCHRONIZATION_SYNCHRONIZE)
+                .add(event.as_raw_handle(), SYNCHRONIZATION_SYNCHRONIZE)
                 .unwrap(),
         ];
         assert!(handles.iter().all(|h| open(*h)));
@@ -43,35 +79,41 @@ fn partial_unpublished_transfer_failure_closes_every_prior_copy() {
                 .is_err()
         );
     }
-    assert!(handles.iter().all(|h| !open(*h)));
     assert_eq!(
-        unsafe { WaitForSingleObject(event.handle_for_query(), 0) },
+        unsafe { WaitForSingleObject(event.as_raw_handle(), 0) },
         WAIT_TIMEOUT
     );
+    drop(event);
+    event_gone(&name);
 }
 
 #[test]
 fn late_unadopted_reply_closes_full_bundle_without_arm() {
     let coordinator = target();
-    let (read, write) = crate::windows::process_tree::custody_pipe().unwrap();
+    let (event, name) = named_event();
+    let (input_read, input_write) = crate::windows::process_tree::custody_pipe().unwrap();
+    let (output_read, output_write) = crate::windows::process_tree::custody_pipe().unwrap();
     let process = transfer(
         &coordinator,
-        coordinator.as_raw_handle(),
-        PROCESS_QUERY_LIMITED_INFORMATION,
+        event.as_raw_handle(),
+        SYNCHRONIZATION_SYNCHRONIZE,
     )
     .unwrap();
     let input = transfer(
         &coordinator,
-        write.as_raw_handle(),
+        input_write.as_raw_handle(),
         windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_WRITE,
     )
     .unwrap();
     let output = transfer(
         &coordinator,
-        read.as_raw_handle(),
+        output_read.as_raw_handle(),
         windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_READ,
     )
     .unwrap();
+    drop(event);
+    drop(input_write);
+    drop(output_read);
     let (send, receive) = reply_channel();
     assert!(matches!(
         send.try_send(Err("probe")),
@@ -94,38 +136,110 @@ fn late_unadopted_reply_closes_full_bundle_without_arm() {
     // drop-unread gap: this is the production zero-capacity reply factory.
     drop(receive);
     worker.join().unwrap();
-    assert!([process, input, output].iter().all(|h| !open(*h)));
-    assert!(open(read.as_raw_handle() as usize));
-    assert!(open(write.as_raw_handle() as usize));
+    // Deliberately allocate more objects after the bundle is closed. Numeric
+    // slots may now refer to these unrelated live objects, never to leaked roles.
+    let _replacements: Vec<_> = (0..64).map(|_| StopEvent::new().unwrap()).collect();
+    event_gone(&name);
+    unsafe {
+        use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+        assert_eq!(
+            PeekNamedPipe(
+                input_read.as_raw_handle(),
+                ptr::null_mut(),
+                0,
+                ptr::null_mut(),
+                ptr::null_mut(),
+                ptr::null_mut()
+            ),
+            0
+        );
+        assert_eq!(
+            GetLastError(),
+            ERROR_BROKEN_PIPE,
+            "transferred writer must be closed"
+        );
+    }
+    let error = File::from(output_write).write_all(b"x").unwrap_err();
+    assert!(
+        matches!(error.raw_os_error(), Some(code) if code == ERROR_BROKEN_PIPE as i32 || code == ERROR_NO_DATA as i32),
+        "transferred reader must be closed"
+    );
+}
+
+#[test]
+fn pipe_lifetime_checks_distinguish_a_live_alias_from_a_closed_transport_role() {
+    use windows_sys::Win32::System::Pipes::PeekNamedPipe;
+    let (read, write) = crate::windows::process_tree::custody_pipe().unwrap();
+    let alias = duplicate(
+        write.as_raw_handle(),
+        windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_WRITE,
+        false,
+    )
+    .unwrap();
+    drop(write);
+    let peek = || unsafe {
+        PeekNamedPipe(
+            read.as_raw_handle(),
+            ptr::null_mut(),
+            0,
+            ptr::null_mut(),
+            ptr::null_mut(),
+            ptr::null_mut(),
+        )
+    };
+    assert_ne!(peek(), 0, "a leaked writer must not pass the EOF witness");
+    drop(alias);
+    assert_eq!(peek(), 0);
+    assert_eq!(unsafe { GetLastError() }, ERROR_BROKEN_PIPE);
+
+    let (read, write) = crate::windows::process_tree::custody_pipe().unwrap();
+    let alias = duplicate(
+        read.as_raw_handle(),
+        windows_sys::Win32::Storage::FileSystem::FILE_GENERIC_READ,
+        false,
+    )
+    .unwrap();
+    drop(read);
+    let mut write = File::from(write);
+    write
+        .write_all(b"x")
+        .expect("a live reader alias must accept one bounded byte");
+    drop(alias);
+    let error = write.write_all(b"x").unwrap_err();
+    assert!(
+        matches!(error.raw_os_error(), Some(code) if code == ERROR_BROKEN_PIPE as i32 || code == ERROR_NO_DATA as i32)
+    );
 }
 
 #[test]
 fn malformed_middle_role_cannot_leak_later_valid_handles() {
     let coordinator = target();
-    let event = StopEvent::new().unwrap();
+    let (event, name) = named_event();
     let a = transfer(
         &coordinator,
-        event.handle_for_query(),
+        event.as_raw_handle(),
         SYNCHRONIZATION_SYNCHRONIZE,
     )
     .unwrap();
     let b = transfer(
         &coordinator,
-        event.handle_for_query(),
+        event.as_raw_handle(),
         SYNCHRONIZATION_SYNCHRONIZE,
     )
     .unwrap();
     assert!(unsafe { adopt_transport([a, 0, b]) }.is_err());
-    assert!(!open(a));
-    assert!(!open(b));
+    drop(event);
+    event_gone(&name);
+    let (event, name) = named_event();
     let a = transfer(
         &coordinator,
-        event.handle_for_query(),
+        event.as_raw_handle(),
         SYNCHRONIZATION_SYNCHRONIZE,
     )
     .unwrap();
     assert!(unsafe { adopt_transport([a, a, 0]) }.is_err());
-    assert!(!open(a));
+    drop(event);
+    event_gone(&name);
 }
 
 #[test]
