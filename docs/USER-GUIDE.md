@@ -27,6 +27,12 @@ An old development entry named Electron can incorrectly share Palisade's identit
 
 ## Updating
 
+Versions 0.3.4 and 0.3.5 contain an installation-name mismatch that prevents
+built-in download preparation. Use Update Manager or the official v0.3.6
+installer once to obtain the repair. Keep the same installation path and profile;
+no account-data reset is needed. From v0.3.6, use the built-in update controls
+for ordinary updates and reserve Manager for repair.
+
 Version 0.3.4 checks signed stable releases on launch, every six hours
 and after waking if overdue. It checks again after network failures with a
 longer delay between attempts. Select **Check now** to check immediately.

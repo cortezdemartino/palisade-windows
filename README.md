@@ -1,6 +1,8 @@
 # Palisade for Windows
 
-Version 0.3.5 reorganizes Windows Settings into six categories with clearer
+Version 0.3.6 fixes installation recognition in the built-in updater. Versions
+0.3.4/0.3.5 need one final Manager/manual update to obtain the fix.
+Version 0.3.5 reorganized Windows Settings into six categories with clearer
 navigation, readable controls and simpler tray menus. Built-in downloads,
 restart controls and signed release notes are retained. **Settings > Updates** manages installation;
 **What's new** shows verified release history. Installed
@@ -52,7 +54,7 @@ npm run test:update-policy
 npm run package:win
 ```
 
-The installer is written to `out/Palisade-Setup-0.3.5-x64.exe`. Official release manifests require the separately held release signing key.
+The installer is written to `out/Palisade-Setup-0.3.6-x64.exe`. Official release manifests require the separately held release signing key.
 
 ## Updates
 

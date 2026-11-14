@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "version": "0.3.6",
+  "locale": "en",
+  "title": "In-app updater repair",
+  "summary": "Fix an installation-recognition mismatch that prevented the built-in updater from preparing downloads.",
+  "sections": [
+    { "category": "fixed", "items": ["Recognize the exact versioned Windows installation name written by the official installer, for both per-user and all-users installations.", "Retain support for the earlier unversioned installation name. Publisher, installed version, installation path, update signatures and installer checksums remain mandatory."] },
+    { "category": "limitations", "items": ["Versions 0.3.4 and 0.3.5 need one final update through Update Manager or the official installer to obtain this fix. Their existing helper cannot prepare the download itself.", "Installed upgrade, relaunch and authenticated session preservation still require disposable-device acceptance. Assist remains disabled."] }
+  ],
+  "compatibility": ["Windows 10 and 11 on x64. Existing account data and desktop preferences are retained."]
+}

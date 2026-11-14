@@ -1,5 +1,15 @@
 # Validation
 
+## November 14 updater installation-name repair
+
+The actual v0.3.4 installation used NSIS's versioned DisplayName, which the helper
+incorrectly rejected. The regression failed before the fix and passed afterward
+for both installation scopes. Strict native checks and 26 tests per configuration,
+243 app tests, editorial validation and the no-install NSIS policy probe pass.
+[Failure, correction and recovery evidence](evidence/2026-11-14-update-registration.md).
+Versions 0.3.4/0.3.5 require one Manager/manual update to obtain v0.3.6. Actual
+installed-upgrade/relaunch/session acceptance remains Not Verified.
+
 ## November 14 Windows Settings and shell UX
 
 243 application tests pass. The packaged-source Electron suite passes all ten

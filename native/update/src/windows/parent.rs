@@ -216,11 +216,15 @@ fn select_scope(
     }
     let mut matches = Vec::new();
     let mut app_path_matches = false;
+    let versioned_name = format!("Palisade {version}");
     for record in records {
         if let Some(executable) = &record.executable {
             app_path_matches |= registered_image_matches(executable, image, directory)?;
         }
-        if record.display_name.as_deref() != Some("Palisade")
+        // NSIS uses "Palisade <version>"; retain the earlier unversioned form.
+        // Neither label substitutes for the exact publisher/version/path checks.
+        let product_name = record.display_name.as_deref();
+        if (product_name != Some("Palisade") && product_name != Some(versioned_name.as_str()))
             || record.publisher.as_deref() != Some("Onyx Operations Group")
             || record.version.as_deref() != Some(version)
         {
@@ -438,6 +442,61 @@ mod tests {
             ),
             Ok(Scope::Machine)
         );
+        // electron-builder's NSIS uninstall entry includes the display version.
+        // This is the actual installed format, not a change of application identity.
+        for scope in [Scope::User, Scope::Machine] {
+            let mut installed = record(scope);
+            installed.display_name = Some("Palisade 0.3.3".into());
+            let records = match scope {
+                Scope::User => [installed, absent(Scope::Machine)],
+                Scope::Machine => [absent(Scope::User), installed],
+            };
+            assert_eq!(
+                select_scope(&records, &image, &directory, "0.3.3"),
+                Ok(scope)
+            );
+        }
+        let mut versioned_machine = machine.clone();
+        versioned_machine.display_name = Some("Palisade 0.3.3".into());
+        let mut app_path_only = absent(Scope::User);
+        app_path_only.executable = user.executable.clone();
+        assert_eq!(
+            select_scope(
+                &[app_path_only, versioned_machine.clone()],
+                &image,
+                &directory,
+                "0.3.3"
+            ),
+            Ok(Scope::Machine)
+        );
+        assert!(
+            select_scope(
+                &[user.clone(), versioned_machine],
+                &image,
+                &directory,
+                "0.3.3"
+            )
+            .is_err()
+        );
+        for name in [
+            "Palisade 0.3.2",
+            "Palisade 0.3.4",
+            "Palisade 0.3.3 repair",
+            "Palisade  0.3.3",
+            "Other App",
+        ] {
+            let mut invalid = user.clone();
+            invalid.display_name = Some(name.into());
+            assert!(
+                select_scope(
+                    &[invalid, absent(Scope::Machine)],
+                    &image,
+                    &directory,
+                    "0.3.3"
+                )
+                .is_err()
+            );
+        }
         assert!(select_scope(&[user.clone(), machine], &image, &directory, "0.3.3").is_err());
         for delta in ["version", "publisher", "directory", "image"] {
             let mut invalid = user.clone();

@@ -1,5 +1,12 @@
 # Release notes
 
+## 0.3.6
+
+- Recognize the exact versioned Windows installation name written by NSIS so
+  built-in update staging is no longer rejected. Preserve all identity and
+  signed-installer checks, with per-user/all-users and negative regressions.
+- Versions 0.3.4/0.3.5 need one final Manager/manual update to obtain this fix.
+
 ## 0.3.5
 
 - Reorganize Windows Settings into six categories with persistent navigation,
