@@ -6,7 +6,8 @@ test('trusted peer operations have closed per-action shapes and bounded packet i
   const values = [{ action: 'prepare', session, grantId: 'grant_fixture_0001' },
     { action: 'seal', session, attempt, ownFingerprint: fingerprint },
     { action: 'observed', session, attempt, fingerprint }, { action: 'check', session, attempt },
-    { action: 'packet', session, attempt, text: 'original bytes', ingressNs: '123456789' }];
+    { action: 'packet', session, attempt, text: 'original bytes', ingressNs: '123456789' },
+    { action: 'close', session, attempt }, { action: 'inspect', session, grant: '{}' }, { action: 'grant-state', session, grantId: 'grant_fixture_01' }];
   for (const value of values) {
     assert.equal(operation(value), true);
     assert.equal(operation({ ...value, extra: true }), false);
@@ -20,8 +21,11 @@ test('trusted peer operations have closed per-action shapes and bounded packet i
   assert.equal(operation({ action: 'execute', session, command: 'arbitrary' }), false);
 });
 test('peer result vocabulary is correlated to the exact private operation', () => {
-  const prepare = { outcome: 'ok', result: { attempt, helperTransport: fingerprint, profile: 'legacy', sourceOperation: 'capture_fixture_01' } };
+  const prepare = { outcome: 'ok', result: { attempt, helperTransport: fingerprint, profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' } };
   const seal = { outcome: 'ok', result: { transportSignature: 'B'.repeat(86) } };
+  assert.equal(answer({ outcome: 'ok', result: { disposition: 'current', generation: 'G'.repeat(43) } }, 'inspect'), true);
+  assert.equal(answer({ outcome: 'ok', result: { generation: 'G'.repeat(43) } }, 'grant-state'), true);
+  assert.equal(answer({ outcome: 'ok', result: { ...prepare.result, generation: 'short' } }, 'prepare'), false);
   assert.equal(answer(prepare, 'prepare'), true); assert.equal(answer(prepare, 'seal'), false);
   assert.equal(answer(seal, 'seal'), true); assert.equal(answer(seal, 'observed'), false);
   assert.equal(answer({ outcome: 'ok', result: { ready: true } }, 'observed'), true);

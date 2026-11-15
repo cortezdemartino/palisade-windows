@@ -1,5 +1,5 @@
 //! One coordinator-owned endpoint, never one signer or enrollment per request.
-//! No input, capture, peer or resource backend is admitted by this milestone.
+//! Public builds stay inactive; qualified sessions retain native source, consent and cleanup ownership.
 use super::{
     enrollment::{Enrollment, Offer},
     identity::{EndpointIdentity, Identity},
@@ -16,14 +16,149 @@ use std::{
 };
 #[derive(Default)]
 struct SafetyState {
+    requests: BTreeMap<u32, GrantRequest>,
+    close_revisions: BTreeMap<(u32, String), u64>,
+    peer_stops: BTreeMap<(u32, String, String), super::runtime::InputRevoker>,
     extension: Option<(u32, u8)>,
     sessions: BTreeMap<(u32, String), super::runtime::RuntimeRevoker>,
     closed: BTreeSet<(u32, String)>,
     peers: BTreeMap<(u32, String), (super::runtime::PeerRuntime, String)>,
 }
+#[derive(Clone)]
+pub(crate) struct GrantRequest {
+    document: u32,
+    session: String,
+    revision: u64,
+    cancelled: Arc<AtomicBool>,
+    input: Arc<AtomicBool>,
+}
+impl crate::cancellation::StopWitness for GrantRequest {
+    fn stopped(&self) -> bool {
+        self.cancelled.load(Ordering::SeqCst)
+    }
+}
+impl GrantRequest {
+    fn check(&self, safety: &Safety, document: u32, session: &str) -> Result<(), Error> {
+        if self.cancelled.load(Ordering::SeqCst)
+            || self.document != document
+            || self.session != session
+            || (self.input.load(Ordering::SeqCst)
+                && safety
+                    .revision(document, session)
+                    .map_err(|_| Error::Stopped)?
+                    != self.revision)
+        {
+            self.cancelled.store(true, Ordering::SeqCst);
+            return Err(Error::Cancelled);
+        }
+        Ok(())
+    }
+    pub(crate) fn flag(&self) -> Arc<AtomicBool> {
+        self.cancelled.clone()
+    }
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+    }
+}
 #[derive(Clone, Default)]
 pub(crate) struct Safety(Arc<Mutex<SafetyState>>);
 impl Safety {
+    pub(crate) fn register_request(
+        &self,
+        sequence: u32,
+        document: u32,
+        session: &str,
+    ) -> Result<GrantRequest, &'static str> {
+        if !crate::grant::token(session, 8, 128) {
+            return Err("invalid-session");
+        }
+        let mut state = self.0.lock().map_err(|_| "endpoint-safety")?;
+        if state.requests.len() >= 4096 || state.requests.contains_key(&sequence) {
+            return Err("request-scope-full");
+        }
+        let request = GrantRequest {
+            document,
+            session: session.into(),
+            revision: *state
+                .close_revisions
+                .get(&(document, session.into()))
+                .unwrap_or(&0),
+            cancelled: Arc::new(AtomicBool::new(false)),
+            input: Arc::new(AtomicBool::new(false)),
+        };
+        state.requests.insert(sequence, request.clone());
+        Ok(request)
+    }
+    pub(crate) fn cancel_request(&self, target: u32) -> Result<bool, &'static str> {
+        let request = self
+            .0
+            .lock()
+            .map_err(|_| "endpoint-safety")?
+            .requests
+            .get(&target)
+            .cloned();
+        if let Some(request) = request {
+            request.cancelled.store(true, Ordering::SeqCst);
+            return Ok(true);
+        }
+        // Single ordered ingress registers a grant before accepting any later
+        // cancellation frame. Unknown/non-grant IDs have no authority to cancel.
+        Ok(false)
+    }
+    fn revision(&self, document: u32, session: &str) -> Result<u64, &'static str> {
+        Ok(*self
+            .0
+            .lock()
+            .map_err(|_| "endpoint-safety")?
+            .close_revisions
+            .get(&(document, session.to_owned()))
+            .unwrap_or(&0))
+    }
+    fn replace_input(
+        &self,
+        document: u32,
+        session: &str,
+        runtime: &super::runtime::StreamRuntime,
+        source: String,
+        expected: u64,
+    ) -> Result<(), &'static str> {
+        let mut state = self.0.lock().map_err(|_| "endpoint-safety")?;
+        let key = (document, session.to_owned());
+        if !state.sessions.contains_key(&key)
+            || *state.close_revisions.get(&key).unwrap_or(&0) != expected
+        {
+            runtime.revoker().suspend_input();
+            return Err("revoked");
+        }
+        state
+            .peers
+            .insert(key.clone(), (runtime.peer_handle()?, source));
+        state.sessions.insert(key.clone(), runtime.revoker());
+        state.closed.remove(&key);
+        Ok(())
+    }
+    pub(crate) fn close_peer(&self, document: u32, session: &str, attempt: &str) -> Answer {
+        let result = (|| {
+            if !crate::grant::token(session, 8, 128) || crate::grant::decode::<32>(attempt).is_err()
+            {
+                return Err(Error::InvalidMessage);
+            }
+            let revoker = self
+                .0
+                .lock()
+                .map_err(|_| Error::Internal)?
+                .peer_stops
+                .get(&(document, session.to_owned(), attempt.to_owned()))
+                .cloned()
+                .ok_or(Error::StaleOperation)?;
+            revoker.revoke();
+            Ok(json!({}))
+        })();
+        match result {
+            Ok(result) => Answer::ok(result),
+            Err(code) => Answer::error(code),
+        }
+    }
     pub(crate) fn extension_safety(
         &self,
         document: u32,
@@ -77,12 +212,23 @@ impl Safety {
                 .ok_or(Error::BindingMismatch)?;
             use crate::peer::Operation as Peer;
             let result = match operation {
-                Peer::Prepare { grant_id, .. } => {
-                    runtime.prepare_peer(&grant_id).map(|mut value| {
-                        value["sourceOperation"] = source_operation.into();
-                        value
-                    })
+                Peer::Inspect { grant, .. } => runtime.inspect_grant(&grant),
+                Peer::GrantState { grant_id, .. } => runtime.grant_state(&grant_id),
+                Peer::Prepare { grant_id, session } => {
+                    let mut value = runtime.prepare_peer(&grant_id).map_err(map_runtime_error)?;
+                    let attempt = value["attempt"].as_str().ok_or(Error::Internal)?.to_owned();
+                    let mut state = self.0.lock().map_err(|_| Error::Internal)?;
+                    if state.peer_stops.len() >= 128 {
+                        runtime.input_revoker().revoke();
+                        return Err(Error::Busy);
+                    }
+                    state
+                        .peer_stops
+                        .insert((document, session, attempt), runtime.input_revoker());
+                    value["sourceOperation"] = source_operation.into();
+                    Ok(value)
                 }
+                Peer::Close { .. } => return Err(Error::InvalidMessage),
                 Peer::Seal {
                     attempt,
                     own_fingerprint,
@@ -106,7 +252,7 @@ impl Safety {
                 "peer-unverified" | "invalid-statement" | "invalid-input-clock" => {
                     Error::TransportMismatch
                 }
-                "input-not-ready" => Error::Busy,
+                "input-not-ready" | "consent-pending" => Error::Busy,
                 _ => map_runtime_error(error),
             })
         })();
@@ -126,6 +272,8 @@ impl Safety {
                 return Err("endpoint-safety-full");
             }
             state.closed.insert(key.clone());
+            let revision = state.close_revisions.entry(key.clone()).or_insert(0);
+            *revision = revision.checked_add(1).ok_or("stop-revision-exhausted")?;
             state.sessions.get(&key).cloned()
         };
         if let Some(revoker) = revoker {
@@ -234,6 +382,9 @@ impl Endpoint {
         if let Some(capture) = &mut self.capture {
             capture.harvest();
         }
+        for session in self.sessions.values_mut() {
+            session.runtime.harvest_prompts();
+        }
     }
     pub(crate) fn configure_capture(&mut self, enabled: bool) -> bool {
         if self.capture_configured || self.document.is_some() || self.live().is_err() {
@@ -268,7 +419,15 @@ impl Endpoint {
         }
     }
     pub fn dispatch(&mut self, document: u32, operation: Operation) -> Answer {
-        let result = self.execute(document, operation);
+        self.dispatch_request(document, operation, None)
+    }
+    pub(crate) fn dispatch_request(
+        &mut self,
+        document: u32,
+        operation: Operation,
+        request: Option<&GrantRequest>,
+    ) -> Answer {
+        let result = self.execute(document, operation, request);
         // A late dialog/network completion cannot commit a current enrollment.
         if self.live().is_err() {
             self.revoke();
@@ -322,7 +481,12 @@ impl Endpoint {
             Err(Error::Unsupported)
         })())
     }
-    fn execute(&mut self, document: u32, operation: Operation) -> Result<serde_json::Value, Error> {
+    fn execute(
+        &mut self,
+        document: u32,
+        operation: Operation,
+        request: Option<&GrantRequest>,
+    ) -> Result<serde_json::Value, Error> {
         self.live()?;
         match self.document {
             None => self.document = Some(document),
@@ -433,7 +597,9 @@ impl Endpoint {
                 "capture":self.capture.as_mut().map(|capture|capture.status()).unwrap_or_else(||json!({"operation":null,"state":"idle","trackSid":null})),
                 "controller":{"session":null,"state":"idle"}
             })),
-            Operation::GrantOffer { session, grant } => self.offer(document, &session, &grant),
+            Operation::GrantOffer { session, grant } => {
+                self.offer(document, &session, &grant, request)
+            }
             Operation::PeerOffer { .. } | Operation::PeerCandidate { .. } => {
                 Err(Error::TransportMismatch)
             }
@@ -503,11 +669,13 @@ impl Endpoint {
         document: u32,
         session: &str,
         encoded: &str,
+        request: Option<&GrantRequest>,
     ) -> Result<serde_json::Value, Error> {
         use super::enrollment::{EnrolledIdentity, PublishedSource};
         let enrollment = self.enrollment.as_ref().ok_or(Error::NotEnrolled)?;
         let identity = self.identity.as_ref().ok_or(Error::NotEnrolled)?;
         let issuer = self.issuer.as_ref().ok_or(Error::NotEnrolled)?;
+        let request = request.ok_or(Error::InvalidMessage)?;
         if !crate::grant::token(session, 8, 128) || encoded.len() > 4096 {
             return Err(Error::GrantInvalid);
         }
@@ -535,12 +703,18 @@ impl Endpoint {
         if !source.live() {
             return Err(Error::CaptureUnavailable);
         }
+        request.input.store(
+            matches!(
+                signed.grant.capability.as_str(),
+                "control_mouse" | "control_keyboard"
+            ),
+            Ordering::SeqCst,
+        );
         let id = signed.grant.grant_id.clone();
         if let Some(previous) = self.sessions.get(session) {
             if previous.binding != binding
                 || previous.source.key != source.key
                 || previous.runtime.ended()
-                || previous.offered.contains(&id)
             {
                 return Err(Error::StaleOperation);
             }
@@ -587,29 +761,93 @@ impl Endpoint {
                 },
             );
         }
+        let revision = request.revision;
         let entry = self.sessions.get_mut(session).ok_or(Error::Stopped)?;
-        entry.runtime.admit(&signed).map_err(map_runtime_error)?;
-        entry.offered.insert(id.clone());
+        if let Err(error) = request.check(&self.safety, document, session) {
+            entry
+                .runtime
+                .reject_offer(&signed)
+                .map_err(map_runtime_error)?;
+            return Err(error);
+        }
+        if entry.offered.contains(&id) {
+            // A repeated ID is not sufficient: verify the entire signed record
+            // before reusing an acknowledgement for the current native consent.
+            if entry.runtime.admit(&signed).map_err(map_runtime_error)? {
+                return Err(Error::StaleOperation);
+            }
+            let signature = entry
+                .runtime
+                .current_acknowledgement(&id)
+                .map_err(map_runtime_error)?
+                .ok_or(Error::StaleOperation)?;
+            request.check(&self.safety, document, session)?;
+            return Ok(json!({"signature":signature}));
+        }
+        // Bind cancellation before any cleanup wait or admission. A timed-out
+        // pre-admission offer cannot later adopt a different RPC's owner flag.
+        entry
+            .runtime
+            .bind_offer(&signed, request.flag())
+            .map_err(map_runtime_error)?;
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+        let replaced = loop {
+            if let Err(error) = request.check(&self.safety, document, session) {
+                entry
+                    .runtime
+                    .reject_offer(&signed)
+                    .map_err(map_runtime_error)?;
+                return Err(error);
+            }
+            match entry.runtime.admit(&signed) {
+                Err("cleanup-pending")
+                    if std::time::Instant::now() < deadline
+                        && !entry.runtime.ended()
+                        && entry.source.live() =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(10))
+                }
+                result => break result.map_err(map_runtime_error)?,
+            }
+        };
+        if replaced {
+            self.safety
+                .replace_input(
+                    document,
+                    session,
+                    &entry.runtime,
+                    entry.source.key.operation.clone(),
+                    revision,
+                )
+                .map_err(|_| Error::Stopped)?;
+        }
+        entry
+            .runtime
+            .bind_operation(&id, request.flag())
+            .map_err(map_runtime_error)?;
+        request.check(&self.safety, document, session)?;
+        entry.offered.insert(id.clone());
         while !entry
             .runtime
-            .source_confirmed()
+            .grant_observed(&id)
             .map_err(map_runtime_error)?
         {
+            request.check(&self.safety, document, session)?;
             if self.stop.is_stopped() || entry.runtime.ended() {
                 return Err(Error::Stopped);
             }
             if std::time::Instant::now() >= deadline {
-                entry.runtime.revoker().revoke();
+                request.cancel();
                 return Err(Error::Timeout);
             }
             std::thread::sleep(std::time::Duration::from_millis(10));
         }
         entry
             .runtime
-            .request_consent(&id)
+            .request_consent(&id, request)
             .map_err(map_runtime_error)?;
         loop {
+            request.check(&self.safety, document, session)?;
             if self.stop.is_stopped()
                 || !entry.source.live()
                 || !entry
@@ -626,11 +864,12 @@ impl Endpoint {
                 .map_err(map_runtime_error)?;
             match result.state {
                 "consented" => {
+                    request.check(&self.safety, document, session)?;
                     return Ok(json!({"signature": result.signature.ok_or(Error::GrantInvalid)?}));
                 }
                 "consent-denied" => return Err(Error::ConsentDenied),
                 _ if std::time::Instant::now() >= deadline => {
-                    entry.runtime.revoker().revoke();
+                    request.cancel();
                     return Err(Error::Timeout);
                 }
                 _ => std::thread::sleep(std::time::Duration::from_millis(10)),
@@ -727,7 +966,11 @@ impl Drop for Endpoint {
 fn map_runtime_error(error: &'static str) -> Error {
     match error {
         "revoked" | "expired" => Error::Stopped,
-        "controller-busy" | "consent-unavailable" => Error::Busy,
+        "controller-busy"
+        | "consent-unavailable"
+        | "operation-pending"
+        | "consent-pending"
+        | "cleanup-pending" => Error::Busy,
         "consent-denied" => Error::ConsentDenied,
         "endpoint-disabled"
         | "native-input-disabled"
@@ -765,6 +1008,67 @@ mod tests {
     use super::*;
     fn endpoint() -> Endpoint {
         Endpoint::new(true, Arc::new(AtomicBool::new(false)))
+    }
+    #[test]
+    fn queued_input_requests_keep_the_ingress_stop_boundary_but_resources_are_independent() {
+        let safety = Safety::default();
+        let input = safety.register_request(1, 4, "session_fixture_01").unwrap();
+        let resource = safety.register_request(2, 4, "session_fixture_01").unwrap();
+        input.input.store(true, Ordering::SeqCst);
+        safety.close_input(4, "session_fixture_01").unwrap();
+        assert!(matches!(
+            input.check(&safety, 4, "session_fixture_01"),
+            Err(Error::Cancelled)
+        ));
+        assert!(input.flag().load(Ordering::SeqCst));
+        assert!(resource.check(&safety, 4, "session_fixture_01").is_ok());
+        let fresh = safety.register_request(3, 4, "session_fixture_01").unwrap();
+        fresh.input.store(true, Ordering::SeqCst);
+        assert!(fresh.check(&safety, 4, "session_fixture_01").is_ok());
+        assert!(safety.cancel_request(2).unwrap());
+        assert!(matches!(
+            resource.check(&safety, 4, "session_fixture_01"),
+            Err(Error::Cancelled)
+        ));
+        assert!(fresh.check(&safety, 4, "session_fixture_01").is_ok());
+        assert!(!safety.cancel_request(999).unwrap());
+        assert!(safety.register_request(3, 4, "session_fixture_01").is_err());
+        safety.cancel_request(1).unwrap();
+        assert!(fresh.check(&safety, 4, "session_fixture_01").is_ok());
+    }
+    #[test]
+    fn retired_transport_can_only_signal_its_own_generation_and_host_stop_still_targets_current() {
+        let safety = Safety::default();
+        let old = super::super::runtime::RuntimeRevoker::no_authority();
+        let current = super::super::runtime::RuntimeRevoker::no_authority();
+        let attempt = "A".repeat(43);
+        safety
+            .register(4, "session_fixture_01", current.clone())
+            .unwrap();
+        safety.0.lock().unwrap().peer_stops.insert(
+            (4, "session_fixture_01".into(), attempt.clone()),
+            old.input_revoker(),
+        );
+        assert!(matches!(
+            safety.close_peer(4, "session_fixture_01", &attempt),
+            Answer::Ok { .. }
+        ));
+        assert!(old.input_stopped());
+        assert!(!current.input_stopped());
+        assert!(!old.session_stopped());
+        assert!(matches!(
+            safety.close_peer(5, "session_fixture_01", &attempt),
+            Answer::Error {
+                code: Error::StaleOperation
+            }
+        ));
+        assert_eq!(safety.revision(4, "session_fixture_01").unwrap(), 0);
+        safety.close_input(4, "session_fixture_01").unwrap();
+        assert!(current.input_stopped());
+        assert!(!current.session_stopped());
+        assert_eq!(safety.revision(4, "session_fixture_01").unwrap(), 1);
+        safety.close_input(4, "session_fixture_01").unwrap();
+        assert_eq!(safety.revision(4, "session_fixture_01").unwrap(), 2);
     }
     #[test]
     fn native_extension_negotiation_is_offered_document_bound_and_never_advertises_unqualified_features()

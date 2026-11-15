@@ -73,6 +73,9 @@ struct Answer {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum ResultKind {
+    CancelNative {
+        cancelled: bool,
+    },
     Extension {
         document: u32,
         answer: crate::extension::Answer,
@@ -131,6 +134,8 @@ enum ResultKind {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
+    CancelNative,
+    PeerSafety,
     Extension,
     ExtensionSafety,
     Peer,
@@ -152,6 +157,11 @@ enum Kind {
 impl Kind {
     fn of(command: &Command) -> Self {
         match command {
+            Command::CancelNative { .. } => Self::CancelNative,
+            Command::Peer {
+                operation: crate::peer::Operation::Close { .. },
+                ..
+            } => Self::PeerSafety,
             Command::Extension { operation, .. } if operation.safety() => Self::ExtensionSafety,
             Command::Extension { .. } => Self::Extension,
             Command::Peer { .. } => Self::Peer,
@@ -216,7 +226,8 @@ fn validated(
         .remove(&answer.sequence)
         .ok_or("monitor-correlation")?;
     let valid = match (&kind, &mut answer.result) {
-        (Kind::Peer, ResultKind::Peer { .. }) => endpoint,
+        (Kind::Peer | Kind::PeerSafety, ResultKind::Peer { .. }) => endpoint,
+        (Kind::CancelNative, ResultKind::CancelNative { .. }) => endpoint,
         (Kind::CaptureSetup, ResultKind::CaptureSetup { .. })
         | (Kind::CaptureSource, ResultKind::CaptureSource { .. })
         | (Kind::InspectLocalIce, ResultKind::LocalIce { .. }) => endpoint,
@@ -634,6 +645,8 @@ fn run_inner(
                         kind,
                         Kind::Hello
                             | Kind::Peer
+                            | Kind::PeerSafety
+                            | Kind::CancelNative
                             | Kind::ExtensionSafety
                             | Kind::Pulse
                             | Kind::Shutdown
@@ -647,6 +660,8 @@ fn run_inner(
                                 k,
                                 Kind::Hello
                                     | Kind::Peer
+                                    | Kind::PeerSafety
+                                    | Kind::CancelNative
                                     | Kind::ExtensionSafety
                                     | Kind::Pulse
                                     | Kind::Shutdown

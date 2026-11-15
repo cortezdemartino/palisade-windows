@@ -585,3 +585,20 @@ test("global stop permits confirmed terminal cleanup events but never old live e
   await turn();
   t.bridge.dispose();
 });
+
+test('intentional peer retirement frees its lifetime without publishing a terminal event about a successor', async () => {
+  const t = setup(); await t.connect(DOC); await t.request('hello', { versions: [1] });
+  let scope;
+  t.dispatch(async (_request, value) => { scope = value; return { sdp: 'answer', transportSignature: 'A'.repeat(86) }; });
+  const fields = { session: 'session_fixture_01', grantId: 'grant_fixture_01', sdp: 'offer' };
+  assert.equal((await t.request('peer.offer', fields, 'old_peer_request')).ok, true);
+  const old = scope, sent = t.contents.sent.length;
+  assert.equal(old.retire(), true); assert.equal(old.signal.aborted, true);
+  assert.equal(t.contents.sent.length, sent);
+  assert.equal((await t.request('peer.offer', fields, 'new_peer_request')).ok, true);
+  t.ipc.emit(t.CHANNELS.expired, t.event, { document: DOC, id: 'old_peer_request' });
+  assert.equal(scope.signal.aborted, false); assert.equal(old.retire(), false);
+  assert.equal(old.emit({ event: 'lifecycle', session: fields.session, state: 'suspended', reason: 'error' }), false);
+  assert.equal(scope.emit({ event: 'lifecycle', session: fields.session, state: 'active', reason: null }), true);
+  assert.equal(t.stops(), 0); t.bridge.dispose();
+});

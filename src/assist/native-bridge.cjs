@@ -200,7 +200,7 @@ function installNativeBridge(
       ['resource.status', 'sync.status'].includes(payload?.event);
     if (entry.request.op !== "stop" && !capture && !peer && !consent && !resource)
       return false;
-    const terminal = ["stopped", "cancelled", "failed"].includes(
+    const terminal = (entry.request.op === 'peer.offer' && payload?.event === 'lifecycle' && payload.state === 'suspended') || ["stopped", "cancelled", "failed"].includes(
       payload?.state,
     );
     if (
@@ -421,6 +421,16 @@ function installNativeBridge(
         signal: entry.abort.signal,
         generation: entry.generation,
         emit: (payload) => emit(entry, payload),
+        retire: () => {
+          // Trusted runtime only: retire an intentionally replaced connection
+          // without publishing an unscoped terminal event about its successor.
+          if (!key || owners.get(key) !== entry) return false;
+          if (lifetimes.get(key) === entry) lifetimes.delete(key);
+          owners.delete(key);
+          entry.abort.abort('replaced');
+          if (!entry.done) settle(entry, 'cancelled');
+          return true;
+        },
       });
       Promise.resolve()
         .then(() => {

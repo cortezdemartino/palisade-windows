@@ -16,11 +16,21 @@ Public/default/Probe input2 remains false/Legacy; only an independently pinned,
 explicit native-input qualification build can declare/select Profile 2.
 The peer checkpoint at `fc2c6f013a2214421110686721c49a47f1751e57` passed exact-SHA CI.
 
-Next: fresh grants and resource integration. Retained resource lifetimes,
+The [fresh-control continuation](evidence/2026-11-15-fresh-control.md) now connects
+verified replacement grants to positive old-worker settlement and a new native
+input generation. The original gate, poller, source and deadline persist. Native
+per-request cancellation and generation-specific peer closes prevent stale work
+from stopping a successor. Partial per-capability consent completes before peer
+setup; a late acknowledgement does not reset that peer. This is unit/process
+integration, not WIN-L02 physical acceptance.
+
+Next: resource integration. Retained resource lifetimes,
 resource consent/channels and cleanup events are still unfinished; all related
 flags remain false. Do not describe strict resource refusal as a working transfer.
-Companion main inspected read-only at `060a8afa320163de14c02f75b048b89abaddbf27`;
-frozen sources/fixtures/30 cases remain unchanged. Real-service/device acceptance
+Companion main inspected read-only at `24b722c206f86651378aeae447252ea71977823a`;
+frozen sources/fixtures/30 cases remain unchanged. Its old-peer-loss handling
+can revoke a replacement's issued/active grants. The exact correction is in the
+[companion handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md); do not modify web code here. Real-service/device acceptance
 is still Not Verified. Cooperative physical arbitration remains Blocked. No
 release, signing, personal-device installation or production activation is authorized.
 

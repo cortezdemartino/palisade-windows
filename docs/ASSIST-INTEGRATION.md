@@ -1,12 +1,33 @@
 # Windows Assist integration
 
-Current RC-3 progress: [qualified capture and retained session dispatch](evidence/2026-11-13-rc3-source-session.md).
-Native source approval, source-scoped cancellation and grant offers are connected
-to the existing components. Public activation remains off. Authenticated peer,
-Profile 2 negotiation, reacquisition and resource dispatch remain Windows work;
-genuine service/native-device acceptance has not passed.
+## Current integration status, November 15
 
-## Current integration status, November 9
+**Full Windows Assist remains unfinished and inactive.**
+[Authenticated peers](evidence/2026-11-14-authenticated-peer.md),
+[extension/Profile 2 routing](evidence/2026-11-14-native-extension.md) and
+[fresh control recovery](evidence/2026-11-15-fresh-control.md) now connect to the
+same persistent native gate, poller, consent and monitor-owned executor. Native
+readiness and certificate verification precede packet admission; renewed input
+requires a fresh signed generation, positive old cleanup and fresh native consent.
+The original source, session and deadline persist.
+
+| Area | Current classification |
+| --- | --- |
+| Private launch/source/session/custody and authenticated input routing | Implemented; unit and no-authority Windows process verification; real native acceptance Not Verified |
+| Extension v1/v2/v3 and Profile 2 | Implemented; immutable qualification-only input2 selection; public/default/Probe input remains unavailable |
+| Fresh input acquisition after Stop | Implemented; signed fixtures, simulated executor cleanup and cancellation/cohort regressions; real WIN-L02 Not Verified |
+| Native clipboard/images/files/drop/resume/sync and resource liveness | Unfinished Windows integration; capability flags remain false |
+| Cooperative host priority | Core simulated; physical delivery arbitration Blocked; localYield remains false |
+| Actual enrolled device and matching web acceptance | All 30 real cases Not Verified; existing device/issuer/relay/review gates apply |
+
+Companion `24b722c206f86651378aeae447252ea71977823a` was inspected read-only.
+Six frozen source blobs, nine fixture families and the 30-case manifest remain
+unchanged. An old web peer's loss callback can revoke replacement grants; the
+[exact Claude handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md) records that separate
+correction. Windows resource engineering must continue independently. Production
+activation, installation and release remain separately gated.
+
+## Historical integration status, November 9
 
 The canonical companion is frozen at `01ae58565dd29dce692bace6d09834c5efdbff69`.
 Protocol sources and fixtures remain byte-identical to `e45cc8f`; Windows pins

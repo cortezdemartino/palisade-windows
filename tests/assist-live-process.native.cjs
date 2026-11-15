@@ -13,6 +13,24 @@ const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: random
 const canonical = (op, fields = {}) => ({ p: 'palisade.assist.native', v: 1, id: randomBytes(12).toString('base64url'), op, ...fields });
 const extension = (op, version, fields = {}) => ({ p: 'palisade.assist.native.ext', v: version, id: randomBytes(12).toString('base64url'), op, ...fields });
 
+test('actual private request cancellation stays responsive behind blocked ordinary work without revoking the launch', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await channel.request(canonical('hello', { versions: [1] }), 4);
+    const ordinary = Array.from({ length: 7 }, () => channel.probeWait(10000).catch(error => error));
+    const abort = new AbortController();
+    const pending = channel.request(canonical('grant.offer', { session: 'session_fixture_01', grant: '{}' }), 4, abort.signal).catch(error => error);
+    abort.abort();
+    // The same ordered reader must consume the cancel frame and this urgent
+    // source fence while the first ordinary fixture remains blocked.
+    assert.deepEqual(await channel.request(canonical('capture.stop', { operation: 'capture_fixture_01' }), 4), {});
+    assert.equal(channel.signal.aborted, false);
+    await channel.close(); await Promise.all([...ordinary, pending]);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
+
 test('actual native extension negotiates frozen versions and refuses resources independently under blocked ordinary work', async () => {
   const lifecycle = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });

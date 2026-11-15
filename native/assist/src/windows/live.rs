@@ -225,6 +225,36 @@ fn run_inner(
                     continue;
                 }
                 match &request.command {
+                    Command::CancelNative { target } => {
+                        let cancelled = safety
+                            .as_ref()
+                            .ok_or("endpoint-unavailable")?
+                            .cancel_request(*target)?;
+                        emit(
+                            &read_output,
+                            request.sequence,
+                            Reply::CancelNative { cancelled },
+                            &read_signals,
+                        )?;
+                    }
+                    Command::Peer {
+                        document,
+                        operation: crate::peer::Operation::Close { session, attempt },
+                    } => {
+                        let answer = safety
+                            .as_ref()
+                            .ok_or("endpoint-unavailable")?
+                            .close_peer(*document, session, attempt);
+                        emit(
+                            &read_output,
+                            request.sequence,
+                            Reply::Peer {
+                                document: *document,
+                                answer,
+                            },
+                            &read_signals,
+                        )?;
+                    }
                     Command::Extension {
                         document,
                         version,
@@ -337,7 +367,23 @@ fn run_inner(
                             &read_signals,
                         )?;
                     }
-                    _ => ordinary.try_send(request).map_err(|_| "live-queue-full")?,
+                    _ => {
+                        let scope = match &request.command {
+                            Command::Native {
+                                document,
+                                operation: crate::endpoint::Operation::GrantOffer { session, .. },
+                            } => Some(
+                                safety
+                                    .as_ref()
+                                    .ok_or("endpoint-unavailable")?
+                                    .register_request(request.sequence, *document, session)?,
+                            ),
+                            _ => None,
+                        };
+                        ordinary
+                            .try_send((request, scope))
+                            .map_err(|_| "live-queue-full")?;
+                    }
                 }
             }
         })();
@@ -350,7 +396,7 @@ fn run_inner(
             if let Some(endpoint) = &mut native_endpoint {
                 endpoint.poll();
             }
-            let request = match receive.recv_timeout(Duration::from_millis(10)) {
+            let (request, scope) = match receive.recv_timeout(Duration::from_millis(10)) {
                 Ok(request) => request,
                 Err(mpsc::RecvTimeoutError::Timeout) => continue,
                 Err(_) => {
@@ -417,7 +463,7 @@ fn run_inner(
                     let answer = native_endpoint
                         .as_mut()
                         .ok_or("endpoint-unavailable")?
-                        .dispatch(document, operation);
+                        .dispatch_request(document, operation, scope.as_ref());
                     emit(
                         &output,
                         request.sequence,

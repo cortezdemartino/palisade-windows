@@ -11,8 +11,12 @@ The [source/session continuation](evidence/2026-11-13-rc3-source-session.md)
 adds root-owned source cancellation, native verification of app-selected screen
 geometry/window ownership, and retained canonical grant/session dispatch. Source
 loss ends its descendant sessions without revoking unrelated launch scopes.
-Input remains unavailable in normal builds. Authenticated peer, reacquisition,
-resource integration and actual service/device acceptance are unfinished.
+Input remains unavailable in normal builds. The
+[authenticated peer](evidence/2026-11-14-authenticated-peer.md) and
+[fresh acquisition](evidence/2026-11-15-fresh-control.md) continuations now connect
+to that persistent authority. Positive old worker/mirror settlement precedes
+replacement; request cancellation is bound before cleanup can block. Resource
+transport/liveness and actual service/device acceptance remain unfinished.
 
 The [RC-2 endpoint checkpoint](evidence/2026-11-11-rc2-native-endpoint.md) connects
 the actual application-owned monitor and persistent coordinator to canonical

@@ -1,6 +1,6 @@
 'use strict';
-// Trusted main only. No production startup or renderer imports this module.
-// This revision negotiates CHANNEL-ONLY cleanup; it cannot own active input.
+// Trusted main only. Version 3 retains endpoint/process cleanup ownership.
+// Public builds stay inactive; no hosted renderer imports this module.
 const { spawn } = require('node:child_process');
 const { randomBytes } = require('node:crypto');
 const { TextDecoder } = require('node:util');
@@ -64,10 +64,11 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     if (!revoked) revoke();
     else child?.stdin.destroy();
   }
-  function send(command, timeoutMs = 2500, safety = false) {
+  function send(command, timeoutMs = 2500, safety = false, requestSignal) {
+    if (requestSignal?.aborted) return Promise.reject(new nativeProtocol.NativeBridgeError('cancelled'));
     if (closed || !child || (!safety && revoked) || sequence >= 0xffffffff || writeBlocked ||
         pending.size >= (endpoint ? 17 : 10) || (endpoint && command.type !== 'shutdown' && pending.size >= 16) ||
-        (command.type === 'peer' && [...pending.values()].filter(v => v.type === 'peer').length >= 4) ||
+        (command.type === 'peer' && command.operation.action !== 'close' && [...pending.values()].filter(v => v.type === 'peer' && v.operation.action !== 'close').length >= 4) ||
         (!safety && command.type !== 'peer' && [...pending.values()].filter(v => !v.safety && !['pulse', 'shutdown', 'peer'].includes(v.type)).length >= CAPACITY)) return Promise.reject(unavailable());
     const bytes = Buffer.from(JSON.stringify({ sequence, command }));
     if (!bytes.length || bytes.length > MAX_FRAME) return Promise.reject(unavailable());
@@ -83,9 +84,18 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     try {
       if (!child.stdin.write(Buffer.concat([prefix, bytes]))) writeBlocked = true;
     } catch { poison(); }
+    if (requestSignal) {
+      // Keep this narrow cancellation binding through the public ACK-delivery
+      // race. A completed consent retains its original native request flag.
+      const cancel = () => { void send({ type: 'cancel-native', target: id }, 2500, true).catch(() => { revoke(); }); };
+      requestSignal.addEventListener('abort', cancel, { once: true });
+      if (requestSignal.aborted) cancel();
+    }
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'cancel-native') return exact(result, ['type', 'cancelled']) &&
+      result.type === 'cancel-native' && typeof result.cancelled === 'boolean';
     if (endpoint && entry.type === 'extension') {
       if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'extension' || result.document !== entry.document) return false;
       const answer = result.answer;
@@ -199,14 +209,14 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     heartbeat.unref?.();
     const api = { status: () => send({ type: 'status' }), revoke,
       close: () => holder.finish('channel-close'), wait: () => exited, signal: abort.signal, pid: child.pid };
-    if (endpoint) api.request = (request, document) => {
+    if (endpoint) api.request = (request, document, requestSignal) => {
       try {
         const canonical = nativeProtocol.parseRequest(request);
         if (canonical.op === 'stop' || !Number.isInteger(document) || document < 0 || document >= 0xffffffff) throw unavailable();
         const { p, v, id, ...operation } = canonical;
         if (revoked) throw unavailable();
         return send({ type: 'native', document, operation }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs,
-          ['capture.stop', 'capture.cancel', 'peer.close'].includes(operation.op)).then(reply => {
+          ['capture.stop', 'capture.cancel', 'peer.close'].includes(operation.op), operation.op === 'grant.offer' ? requestSignal : undefined).then(reply => {
           if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
           return reply.answer.result;
         });
@@ -228,7 +238,7 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       api.peer = (operation, document) => {
         if (!privatePeer.operation(operation) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
           return Promise.reject(unavailable());
-        return send({ type: 'peer', document, operation }, ['prepare', 'observed'].includes(operation.action) ? 10000 : 2500).then(reply => {
+        return send({ type: 'peer', document, operation }, ['prepare', 'observed'].includes(operation.action) ? 10000 : 2500, operation.action === 'close').then(reply => {
           if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
           return reply.answer.result;
         });

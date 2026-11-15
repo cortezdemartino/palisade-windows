@@ -4,7 +4,10 @@ use ed25519_dalek::{Signature, VerifyingKey};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
     time::{Duration, Instant},
 };
 static NEXT_INSTANCE: AtomicU64 = AtomicU64::new(1);
@@ -227,6 +230,12 @@ pub fn verify_lease(
 }
 
 /// One endpoint owns one controller. Callers cannot manufacture an Authorized result.
+struct GrantOperation {
+    cancelled: Arc<AtomicBool>,
+    canonical: Vec<u8>,
+    generation: u64,
+    nonce: String,
+}
 pub struct SessionGate {
     issuer: [u8; 32],
     binding: Binding,
@@ -235,6 +244,9 @@ pub struct SessionGate {
     minimum_generation: u64,
     highest_grant: u64,
     new_input_blocked: bool,
+    fresh_input_generation: Option<u64>,
+    staged_input: BTreeMap<String, StreamGrant>,
+    grant_operations: BTreeMap<String, GrantOperation>,
     grants: BTreeMap<String, StreamGrant>,
     consent: BTreeSet<String>,
     active_seen: BTreeSet<String>,
@@ -250,6 +262,7 @@ pub struct SessionGate {
     input_epoch: u64,
     instance: u64,
     peer_verified: bool,
+    resource_peer_verified: bool,
     input_age: Option<(crate::input_age::InputAgeGuard, Instant)>,
     executor: Option<(crate::executor::ExecutorIdentity, bool)>,
     cleanup_nonce: u64,
@@ -273,6 +286,11 @@ pub struct PeerPermit {
     grant: String,
     generation: u64,
     capability: String,
+}
+pub(crate) enum InputOffer {
+    Existing,
+    Additional,
+    Replacement,
 }
 impl ExecutionPermit {
     pub(crate) fn executor_registration(&self) -> Option<(crate::executor::ExecutorIdentity, u64)> {
@@ -302,6 +320,9 @@ impl SessionGate {
             minimum_generation,
             highest_grant: minimum_generation,
             new_input_blocked: false,
+            fresh_input_generation: None,
+            staged_input: BTreeMap::new(),
+            grant_operations: BTreeMap::new(),
             grants: BTreeMap::new(),
             consent: BTreeSet::new(),
             active_seen: BTreeSet::new(),
@@ -319,6 +340,7 @@ impl SessionGate {
                 .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |v| v.checked_add(1))
                 .expect("endpoint instance exhausted"),
             peer_verified: false,
+            resource_peer_verified: false,
             input_age: None,
             executor: None,
             cleanup_nonce: 0,
@@ -336,6 +358,112 @@ impl SessionGate {
         }
         self.last_wall = now;
         Ok(())
+    }
+    fn is_revoked(&self, id: &str) -> bool {
+        self.revoked.contains(id)
+            || self
+                .grant_operations
+                .get(id)
+                .is_some_and(|operation| operation.cancelled.load(Ordering::SeqCst))
+    }
+    fn observed_generation(&self) -> u64 {
+        self.grant_operations
+            .values()
+            .filter(|op| op.cancelled.load(Ordering::SeqCst))
+            .fold(self.highest_grant, |highest, op| highest.max(op.generation))
+    }
+    pub(crate) fn bind_operation(
+        &mut self,
+        id: &str,
+        cancelled: Arc<AtomicBool>,
+        now: u64,
+    ) -> Result<(), &'static str> {
+        let grant = self.pending_grant(id, now)?;
+        self.bind_verified_offer(&grant, cancelled)
+    }
+    pub(crate) fn bind_offered_operation(
+        &mut self,
+        signed: &SignedStreamGrant,
+        cancelled: Arc<AtomicBool>,
+        now: u64,
+    ) -> Result<(), &'static str> {
+        self.clock(now)?;
+        verify_grant(
+            signed,
+            &self.issuer,
+            &self.binding,
+            now,
+            self.deadline,
+            self.minimum_generation,
+        )?;
+        let grant = &signed.grant;
+        if self.approved_at.is_some_and(|a| a != grant.approved_at)
+            || self.is_revoked(&grant.grant_id)
+        {
+            return Err("revoked");
+        }
+        if self
+            .grants
+            .get(&grant.grant_id)
+            .is_some_and(|known| known.canonical() != grant.canonical())
+        {
+            return Err("binding-mismatch");
+        }
+        if !self.grants.contains_key(&grant.grant_id) && is_input(&grant.capability) {
+            self.classify_input_offer(signed, now)?;
+        }
+        if self
+            .grants
+            .values()
+            .any(|old| old.grant_id != grant.grant_id && old.nonce == grant.nonce)
+            || self
+                .grant_operations
+                .iter()
+                .any(|(id, op)| id != &grant.grant_id && op.nonce == grant.nonce)
+        {
+            return Err("revoked");
+        }
+        self.bind_verified_offer(grant, cancelled)
+    }
+    fn bind_verified_offer(
+        &mut self,
+        grant: &StreamGrant,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<(), &'static str> {
+        let id = &grant.grant_id;
+        // A retry of a completed consent cannot replace the permission's owner
+        // with a later RPC's cancellation flag.
+        if self.consent.contains(id) {
+            return Ok(());
+        }
+        if let Some(existing) = self.grant_operations.get(id) {
+            if existing.canonical != grant.canonical() {
+                return Err("binding-mismatch");
+            }
+            return if Arc::ptr_eq(&existing.cancelled, &cancelled) {
+                if existing.cancelled.load(Ordering::SeqCst) {
+                    Err("revoked")
+                } else {
+                    Ok(())
+                }
+            } else {
+                Err("operation-pending")
+            };
+        }
+        if self.grant_operations.len() >= 128 {
+            return Err("not-granted");
+        }
+        let stopped = cancelled.load(Ordering::SeqCst);
+        self.grant_operations.insert(
+            id.to_owned(),
+            GrantOperation {
+                cancelled,
+                canonical: grant.canonical(),
+                generation: grant.generation,
+                nonce: grant.nonce.clone(),
+            },
+        );
+        if stopped { Err("revoked") } else { Ok(()) }
     }
     pub fn admit(&mut self, signed: &SignedStreamGrant, now: u64) -> Result<(), &'static str> {
         self.clock(now)?;
@@ -355,9 +483,7 @@ impl SessionGate {
             },
         )?;
         let g = &signed.grant;
-        if self.revoked.contains(&g.grant_id)
-            || self.approved_at.is_some_and(|a| a != g.approved_at)
-        {
+        if self.is_revoked(&g.grant_id) || self.approved_at.is_some_and(|a| a != g.approved_at) {
             return Err("revoked");
         }
         if let Some(previous) = self.grants.get(&g.grant_id) {
@@ -372,7 +498,15 @@ impl SessionGate {
         if is_input(&g.capability) && self.new_input_blocked {
             return Err("revoked");
         }
-        if self.grants.len() >= 8 || self.grants.values().any(|v| v.capability == g.capability) {
+        if self.grants.len() >= 128
+            || self
+                .grants
+                .values()
+                .filter(|v| !self.is_revoked(&v.grant_id))
+                .count()
+                >= 8
+            || self.grants.values().any(|v| v.capability == g.capability)
+        {
             return Err("not-granted");
         }
         self.approved_at = Some(g.approved_at);
@@ -380,6 +514,294 @@ impl SessionGate {
         self.highest_grant = self.highest_grant.max(g.generation);
         self.grants.insert(g.grant_id.clone(), g.clone());
         Ok(())
+    }
+    /// Retain a verified canceled offer as inactive history. Cancellation cannot
+    /// be erased by resubmitting the same signed ID under a new request.
+    pub(crate) fn reject_offer(
+        &mut self,
+        signed: &SignedStreamGrant,
+        now: u64,
+    ) -> Result<(), &'static str> {
+        self.clock(now)?;
+        verify_grant(
+            signed,
+            &self.issuer,
+            &self.binding,
+            now,
+            self.deadline,
+            self.minimum_generation,
+        )?;
+        let g = &signed.grant;
+        if self.approved_at.is_some_and(|a| a != g.approved_at) {
+            return Err("binding-mismatch");
+        }
+        if let Some(known) = self.grants.get(&g.grant_id) {
+            if known.canonical() != g.canonical() {
+                return Err("binding-mismatch");
+            }
+            // A canceled ACK retry cannot revoke an earlier completed consent,
+            // nor can a duplicate request take ownership of another prompt.
+            if !self.consent.contains(&g.grant_id)
+                && !self.grant_operations.contains_key(&g.grant_id)
+            {
+                self.revoke(&g.grant_id);
+            }
+            return Ok(());
+        }
+        if self.grants.len() >= 128 || self.grants.values().any(|old| old.nonce == g.nonce) {
+            return Err("not-granted");
+        }
+        self.approved_at = Some(g.approved_at);
+        self.deadline = Some(g.session_deadline);
+        self.highest_grant = self.highest_grant.max(g.generation);
+        self.grants.insert(g.grant_id.clone(), g.clone());
+        self.revoked.insert(g.grant_id.clone());
+        self.staged_input.remove(&g.grant_id);
+        Ok(())
+    }
+    /// A fresh signed input record can be observed while cleanup/consent is
+    /// pending, without becoming an admitted grant. This keeps valid independent
+    /// resource leases alive while the service publishes a replacement request.
+    fn stage_input(&mut self, signed: &SignedStreamGrant, now: u64) -> Result<(), &'static str> {
+        self.clock(now)?;
+        let grant = &signed.grant;
+        verify_grant(
+            signed,
+            &self.issuer,
+            &self.binding,
+            now,
+            self.deadline,
+            self.minimum_generation,
+        )?;
+        if !is_input(&grant.capability)
+            || self.approved_at != Some(grant.approved_at)
+            || self.is_revoked(&grant.grant_id)
+            || self.grants.contains_key(&grant.grant_id)
+            || (grant.generation <= self.observed_generation()
+                && self.fresh_input_generation != Some(grant.generation))
+            || self.grants.values().any(|known| known.nonce == grant.nonce)
+            || self
+                .grant_operations
+                .iter()
+                .any(|(id, op)| id != &grant.grant_id && op.nonce == grant.nonce)
+            || self.grants.values().any(|known| {
+                known.capability == grant.capability && known.generation == grant.generation
+            })
+        {
+            return Err("revoked");
+        }
+        if let Some(previous) = self.staged_input.get(&grant.grant_id) {
+            return if previous.canonical() == grant.canonical() {
+                Ok(())
+            } else {
+                Err("binding-mismatch")
+            };
+        }
+        if let Some(previous) = self
+            .staged_input
+            .values()
+            .find(|known| known.capability == grant.capability)
+        {
+            if previous.generation >= grant.generation {
+                return Err("stale-generation");
+            }
+            let old_id = previous.grant_id.clone();
+            self.revoke(&old_id);
+            if self.ended {
+                return Err("not-granted");
+            }
+        }
+        if self.staged_input.len() >= 2 {
+            return Err("not-granted");
+        }
+        self.staged_input
+            .insert(grant.grant_id.clone(), grant.clone());
+        Ok(())
+    }
+    /// Trusted runtime only: call after the old input worker has positively
+    /// joined. A signature, new generation and settled gate are required; fresh
+    /// native consent, lease coverage and certificate admission still follow.
+    pub fn reacquire_input(
+        &mut self,
+        signed: &SignedStreamGrant,
+        now: u64,
+    ) -> Result<(), &'static str> {
+        self.stage_input(signed, now)?;
+        let grant = &signed.grant;
+        let same_cohort = self.fresh_input_generation == Some(grant.generation);
+        if !self.new_input_blocked
+            || (!same_cohort
+                && (self.executor.is_some()
+                    || self.cleanup_required.is_some()
+                    || self.peer_verified))
+            || self.grants.len() >= 128
+            || self.grants.values().any(|known| {
+                known.capability == grant.capability && !self.is_revoked(&known.grant_id)
+            })
+        {
+            return Err("cleanup-pending");
+        }
+        if self
+            .fresh_input_generation
+            .is_some_and(|generation| generation != grant.generation)
+        {
+            return Err("stale-generation");
+        }
+        if !same_cohort {
+            self.input_epoch = self
+                .input_epoch
+                .checked_add(1)
+                .ok_or("input-epoch-exhausted")?;
+            self.input_age = None;
+        }
+        self.fresh_input_generation = Some(grant.generation);
+        self.highest_grant = self.highest_grant.max(grant.generation);
+        self.staged_input.remove(&grant.grant_id);
+        self.grants.insert(grant.grant_id.clone(), grant.clone());
+        Ok(())
+    }
+    pub(crate) fn needs_input_reacquisition(&self, signed: &SignedStreamGrant) -> bool {
+        self.new_input_blocked
+            && is_input(&signed.grant.capability)
+            && !self.grants.contains_key(&signed.grant.grant_id)
+    }
+    pub(crate) fn classify_input_offer(
+        &mut self,
+        signed: &SignedStreamGrant,
+        now: u64,
+    ) -> Result<InputOffer, &'static str> {
+        self.clock(now)?;
+        verify_grant(
+            signed,
+            &self.issuer,
+            &self.binding,
+            now,
+            self.deadline,
+            self.minimum_generation,
+        )?;
+        let g = &signed.grant;
+        if !is_input(&g.capability)
+            || self.is_revoked(&g.grant_id)
+            || self.approved_at.is_some_and(|a| a != g.approved_at)
+        {
+            return Err("revoked");
+        }
+        if let Some(old) = self.grants.get(&g.grant_id) {
+            return if old.canonical() == g.canonical() {
+                Ok(InputOffer::Existing)
+            } else {
+                Err("binding-mismatch")
+            };
+        }
+        if self.grants.values().any(|old| old.nonce == g.nonce) {
+            return Err("revoked");
+        }
+        if self
+            .grant_operations
+            .iter()
+            .any(|(id, op)| id != &g.grant_id && op.nonce == g.nonce)
+        {
+            return Err("revoked");
+        }
+        if self.fresh_input_generation == Some(g.generation) {
+            return Ok(InputOffer::Additional);
+        }
+        if self
+            .grant_operations
+            .values()
+            .any(|op| op.cancelled.load(Ordering::SeqCst) && op.generation >= g.generation)
+        {
+            return Err("stale-generation");
+        }
+        if g.generation > self.observed_generation()
+            && (self.new_input_blocked || self.grants.values().any(|old| is_input(&old.capability)))
+        {
+            return Ok(InputOffer::Replacement);
+        }
+        if !self.new_input_blocked
+            && self
+                .grants
+                .values()
+                .filter(|old| is_input(&old.capability))
+                .map(|old| old.generation)
+                .min()
+                .is_none_or(|generation| g.generation <= generation)
+            && !self
+                .grants
+                .values()
+                .any(|old| old.capability == g.capability)
+        {
+            return Ok(InputOffer::Additional);
+        }
+        Err("stale-generation")
+    }
+    pub(crate) fn consented_grant(
+        &mut self,
+        id: &str,
+        now: u64,
+    ) -> Result<Option<StreamGrant>, &'static str> {
+        let grant = self.pending_grant(id, now)?;
+        Ok(self.consent.contains(id).then_some(grant))
+    }
+    pub(crate) fn lease_current(&mut self, now: u64, instant: Instant) -> Result<(), &'static str> {
+        self.clock(now)?;
+        if self.lease_until.is_none() || self.lease.is_none() {
+            return Err("lease-required");
+        }
+        if self.lease_until.is_some_and(|until| instant >= until)
+            || self
+                .lease
+                .as_ref()
+                .is_some_and(|lease| now >= lease.expires_at)
+        {
+            self.stop();
+            return Err("expired");
+        }
+        Ok(())
+    }
+    pub(crate) fn input_cohort_decided(
+        &mut self,
+        current: &[StreamGrant],
+        selected: &str,
+        now: u64,
+    ) -> Result<bool, &'static str> {
+        let selected = self.pending_grant(selected, now)?;
+        if !current
+            .iter()
+            .any(|g| g.canonical() == selected.canonical())
+        {
+            return Err("not-granted");
+        }
+        for record in current
+            .iter()
+            .filter(|g| is_input(&g.capability) && g.generation == selected.generation)
+        {
+            if !is_input(&record.capability) {
+                return Err("invalid-message");
+            }
+            let known = self.grants.get(&record.grant_id).ok_or("consent-pending")?;
+            if known.canonical() != record.canonical() {
+                return Err("binding-mismatch");
+            }
+            if !self.consent.contains(&record.grant_id) && !self.is_revoked(&record.grant_id) {
+                return Ok(false);
+            }
+        }
+        Ok(true)
+    }
+    pub(crate) fn extends_fresh_input_batch(&self, signed: &SignedStreamGrant) -> bool {
+        self.needs_input_reacquisition(signed)
+            && self.fresh_input_generation == Some(signed.grant.generation)
+    }
+    pub(crate) fn input_generation_ended(&self) -> bool {
+        self.new_input_blocked && self.fresh_input_generation.is_none()
+    }
+    pub(crate) fn validate_worker_epoch(&self, epoch: Option<u64>) -> Result<(), &'static str> {
+        if epoch != Some(self.input_epoch) || self.input_generation_ended() {
+            Err("revoked")
+        } else {
+            Ok(())
+        }
     }
     /// One native execution generation per gate. Reserve before startup/READY;
     /// there is no replacement while a previous generation remains registered.
@@ -395,7 +817,7 @@ impl SessionGate {
         if !self
             .grants
             .values()
-            .any(|g| is_input(&g.capability) && !self.revoked.contains(&g.grant_id))
+            .any(|g| is_input(&g.capability) && !self.is_revoked(&g.grant_id))
         {
             return Err("not-granted");
         }
@@ -432,7 +854,7 @@ impl SessionGate {
         if self
             .grants
             .values()
-            .any(|g| is_input(&g.capability) && !self.revoked.contains(&g.grant_id))
+            .any(|g| is_input(&g.capability) && !self.is_revoked(&g.grant_id))
         {
             return Err("input-still-authorized");
         }
@@ -472,7 +894,7 @@ impl SessionGate {
     }
     pub fn consent(&mut self, grant_id: &str, now: u64) -> Result<(), &'static str> {
         self.clock(now)?;
-        if !self.grants.contains_key(grant_id) || self.revoked.contains(grant_id) {
+        if !self.grants.contains_key(grant_id) || self.is_revoked(grant_id) {
             return Err("not-granted");
         }
         if self.cleanup_required.is_some()
@@ -494,12 +916,42 @@ impl SessionGate {
         now: u64,
     ) -> Result<(), &'static str> {
         self.clock(now)?;
-        if self.revoked.contains(&signed.grant.grant_id) {
-            let previous = self.grants.get(&signed.grant.grant_id).ok_or("revoked")?;
-            if previous.canonical() != signed.grant.canonical() {
+        if self.is_revoked(&signed.grant.grant_id) {
+            let canonical = self
+                .grants
+                .get(&signed.grant.grant_id)
+                .map(|g| g.canonical())
+                .or_else(|| {
+                    self.grant_operations
+                        .get(&signed.grant.grant_id)
+                        .map(|op| op.canonical.clone())
+                })
+                .ok_or("revoked")?;
+            if canonical != signed.grant.canonical() {
                 return Err("binding-mismatch");
             }
             signature(&signed.grant, &signed.signature, &self.issuer)
+        } else if is_input(&signed.grant.capability)
+            && !self.grants.contains_key(&signed.grant.grant_id)
+            && self.fresh_input_generation != Some(signed.grant.generation)
+            && self.grant_operations.values().any(|op| {
+                op.cancelled.load(Ordering::SeqCst) && op.generation >= signed.grant.generation
+            })
+        {
+            // A locally canceled acquisition can remain visible until the
+            // service processes revocation. Validate it without restoring it or
+            // ending independently valid resources. Only a higher fresh signed
+            // generation can enter a new native acquisition.
+            self.reject_offer(signed, now)
+        } else if self.needs_input_reacquisition(signed)
+            || (is_input(&signed.grant.capability)
+                && !self.grants.contains_key(&signed.grant.grant_id)
+                && self
+                    .grants
+                    .values()
+                    .any(|known| known.capability == signed.grant.capability))
+        {
+            self.stage_input(signed, now)
         } else {
             self.admit(signed, now)
         }
@@ -554,7 +1006,11 @@ impl SessionGate {
         instant: Instant,
     ) -> Result<&StreamGrant, &'static str> {
         self.clock(now)?;
-        if !self.peer_verified {
+        if if is_input(capability) {
+            !self.peer_verified
+        } else {
+            !self.resource_peer_verified
+        } {
             return Err("peer-unverified");
         }
         self.authorize_grant(grant_id, capability, now, instant)
@@ -574,7 +1030,7 @@ impl SessionGate {
         }
         let g = self.grants.get(grant_id).ok_or("not-granted")?;
         let l = self.lease.as_ref().ok_or("not-granted")?;
-        if self.revoked.contains(grant_id) {
+        if self.is_revoked(grant_id) {
             return Err("revoked");
         }
         if !self.consent.contains(grant_id)
@@ -596,6 +1052,10 @@ impl SessionGate {
         now: u64,
         instant: Instant,
     ) -> Result<PeerPermit, &'static str> {
+        self.tick(now, instant)?;
+        if self.input_generation_ended() {
+            return Err("revoked");
+        }
         if self.peer_verified {
             return Err("peer-already-bound");
         }
@@ -625,6 +1085,7 @@ impl SessionGate {
         now: u64,
         instant: Instant,
     ) -> Result<(), &'static str> {
+        self.tick(now, instant)?;
         if permit.instance != self.instance || permit.input_epoch != self.input_epoch {
             return Err("stale-peer");
         }
@@ -634,6 +1095,19 @@ impl SessionGate {
             != permit.generation
         {
             return Err("stale-peer");
+        }
+        Ok(())
+    }
+    pub(crate) fn validate_peer_cohort(
+        &mut self,
+        permit: &PeerPermit,
+        current: &[StreamGrant],
+        now: u64,
+        instant: Instant,
+    ) -> Result<(), &'static str> {
+        self.validate_peer_setup(permit, now, instant)?;
+        if !self.input_cohort_decided(current, &permit.grant, now)? {
+            return Err("consent-pending");
         }
         Ok(())
     }
@@ -693,13 +1167,23 @@ impl SessionGate {
         if self.revoked.contains(id) {
             return;
         }
+        if let Some(staged) = self.staged_input.remove(id) {
+            if self.grants.len() >= 128 {
+                self.stop();
+                return;
+            }
+            self.highest_grant = self.highest_grant.max(staged.generation);
+            self.grants.insert(id.into(), staged);
+        }
         self.epoch = self.epoch.checked_add(1).expect("endpoint epoch exhausted");
         if self
             .grants
             .get(id)
             .is_some_and(|grant| is_input(&grant.capability))
+            && self.consent.contains(id)
         {
             self.new_input_blocked = true;
+            self.fresh_input_generation = None;
             self.input_epoch = self
                 .input_epoch
                 .checked_add(1)
@@ -713,6 +1197,8 @@ impl SessionGate {
     /// restore them. Independently granted clipboard/files keep their own checks.
     pub fn suspend_input(&mut self) {
         self.new_input_blocked = true;
+        self.peer_verified = false;
+        self.fresh_input_generation = None;
         let ids: Vec<_> = self
             .grants
             .values()
@@ -732,6 +1218,9 @@ impl SessionGate {
             .expect("input epoch exhausted");
         self.ended = true;
         self.peer_verified = false;
+        self.resource_peer_verified = false;
+        self.staged_input.clear();
+        self.grant_operations.clear();
         self.consent.clear();
         self.active_seen.clear();
         self.grants.clear();
@@ -760,7 +1249,7 @@ impl SessionGate {
         self.deadline
     }
     pub fn highest_generation(&self) -> u64 {
-        self.highest_grant
+        self.observed_generation()
     }
     pub(crate) fn input_epoch(&self) -> u64 {
         self.input_epoch
@@ -774,11 +1263,12 @@ impl SessionGate {
             self.input_age = Some((crate::input_age::InputAgeGuard::new(), Instant::now()));
         }
         self.peer_verified = true;
+        self.resource_peer_verified = true;
         Ok(())
     }
     pub fn pending_grant(&mut self, id: &str, now: u64) -> Result<StreamGrant, &'static str> {
         self.clock(now)?;
-        if self.revoked.contains(id) {
+        if self.is_revoked(id) {
             return Err("revoked");
         }
         self.grants
@@ -789,6 +1279,17 @@ impl SessionGate {
     }
     pub fn tick(&mut self, now: u64, instant: Instant) -> Result<(), &'static str> {
         self.clock(now)?;
+        let cancelled: Vec<_> = self
+            .grant_operations
+            .iter()
+            .filter(|(id, operation)| {
+                operation.cancelled.load(Ordering::SeqCst) && !self.revoked.contains(*id)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in cancelled {
+            self.revoke(&id);
+        }
         let expired: Vec<_> = self
             .grants
             .values()
@@ -1027,6 +1528,9 @@ impl SessionGate {
         now: u64,
         instant: Instant,
     ) -> Result<(), &'static str> {
+        // Per-request cancellation is lock-free; fold sibling cancellation
+        // before every primitive rather than waiting for the worker's next tick.
+        self.tick(now, instant)?;
         if permit.instance != self.instance
             || permit.executor != self.executor.map(|(id, _)| id)
             || self.cleanup_required.is_some()
@@ -1038,5 +1542,419 @@ impl SessionGate {
         }
         self.authorize(&permit.grant, &permit.capability, now, instant)
             .map(|_| ())
+    }
+}
+
+#[cfg(test)]
+mod request_tests {
+    use super::*;
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use ed25519_dalek::{Signer, SigningKey};
+    fn setup() -> (SessionGate, SigningKey, SignedStreamGrant, u64, Instant) {
+        let f: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let mut grant: StreamGrant =
+            serde_json::from_value(f["grants"]["valid"][1]["signed"]["grant"].clone()).unwrap();
+        let key = SigningKey::from_bytes(&[73; 32]);
+        grant.generation = 10;
+        let now = f["now"].as_u64().unwrap();
+        let binding = Binding {
+            session: grant.session.clone(),
+            room: grant.room.clone(),
+            stream: grant.stream.clone(),
+            publisher_account: grant.publisher_account.clone(),
+            publisher_device: grant.publisher_device.clone(),
+            helper_account: grant.helper_account.clone(),
+            helper_device: grant.helper_device.clone(),
+            helper_transport: grant.helper_transport.clone(),
+            endpoint: grant.endpoint.clone().unwrap(),
+        };
+        let t = Instant::now();
+        (
+            SessionGate::new(key.verifying_key().to_bytes(), binding, now, 3, t),
+            key.clone(),
+            sign(grant, &key),
+            now,
+            t,
+        )
+    }
+    fn sign(grant: StreamGrant, key: &SigningKey) -> SignedStreamGrant {
+        SignedStreamGrant {
+            signature: URL_SAFE_NO_PAD.encode(key.sign(&grant.canonical()).to_bytes()),
+            grant,
+        }
+    }
+    fn other(
+        g: &SignedStreamGrant,
+        key: &SigningKey,
+        generation: u64,
+        cap: &str,
+    ) -> SignedStreamGrant {
+        let mut grant = g.grant.clone();
+        grant.grant_id = format!("grant_request_{}_{}", generation, cap);
+        grant.nonce = format!("nonce_request_{}_{}", generation, cap);
+        grant.generation = generation;
+        grant.capability = cap.into();
+        sign(grant, key)
+    }
+    #[test]
+    fn consent_cohorts_wait_for_both_decisions_and_partial_denial_preserves_the_allowed_capability()
+    {
+        for fresh in [false, true] {
+            for allow_mouse in [false, true] {
+                let (mut gate, key, mouse, now, t) = setup();
+                gate.admit(&mouse, now).unwrap();
+                let (mouse, keyboard) = if fresh {
+                    gate.suspend_input();
+                    let mouse = other(&mouse, &key, 11, "control_mouse");
+                    let keyboard = other(&mouse, &key, 11, "control_keyboard");
+                    gate.reacquire_input(&mouse, now).unwrap();
+                    let epoch = gate.input_epoch();
+                    gate.reacquire_input(&keyboard, now).unwrap();
+                    assert_eq!(gate.input_epoch(), epoch);
+                    (mouse, keyboard)
+                } else {
+                    let keyboard = other(&mouse, &key, 10, "control_keyboard");
+                    gate.admit(&keyboard, now).unwrap();
+                    (mouse, keyboard)
+                };
+                let current = vec![mouse.grant.clone(), keyboard.grant.clone()];
+                let (allowed, denied) = if allow_mouse {
+                    (&mouse, &keyboard)
+                } else {
+                    (&keyboard, &mouse)
+                };
+                gate.consent(&allowed.grant.grant_id, now).unwrap();
+                assert!(
+                    !gate
+                        .input_cohort_decided(&current, &allowed.grant.grant_id, now)
+                        .unwrap()
+                );
+                let epoch = gate.input_epoch();
+                gate.revoke(&denied.grant.grant_id);
+                assert_eq!(gate.input_epoch(), epoch);
+                assert!(!gate.input_generation_ended());
+                assert!(
+                    gate.input_cohort_decided(&current, &allowed.grant.grant_id, now)
+                        .unwrap()
+                );
+                let fixture: serde_json::Value = serde_json::from_str(include_str!(
+                    "../../../tests/fixtures/assist-control-v2.json"
+                ))
+                .unwrap();
+                let mut lease: StreamLease = serde_json::from_value(
+                    fixture["leases"]["valid"][0]["signed"]["lease"].clone(),
+                )
+                .unwrap();
+                lease.generation = allowed.grant.generation;
+                lease.grants = vec![allowed.grant.grant_id.clone()];
+                let signed = SignedStreamLease {
+                    signature: URL_SAFE_NO_PAD
+                        .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
+                    lease,
+                };
+                gate.refresh(&signed, now, t, t).unwrap();
+                let permit = gate.prepare_peer(&allowed.grant.grant_id, now, t).unwrap();
+                gate.validate_peer_cohort(&permit, &current, now, t)
+                    .unwrap();
+                gate.admit_peer(&permit, &allowed.grant.helper_transport, now, t)
+                    .unwrap();
+                gate.authorize(&allowed.grant.grant_id, &allowed.grant.capability, now, t)
+                    .unwrap();
+            }
+        }
+    }
+    #[test]
+    fn a_second_fresh_member_preserves_a_prepared_permit_and_age_epoch() {
+        let (mut gate, key, mouse, now, t) = setup();
+        gate.admit(&mouse, now).unwrap();
+        gate.suspend_input();
+        let mouse = other(&mouse, &key, 11, "control_mouse");
+        let keyboard = other(&mouse, &key, 11, "control_keyboard");
+        gate.reacquire_input(&mouse, now).unwrap();
+        gate.consent(&mouse.grant.grant_id, now).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let mut lease: StreamLease =
+            serde_json::from_value(fixture["leases"]["valid"][0]["signed"]["lease"].clone())
+                .unwrap();
+        lease.generation = 11;
+        lease.grants = vec![mouse.grant.grant_id.clone()];
+        let lease = SignedStreamLease {
+            signature: URL_SAFE_NO_PAD
+                .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
+            lease,
+        };
+        gate.refresh(&lease, now, t, t).unwrap();
+        let permit = gate.prepare_peer(&mouse.grant.grant_id, now, t).unwrap();
+        let epoch = gate.input_epoch();
+        assert!(matches!(
+            gate.classify_input_offer(&keyboard, now).unwrap(),
+            InputOffer::Additional
+        ));
+        gate.reacquire_input(&keyboard, now).unwrap();
+        assert_eq!(gate.input_epoch(), epoch);
+        gate.validate_peer_setup(&permit, now, t).unwrap();
+        let current = vec![mouse.grant.clone(), keyboard.grant.clone()];
+        assert_eq!(
+            gate.validate_peer_cohort(&permit, &current, now, t),
+            Err("consent-pending")
+        );
+        gate.revoke(&keyboard.grant.grant_id);
+        gate.validate_peer_cohort(&permit, &current, now, t)
+            .unwrap();
+    }
+    #[test]
+    fn cancellation_binding_is_immutable_and_idle_tick_revokes_consent() {
+        let (mut gate, _, mouse, now, t) = setup();
+        gate.admit(&mouse, now).unwrap();
+        let flag = Arc::new(AtomicBool::new(false));
+        gate.bind_operation(&mouse.grant.grant_id, flag.clone(), now)
+            .unwrap();
+        assert_eq!(
+            gate.bind_operation(&mouse.grant.grant_id, Arc::new(AtomicBool::new(false)), now),
+            Err("operation-pending")
+        );
+        gate.consent(&mouse.grant.grant_id, now).unwrap();
+        let epoch = gate.input_epoch();
+        flag.store(true, Ordering::SeqCst);
+        assert!(gate.consented_grant(&mouse.grant.grant_id, now).is_err());
+        gate.tick(now, t).unwrap();
+        assert!(gate.input_epoch() > epoch);
+        assert!(gate.input_generation_ended());
+        assert!(gate.pending_grant(&mouse.grant.grant_id, now).is_err());
+        assert!(
+            gate.bind_operation(&mouse.grant.grant_id, Arc::new(AtomicBool::new(false)), now)
+                .is_err()
+        );
+        let epoch = gate.input_epoch();
+        gate.tick(now, t).unwrap();
+        assert_eq!(gate.input_epoch(), epoch);
+    }
+    #[test]
+    fn service_revocation_before_peer_ready_requires_positive_retirement_and_a_new_generation() {
+        let (mut gate, key, mouse, now, _) = setup();
+        gate.admit(&mouse, now).unwrap();
+        gate.consent(&mouse.grant.grant_id, now).unwrap();
+        assert!(!gate.input_generation_ended());
+        gate.revoke(&mouse.grant.grant_id);
+        assert!(gate.input_generation_ended());
+        let same_generation = other(&mouse, &key, 10, "control_keyboard");
+        assert!(gate.classify_input_offer(&same_generation, now).is_err());
+        let fresh = other(&mouse, &key, 11, "control_keyboard");
+        assert!(matches!(
+            gate.classify_input_offer(&fresh, now).unwrap(),
+            InputOffer::Replacement
+        ));
+        gate.reacquire_input(&fresh, now).unwrap();
+        assert!(!gate.input_generation_ended());
+        assert!(
+            gate.consented_grant(&fresh.grant.grant_id, now)
+                .unwrap()
+                .is_none()
+        );
+    }
+    #[test]
+    fn pre_admission_cancellation_is_immediate_immutable_and_does_not_restore_lease_observations() {
+        let (mut gate, key, mouse, now, t) = setup();
+        gate.admit(&mouse, now).unwrap();
+        let fresh = other(&mouse, &key, 12, "control_mouse");
+        let flag = Arc::new(AtomicBool::new(false));
+        gate.bind_offered_operation(&fresh, flag.clone(), now)
+            .unwrap();
+        assert_eq!(gate.highest_generation(), 10); // binding alone is not admission
+        assert!(gate.pending_grant(&fresh.grant.grant_id, now).is_err());
+        flag.store(true, Ordering::SeqCst);
+        assert_eq!(gate.highest_generation(), 12); // no tick/cleanup scheduling gap
+        let lower = other(&mouse, &key, 11, "control_keyboard");
+        assert!(gate.classify_input_offer(&lower, now).is_err());
+        assert!(
+            gate.bind_offered_operation(&fresh, Arc::new(AtomicBool::new(false)), now)
+                .is_err()
+        );
+        let sibling = other(&fresh, &key, 12, "control_keyboard");
+        for record in [&fresh, &sibling] {
+            gate.observe_grant(record, now).unwrap();
+            assert!(gate.pending_grant(&record.grant.grant_id, now).is_err());
+        }
+        assert!(!gate.ended());
+        gate.tick(now, t).unwrap();
+        gate.observe_grant(&fresh, now).unwrap();
+        let later = other(&fresh, &key, 13, "control_mouse");
+        gate.bind_offered_operation(&later, Arc::new(AtomicBool::new(false)), now)
+            .unwrap();
+        assert!(matches!(
+            gate.classify_input_offer(&later, now).unwrap(),
+            InputOffer::Replacement
+        ));
+        // A different ID cannot reuse the canceled operation's nonce.
+        let mut replay = later.grant.clone();
+        replay.nonce = fresh.grant.nonce.clone();
+        assert!(
+            gate.bind_offered_operation(&sign(replay, &key), Arc::new(AtomicBool::new(false)), now)
+                .is_err()
+        );
+    }
+    #[test]
+    fn a_queued_peer_cannot_adopt_a_new_input_epoch_when_another_capability_is_revoked() {
+        let (mut gate, key, mouse, now, _) = setup();
+        let keyboard = other(&mouse, &key, 10, "control_keyboard");
+        for grant in [&mouse, &keyboard] {
+            gate.admit(grant, now).unwrap();
+            gate.consent(&grant.grant.grant_id, now).unwrap();
+        }
+        let queued_epoch = gate.input_epoch();
+        gate.validate_worker_epoch(Some(queued_epoch)).unwrap();
+        // The service update wins the gate lock after ingress but before dequeue.
+        gate.revoke(&mouse.grant.grant_id);
+        assert!(
+            gate.consented_grant(&keyboard.grant.grant_id, now)
+                .unwrap()
+                .is_some()
+        );
+        assert_ne!(gate.input_epoch(), queued_epoch);
+        assert_eq!(
+            gate.validate_worker_epoch(Some(queued_epoch)),
+            Err("revoked")
+        );
+        assert_eq!(
+            gate.validate_worker_epoch(Some(gate.input_epoch())),
+            Err("revoked")
+        );
+    }
+    #[test]
+    fn revoked_staged_records_keep_authenticated_history_without_ending_resources() {
+        let (mut gate, key, mouse, now, t) = setup();
+        let mut resource = other(&mouse, &key, 11, "clipboard_to_host").grant;
+        resource.endpoint = None;
+        let resource = sign(resource, &key);
+        for grant in [&mouse, &resource] {
+            gate.admit(grant, now).unwrap();
+            gate.consent(&grant.grant.grant_id, now).unwrap();
+        }
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let mut lease: StreamLease =
+            serde_json::from_value(fixture["leases"]["valid"][0]["signed"]["lease"].clone())
+                .unwrap();
+        lease.generation = 11;
+        lease.grants = vec![
+            mouse.grant.grant_id.clone(),
+            resource.grant.grant_id.clone(),
+        ];
+        lease.grants.sort();
+        let lease = SignedStreamLease {
+            signature: URL_SAFE_NO_PAD
+                .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
+            lease,
+        };
+        gate.refresh(&lease, now, t, t).unwrap();
+        gate.verify_peer(&mouse.grant.helper_transport).unwrap();
+        gate.suspend_input();
+        let fresh = other(&mouse, &key, 12, "control_mouse");
+        gate.observe_grant(&fresh, now).unwrap(); // service observation before a local offer
+        gate.revoke(&fresh.grant.grant_id);
+        for _ in 0..2 {
+            gate.observe_grant(&fresh, now).unwrap();
+            gate.revoke(&fresh.grant.grant_id);
+        }
+        let staged = other(&mouse, &key, 13, "control_mouse");
+        gate.observe_grant(&staged, now).unwrap();
+        let replacement = other(&mouse, &key, 14, "control_mouse");
+        gate.observe_grant(&replacement, now).unwrap(); // replaces an unadmitted staged record
+        gate.observe_grant(&staged, now).unwrap();
+        gate.revoke(&staged.grant.grant_id);
+        gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, t)
+            .unwrap();
+        assert!(gate.pending_grant(&fresh.grant.grant_id, now).is_err());
+        assert!(gate.pending_grant(&staged.grant.grant_id, now).is_err());
+        assert!(
+            gate.pending_grant(&replacement.grant.grant_id, now)
+                .is_err()
+        );
+        assert!(!gate.ended());
+    }
+    #[test]
+    fn sibling_cancellation_fences_the_next_primitive_before_the_idle_worker_tick() {
+        let (mut gate, key, mouse, now, t) = setup();
+        let keyboard = other(&mouse, &key, 10, "control_keyboard");
+        for grant in [&mouse, &keyboard] {
+            gate.admit(grant, now).unwrap();
+        }
+        let flag = Arc::new(AtomicBool::new(false));
+        gate.bind_operation(&keyboard.grant.grant_id, flag.clone(), now)
+            .unwrap();
+        for grant in [&mouse, &keyboard] {
+            gate.consent(&grant.grant.grant_id, now).unwrap();
+        }
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let mut lease: StreamLease =
+            serde_json::from_value(fixture["leases"]["valid"][0]["signed"]["lease"].clone())
+                .unwrap();
+        lease.generation = 10;
+        lease.grants = vec![
+            mouse.grant.grant_id.clone(),
+            keyboard.grant.grant_id.clone(),
+        ];
+        lease.grants.sort();
+        let lease = SignedStreamLease {
+            signature: URL_SAFE_NO_PAD
+                .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
+            lease,
+        };
+        gate.refresh(&lease, now, t, t).unwrap();
+        gate.verify_peer(&mouse.grant.helper_transport).unwrap();
+        let permit = ExecutionPermit {
+            instance: gate.instance,
+            epoch: gate.input_epoch(),
+            grant: mouse.grant.grant_id.clone(),
+            capability: "control_mouse".into(),
+            source_generation: 1,
+            until: t + Duration::from_millis(100),
+            action: crate::input::Action::ReleaseAll,
+            executor: None,
+        };
+        gate.validate_permit(&permit, 1, now, t).unwrap();
+        flag.store(true, Ordering::SeqCst);
+        assert_eq!(gate.validate_permit(&permit, 1, now, t), Err("revoked"));
+        assert!(gate.input_generation_ended());
+        assert!(gate.prepare_peer(&mouse.grant.grant_id, now, t).is_err());
+    }
+    #[test]
+    fn canceled_signed_offers_cannot_restore_authority_and_do_not_cancel_an_existing_ack_owner() {
+        let (mut gate, key, mouse, now, _) = setup();
+        gate.admit(&mouse, now).unwrap();
+        gate.reject_offer(&mouse, now).unwrap();
+        assert!(gate.admit(&mouse, now).is_err());
+        let fresh = other(&mouse, &key, 11, "control_mouse");
+        gate.reject_offer(&fresh, now).unwrap();
+        assert!(gate.classify_input_offer(&fresh, now).is_err());
+        let canceled_sibling = other(&fresh, &key, 11, "control_keyboard");
+        assert!(gate.classify_input_offer(&canceled_sibling, now).is_err());
+        let sibling = other(&fresh, &key, 12, "control_keyboard");
+        assert!(matches!(
+            gate.classify_input_offer(&sibling, now).unwrap(),
+            InputOffer::Replacement
+        ));
+        gate.suspend_input();
+        gate.reacquire_input(&sibling, now).unwrap();
+        gate.consent(&sibling.grant.grant_id, now).unwrap();
+        let epoch = gate.input_epoch();
+        gate.reject_offer(&sibling, now).unwrap();
+        assert_eq!(gate.input_epoch(), epoch);
+        assert!(
+            gate.consented_grant(&sibling.grant.grant_id, now)
+                .unwrap()
+                .is_some()
+        );
     }
 }

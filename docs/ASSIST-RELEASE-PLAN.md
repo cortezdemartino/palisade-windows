@@ -10,7 +10,9 @@ qualify real input, enrollment or any of the 30 real cross-client cases.
 
 The [extension continuation](evidence/2026-11-14-native-extension.md) adds frozen
 v1/v2/v3 negotiation and immutable qualification-only Profile 2 selection. Public
-input/resources stay disabled. Next: fresh acquisition and native resources,
+input/resources stay disabled. [Fresh acquisition](evidence/2026-11-15-fresh-control.md)
+now uses joined cleanup, a new native generation and native request-bound
+cancellation. Next: native resources,
 including retained transfer lifetimes and truthful cleanup/progress events.
 Cooperative delivery remains blocked independently; unrelated engineering must
 continue. Production switches and release approvals are unchanged.

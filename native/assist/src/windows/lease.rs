@@ -41,6 +41,8 @@ pub struct ServiceFacts {
     pub approved: Vec<String>,
     pub input_request: Option<InputRequest>,
     pub lease_issued_at: u64,
+    pub observed_at: Instant,
+    pub current_grants: Vec<crate::stream::StreamGrant>,
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
@@ -149,6 +151,7 @@ fn apply_response(
         return Err("session-ended");
     }
     let mut ids = std::collections::BTreeSet::new();
+    let mut current_grants = Vec::new();
     for record in view.grants {
         if !ids.insert(record.grant.grant_id.clone())
             || record.grant.approved_at != view.approved_at
@@ -158,6 +161,9 @@ fn apply_response(
             return Err("binding-mismatch");
         }
         let id = record.grant.grant_id.clone();
+        if record.state != "revoked" {
+            current_grants.push(record.grant.clone());
+        }
         // Even revoked service records must match an authenticated known grant.
         guard.observe_grant(
             &SignedStreamGrant {
@@ -177,6 +183,8 @@ fn apply_response(
         approved: view.approved,
         input_request: view.input_request,
         lease_issued_at: lease.lease.issued_at,
+        observed_at: instant,
+        current_grants,
     })
 }
 impl LeasePoller {
@@ -219,8 +227,19 @@ impl LeasePoller {
                         return Err("revoked");
                     }
                     let mut guard = gate.lock().map_err(|_| "endpoint-failed")?;
-                    let observed =
-                        apply_response(&mut guard, &response, now()?, started, Instant::now())?;
+                    let observed = match apply_response(
+                        &mut guard,
+                        &response,
+                        now()?,
+                        started,
+                        Instant::now(),
+                    ) {
+                        Ok(observed) => observed,
+                        Err(error) => {
+                            guard.stop();
+                            return Err(error);
+                        }
+                    };
                     if flag.load(Ordering::SeqCst) {
                         return Err("revoked");
                     }
@@ -419,6 +438,8 @@ mod tests {
     #[test]
     fn poller_exit_clears_descriptive_facts_even_during_unwind() {
         let facts = Arc::new(Mutex::new(Some(ServiceFacts {
+            observed_at: Instant::now(),
+            current_grants: vec![],
             stream_track_name: Some("palisade-capture:fixture_operation_01".into()),
             approved: vec!["control_mouse".into()],
             input_request: None,

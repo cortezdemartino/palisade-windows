@@ -1,5 +1,17 @@
 # Private native Assist channel
 
+## Current recovery continuation
+
+[Fresh control recovery](evidence/2026-11-15-fresh-control.md) preserves the same
+session authority while replacing only positively retired input generations.
+Private request cancellation is sequence-bound and independently scheduled;
+per-attempt peer close retains its original revoker. Explicit Stop advances an
+ingress revision and cannot be erased by queued grant work. Native verified
+classification and generation checks preserve a same-cohort connection and stop
+stale cancellation from targeting a successor. The frozen page protocols are
+unchanged. Public capabilities remain inactive; full physical and cross-client
+acceptance is still outstanding.
+
 ## Persistent enrollment endpoint, private version 3
 
 RC-3 adds a dedicated monitor custody side channel and independent coordinator

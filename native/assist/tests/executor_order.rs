@@ -52,6 +52,131 @@ fn profile2_sender_age_baseline_uses_ingress_not_worker_dequeue_time() {
     ));
 }
 #[test]
+fn fresh_input_requires_positive_old_cleanup_new_consent_and_new_certificate_admission() {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use ed25519_dalek::{Signer, SigningKey};
+    let key = SigningKey::from_bytes(&[42; 32]);
+    let (mut gate, old, now, t) = fixture();
+    let deadline = gate.deadline();
+    let resource = add_resource(&mut gate, &old, now, t);
+    let old_peer = gate.prepare_peer(&old.grant.grant_id, now, t);
+    assert!(old_peer.is_err()); // An already observed peer cannot prepare twice.
+    let registration = gate.reserve_executor().unwrap();
+    let trace = Rc::new(RefCell::new(Trace::default()));
+    let mut executor = Executor::registered(
+        Fake(trace.clone()),
+        Arc::new(AtomicBool::new(false)),
+        true,
+        registration,
+    );
+    let action = message(&old, "key", json!({"code":"ShiftLeft","down":true}));
+    let permit = gate.permit(&action, 1, now, t).unwrap();
+    executor
+        .dispatch(permit, &mut gate, &source(), &action.action, || {
+            Ok((now, t))
+        })
+        .unwrap();
+    let mut fresh = old.clone();
+    fresh.grant.grant_id = "fresh_input_grant_01".into();
+    fresh.grant.nonce = "fresh_input_nonce_01".into();
+    fresh.grant.generation = resource.grant.generation + 1;
+    fresh.signature = URL_SAFE_NO_PAD.encode(key.sign(&fresh.grant.canonical()).to_bytes());
+    gate.suspend_input();
+    gate.observe_grant(&fresh, now).unwrap(); // Service observation stages, never restores authority.
+    assert!(gate.pending_grant(&fresh.grant.grant_id, now).is_err());
+    gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, t)
+        .unwrap();
+    assert!(gate.reacquire_input(&fresh, now).is_err());
+    let requirement = gate.require_input_cleanup().unwrap();
+    assert!(gate.reacquire_input(&fresh, now).is_err());
+    let receipt = executor.release_for(&requirement, &source()).unwrap();
+    gate.accept_input_cleanup(receipt).unwrap();
+    assert!(!executor.held());
+    gate.reacquire_input(&fresh, now).unwrap();
+    assert_eq!(gate.deadline(), deadline);
+    assert!(gate.consent(&old.grant.grant_id, now).is_err());
+    assert!(
+        gate.authorize(&fresh.grant.grant_id, "control_keyboard", now, t)
+            .is_err()
+    );
+    gate.consent(&fresh.grant.grant_id, now).unwrap();
+    assert!(
+        gate.authorize(&fresh.grant.grant_id, "control_keyboard", now, t)
+            .is_err()
+    );
+    let fixtures: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/assist-control-v2.json"
+    ))
+    .unwrap();
+    let mut lease: SignedStreamLease =
+        serde_json::from_value(fixtures["leases"]["valid"][0]["signed"].clone()).unwrap();
+    lease.lease.issued_at += 2;
+    lease.lease.expires_at += 2;
+    lease.lease.generation = fresh.grant.generation;
+    lease.lease.grants = vec![
+        resource.grant.grant_id.clone(),
+        fresh.grant.grant_id.clone(),
+    ];
+    lease.lease.grants.sort();
+    lease.signature = URL_SAFE_NO_PAD.encode(
+        key.sign(&serde_json::to_vec(&lease.lease).unwrap())
+            .to_bytes(),
+    );
+    gate.refresh(&lease, now, t, t).unwrap();
+    assert!(
+        gate.authorize(&fresh.grant.grant_id, "control_keyboard", now, t)
+            .is_err()
+    );
+    let peer = gate.prepare_peer(&fresh.grant.grant_id, now, t).unwrap();
+    gate.admit_peer(&peer, &old.grant.helper_transport, now, t)
+        .unwrap();
+    gate.authorize(&fresh.grant.grant_id, "control_keyboard", now, t)
+        .unwrap();
+    gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, t)
+        .unwrap();
+}
+#[test]
+fn fresh_input_cannot_reuse_old_identity_generation_deadline_or_approval() {
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
+    use ed25519_dalek::{Signer, SigningKey};
+    let key = SigningKey::from_bytes(&[42; 32]);
+    for negative in [
+        "old-id",
+        "old-nonce",
+        "old-generation",
+        "changed-device",
+        "changed-deadline",
+        "changed-approval",
+        "bad-signature",
+        "expired",
+    ] {
+        let (mut gate, old, now, _) = fixture();
+        gate.suspend_input();
+        let mut fresh = old.clone();
+        fresh.grant.grant_id = "fresh_input_grant_01".into();
+        fresh.grant.nonce = "fresh_input_nonce_01".into();
+        fresh.grant.generation += 1;
+        match negative {
+            "old-id" => fresh.grant.grant_id = old.grant.grant_id,
+            "old-nonce" => fresh.grant.nonce = old.grant.nonce,
+            "old-generation" => fresh.grant.generation -= 1,
+            "changed-device" => fresh.grant.helper_device = "OTHER_DEVICE".into(),
+            "changed-deadline" => {
+                fresh.grant.session_deadline += 1000;
+                fresh.grant.expires_at += 1000;
+            }
+            "changed-approval" => fresh.grant.approved_at += 1,
+            "expired" => fresh.grant.expires_at = now,
+            _ => (),
+        }
+        fresh.signature = URL_SAFE_NO_PAD.encode(key.sign(&fresh.grant.canonical()).to_bytes());
+        if negative == "bad-signature" {
+            fresh.signature = "A".repeat(86);
+        }
+        assert!(gate.reacquire_input(&fresh, now).is_err(), "{negative}");
+    }
+}
+#[test]
 fn runtime_ingress_bounds_queue_without_losing_delayed_releases_or_legacy() {
     use palisade_assist_guardian::input::InputProfile;
     let (mut gate, grant, now, _) = fixture();

@@ -51,6 +51,73 @@ fn peer_fixture(consented: bool, leased: bool) -> (SessionGate, String, u64, Ins
     (gate, mouse.grant.grant_id, now, instant)
 }
 #[test]
+fn frozen_reacquisition_records_require_fresh_consent_lease_and_peer_without_extending_the_session()
+{
+    let f: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/assist-control-v2-profile2.json"
+    ))
+    .unwrap();
+    let r = &f["reacquisition"];
+    let key = decode::<32>(f["issuerPublicKey"].as_str().unwrap()).unwrap();
+    let original: SignedStreamGrant = serde_json::from_value(r["original"].clone()).unwrap();
+    let resource: SignedStreamGrant = serde_json::from_value(r["resource"].clone()).unwrap();
+    let fresh: SignedStreamGrant = serde_json::from_value(r["fresh"].clone()).unwrap();
+    let now = r["expect"]["now"].as_u64().unwrap();
+    let t = Instant::now();
+    let setup = || {
+        let mut gate = SessionGate::new(key, binding(&fixtures()), now, 3, t);
+        for grant in [&original, &resource] {
+            gate.admit(grant, now).unwrap();
+            gate.consent(&grant.grant.grant_id, now).unwrap();
+        }
+        gate.verify_peer(&original.grant.helper_transport).unwrap();
+        gate.suspend_input();
+        gate
+    };
+    for covering in [false, true] {
+        let mut gate = setup();
+        gate.observe_grant(&fresh, now).unwrap();
+        assert!(gate.pending_grant(&fresh.grant.grant_id, now).is_err());
+        gate.reacquire_input(&fresh, now).unwrap();
+        assert_eq!(gate.deadline(), Some(original.grant.session_deadline));
+        assert!(gate.consent(&original.grant.grant_id, now).is_err());
+        let lease = serde_json::from_value(
+            r[if covering {
+                "leaseWithFresh"
+            } else {
+                "leaseAfterRevocation"
+            }]
+            .clone(),
+        )
+        .unwrap();
+        gate.refresh(&lease, now, t, t).unwrap();
+        gate.authorize(&resource.grant.grant_id, "clipboard_to_host", now, t)
+            .unwrap();
+        assert!(gate.prepare_peer(&fresh.grant.grant_id, now, t).is_err());
+        gate.consent(&fresh.grant.grant_id, now).unwrap();
+        let permit = gate.prepare_peer(&fresh.grant.grant_id, now, t);
+        if covering {
+            let permit = permit.unwrap();
+            gate.admit_peer(&permit, &fresh.grant.helper_transport, now, t)
+                .unwrap();
+            gate.authorize(&fresh.grant.grant_id, "control_mouse", now, t)
+                .unwrap();
+        } else {
+            assert!(permit.is_err());
+        }
+    }
+    for case in r["invalid"].as_array().unwrap() {
+        let mut gate = setup();
+        let invalid = serde_json::from_value(case["signed"].clone()).unwrap();
+        assert_eq!(
+            gate.reacquire_input(&invalid, now).unwrap_err(),
+            case["error"].as_str().unwrap(),
+            "{}",
+            case["name"]
+        );
+    }
+}
+#[test]
 fn peer_setup_requires_current_consent_and_lease_without_authorizing_input() {
     for (consent, lease) in [(false, false), (true, false), (false, true)] {
         let (mut gate, id, now, instant) = peer_fixture(consent, lease);

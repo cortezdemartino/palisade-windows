@@ -8,7 +8,7 @@ const source = readFileSync(require.resolve('../src/assist/live-channel.cjs'), '
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const normal = value => JSON.parse(JSON.stringify(value));
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
-function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1234, sha256: 'a'.repeat(64) } : undefined, reply, pressure = false, launchError } = {}) {
+function harness({ ownedTree = false, endpoint = false, verify = async () => ownedTree ? { size: 1234, sha256: 'a'.repeat(64) } : undefined, reply, pressure = false, launchError } = {}) {
   const life = createAssistLifecycle(), child = new EventEmitter(), requests = [];
   let spawns = 0, kills = 0, rawWrite;
   child.pid = 4242; child.stdout = new PassThrough(); child.stderr = new PassThrough();
@@ -22,7 +22,7 @@ function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1
     const r = JSON.parse(bytes.subarray(4).toString('utf8')); requests.push(r);
     setImmediate(() => {
       if (r.command.type === 'hello') send(r.sequence, { type: 'hello', protocol: r.command.protocol,
-        version: ownedTree ? 2 : 1, challenge: r.command.challenge, mode: ownedTree ? 'tree-live-probe' : 'live-probe', nativeInput: false, cleanupScope: ownedTree ? 'channel-and-process-exit' : 'channel-only' });
+        version: endpoint ? 3 : ownedTree ? 2 : 1, challenge: r.command.challenge, mode: endpoint ? 'tree-endpoint-probe' : ownedTree ? 'tree-live-probe' : 'live-probe', nativeInput: false, cleanupScope: endpoint ? 'endpoint-and-process-exit' : ownedTree ? 'channel-and-process-exit' : 'channel-only' });
       else reply?.(r, { send, sendBytes, child });
     });
     done();
@@ -34,7 +34,7 @@ function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1
     setTimeout, clearTimeout, setInterval, clearInterval,
     require(name) {
       if (name === 'node:child_process') return { spawn(_binary, args, options) {
-        spawns++; assert.equal(args[0], ownedTree ? '--tree-live-probe' : '--live-probe'); assert.equal(options.shell, false); assert.equal(options.windowsHide, true);
+        spawns++; assert.equal(args[0], endpoint ? '--tree-endpoint-probe' : ownedTree ? '--tree-live-probe' : '--live-probe'); assert.equal(options.shell, false); assert.equal(options.windowsHide, true);
         assert.equal(options.detached, true, 'native cleanup must survive the libuv parent job');
         if (ownedTree) assert.deepEqual(normal(args.slice(2)), ['1234', 'a'.repeat(64)]);
         assert.equal(life.status().holders, 1, 'ownership must precede spawn');
@@ -47,16 +47,21 @@ function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1
         setImmediate(() => child.emit('spawn')); return child;
       } };
       if (name === './guardian.cjs') return { verifyGuardian: verify };
-      if (name === './native-protocol.cjs') return require('../src/assist/native-protocol.cjs');
+      if (name === './native-protocol.cjs') {
+        const protocol = require('../src/assist/native-protocol.cjs');
+        // JSON IPC materializes objects in the consumer realm. Mirror that
+        // boundary for the VM without weakening the production plain-object test.
+        return { ...protocol, parseResponse: (value, op) => protocol.parseResponse(normal(value), op) };
+      }
       if (name === './private-peer.cjs') return require('../src/assist/private-peer.cjs');
       if (name === './native-extension.cjs') return require('../src/assist/native-extension.cjs');
       return require(name);
     },
   });
-  const open = options => module.exports.openLiveChannel({ binary: 'fixture', manifestFile: 'fixture', lifecycle: life, probe: true, ownedTree, ...options });
+  const open = options => module.exports.openLiveChannel({ binary: 'fixture', manifestFile: 'fixture', lifecycle: life, probe: true, ownedTree, endpoint, ...options });
   const finish = () => {
     const r = requests.find(r => r.command.type === 'shutdown'); assert.ok(r);
-    send(r.sequence, { type: 'cleanup-complete', challenge: requests[0].command.challenge, scope: ownedTree ? 'channel-and-process-exit' : 'channel-only' });
+    send(r.sequence, { type: 'cleanup-complete', challenge: requests[0].command.challenge, scope: endpoint ? 'endpoint-and-process-exit' : ownedTree ? 'channel-and-process-exit' : 'channel-only' });
     child.emit('close', 0, null);
   };
   return { life, child, requests, open, send, sendBytes, finish, spawns: () => spawns, kills: () => kills };
@@ -179,5 +184,28 @@ test('external cancellation revokes and invalid probe requests cannot create arb
   await assert.rejects(channel.probeWait(0)); await assert.rejects(channel.probeWait(10001));
   assert.equal(h.requests.length, 1);
   cancel.abort(); assert.equal(channel.signal.aborted, true); h.finish(); await channel.wait(); await tick();
+  assert.equal(h.life.status().holders, 0);
+});
+
+test('late grant delivery cancellation targets its original private sequence after a successor ACK', async () => {
+  const h = harness({ ownedTree: true, endpoint: true, reply(r, { send }) {
+    if (r.command.type === 'native') send(r.sequence, { type: 'native', document: r.command.document,
+      answer: { outcome: 'ok', result: { signature: 'A'.repeat(86) } } });
+    if (r.command.type === 'cancel-native') send(r.sequence, { type: 'cancel-native', cancelled: true });
+  } });
+  const channel = await h.open();
+  const a = new AbortController(), b = new AbortController();
+  const grant = id => ({ p: 'palisade.assist.native', v: 1, id, op: 'grant.offer', session: 'session_fixture_01', grant: '{}' });
+  await channel.request(grant('grant_request_a'), 4, a.signal);
+  const original = h.requests.at(-1).sequence;
+  await channel.request(grant('grant_request_b'), 4, b.signal);
+  const successor = h.requests.at(-1).sequence;
+  a.abort(); await tick();
+  assert.equal(h.requests.at(-1).command.type, 'cancel-native');
+  assert.equal(h.requests.at(-1).command.target, original);
+  assert.notEqual(original, successor);
+  assert.equal(b.signal.aborted, false);
+  assert.equal(h.requests.some(v => v.command.operation?.op === 'peer.close'), false);
+  const closing = channel.close(); await tick(); h.finish(); await closing;
   assert.equal(h.life.status().holders, 0);
 });

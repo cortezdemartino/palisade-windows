@@ -57,6 +57,9 @@ pub struct Request {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
+    CancelNative {
+        target: u32,
+    },
     Extension {
         document: u32,
         version: u8,
@@ -158,7 +161,10 @@ impl Ingress {
                     self.closed = true;
                     signals.revoke();
                 }
-                Command::Native { .. } | Command::Peer { .. } | Command::Extension { .. }
+                Command::Native { .. }
+                | Command::Peer { .. }
+                | Command::Extension { .. }
+                | Command::CancelNative { .. }
                     if self.version != 3 =>
                 {
                     return Err("operation-unavailable");
@@ -209,6 +215,9 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    CancelNative {
+        cancelled: bool,
+    },
     Extension {
         document: u32,
         answer: crate::extension::Answer,
