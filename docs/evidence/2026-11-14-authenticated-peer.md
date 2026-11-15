@@ -60,6 +60,13 @@ was still building: 25 passed and the new operation failed. After rebuilding,
 all 26 passed. No security check was relaxed. Final package/CI evidence is tracked
 with the pushed revision in Windows #1/#4.
 
+The first pushed run, [43658729634](https://github.com/cortezdemartino/palisade-windows/actions/runs/43658729634),
+failed because the new real-Electron clock test could not open its executable
+on the runner. Both workflows now explicitly prepare/check the locked runtime
+before native tests. The fixture canonicalizes its repository path and sets its
+working directory. Local clock tests passed after the correction; the check was
+not skipped or weakened. The next exact-SHA run must pass before CI is cleared.
+
 ## Classification and remaining work
 
 This is implemented application/native peer routing with unit, real-process and

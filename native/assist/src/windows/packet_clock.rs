@@ -54,11 +54,15 @@ mod tests {
     use super::*;
     #[test]
     fn actual_locked_electron_main_clock_and_native_qpc_share_the_same_origin() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .unwrap();
         let before = Instant::now();
         let output =
             std::process::Command::new(root.join("node_modules/electron/dist/electron.exe"))
                 .arg(root.join("scripts/assist-clock-smoke.cjs"))
+                .current_dir(&root)
                 .env_remove("ELECTRON_RUN_AS_NODE")
                 .env_remove("NODE_OPTIONS")
                 .output()
