@@ -369,7 +369,10 @@ fn run_inner(
                     }
                     _ => {
                         let scope = match &request.command {
-                            Command::ResourceSession {
+                            Command::PeerIce {
+                                document, session, ..
+                            }
+                            | Command::ResourceSession {
                                 document, session, ..
                             } => Some(
                                 safety
@@ -421,6 +424,28 @@ fn run_inner(
                 continue;
             }
             match request.command {
+                Command::PeerIce {
+                    document,
+                    session,
+                    attempt,
+                } => {
+                    let answer = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-unavailable")?
+                        .peer_ice(
+                            document,
+                            &session,
+                            &attempt,
+                            scope.as_ref().ok_or("request-scope-required")?,
+                        );
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::PeerIce { document, answer },
+                        &signals,
+                    )?;
+                }
+
                 Command::ResourceSession {
                     document,
                     session,

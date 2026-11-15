@@ -57,6 +57,11 @@ pub struct Request {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
+    PeerIce {
+        document: u32,
+        session: String,
+        attempt: String,
+    },
     #[serde(rename_all = "camelCase")]
     ResourceSession {
         document: u32,
@@ -172,6 +177,7 @@ impl Ingress {
                 | Command::Extension { .. }
                 | Command::CancelNative { .. }
                 | Command::ResourceSession { .. }
+                | Command::PeerIce { .. }
                     if self.version != 3 =>
                 {
                     return Err("operation-unavailable");
@@ -222,6 +228,10 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    PeerIce {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     ResourceSession {
         document: u32,
         answer: crate::endpoint::Answer,
@@ -304,6 +314,7 @@ mod tests {
     #[test]
     fn source_and_inspection_commands_are_private_v3_only_and_never_accept_page_authority() {
         for command in [
+            json!({"type":"peer-ice","document":4,"session":"session_fixture_01","attempt":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}),
             json!({"type":"capture-setup","enabled":true}),
             json!({"type":"capture-source","document":0,"selection":{"operation":"capture_fixture_01","source":"window:123:0","display":null,"bounds":null}}),
             json!({"type":"inspect-local-ice","ports":[12345]}),

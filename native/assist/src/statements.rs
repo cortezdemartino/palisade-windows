@@ -42,6 +42,12 @@ pub fn lease(endpoint: &str, session: &str, issued_at: u64) -> Result<Vec<u8>, &
             .into_bytes(),
     )
 }
+pub(crate) fn ice(endpoint: &str, issued_at: u64) -> Result<Vec<u8>, &'static str> {
+    if !id(endpoint) || issued_at > 8_640_000_000_000_000 {
+        return Err("invalid-statement");
+    }
+    Ok(format!("palisade.assist.control/endpoint-ice/v2\n{endpoint}\n{issued_at}").into_bytes())
+}
 pub fn transport(
     session: &str,
     endpoint: &str,
@@ -67,6 +73,27 @@ mod tests {
             "../../../tests/fixtures/assist-native-v1.json"
         ))
         .unwrap()
+    }
+    #[test]
+    fn endpoint_ice_label_matches_the_committed_service_without_reusing_lease_authority() {
+        let endpoint = "endpoint_fixture_01";
+        let at = 1_800_000_000_000;
+        assert_eq!(
+            ice(endpoint, at).unwrap(),
+            b"palisade.assist.control/endpoint-ice/v2\nendpoint_fixture_01\n1800000000000"
+        );
+        assert_ne!(
+            ice(endpoint, at).unwrap(),
+            lease(endpoint, "session_fixture_01", at).unwrap()
+        );
+        for endpoint in [
+            "short",
+            "endpoint_fixture_01\nother",
+            "../endpoint_fixture_01",
+        ] {
+            assert!(ice(endpoint, at).is_err());
+        }
+        assert!(ice(endpoint, u64::MAX).is_err());
     }
     #[test]
     fn all_labelled_statement_bytes_and_signatures_match_the_canonical_fixture() {

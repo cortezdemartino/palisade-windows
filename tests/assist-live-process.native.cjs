@@ -25,6 +25,17 @@ test('actual resource session bootstrap refuses a probe before HTTPS or resource
   assert.equal(lifecycle.status().holders, 0);
 });
 
+test('actual endpoint ICE refuses a probe before signer use or network and retains private channel ownership', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await channel.request(canonical('hello', { versions: [1] }), 4);
+    await assert.rejects(channel.peerIce('session_fixture_01', 'A'.repeat(43), 4), { code: 'transport-mismatch' });
+    assert.equal((await channel.status()).authority, 'none'); assert.equal(channel.signal.aborted, false);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
+
 test('actual private request cancellation stays responsive behind blocked ordinary work without revoking the launch', async () => {
   const lifecycle = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });

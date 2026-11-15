@@ -2,6 +2,20 @@
 const test = require('node:test'), assert = require('node:assert/strict');
 const { dataSdp, candidate, inputPacket } = require('../src/assist/remote-input-policy.cjs');
 const fp = 'sha-256 ' + Array(32).fill('AB').join(':');
+test('native-only ICE configuration preserves relay policy and rejects arbitrary servers or credential shapes', () => {
+  const { iceConfiguration } = require('../src/assist/remote-input-policy.cjs');
+  const direct = { iceServers: [], iceTransportPolicy: 'all' };
+  const relay = { iceServers: [{ urls: ['turns:fixture.example:5349?transport=tcp'],
+    username: '1800000600:' + 'p'.repeat(22), credential: Buffer.alloc(20, 1).toString('base64') }], iceTransportPolicy: 'relay' };
+  assert.deepEqual(iceConfiguration(direct), direct); assert.deepEqual(iceConfiguration(relay), relay);
+  for (const value of [{ ...direct, approved: true }, { ...direct, iceTransportPolicy: 'relay' },
+    { ...relay, iceServers: [{ ...relay.iceServers[0], urls: ['https://fixture.example'] }] },
+    { ...relay, iceServers: [{ ...relay.iceServers[0], urls: ['turn:user@fixture.example'] }] },
+    { ...relay, iceServers: [{ ...relay.iceServers[0], urls: ['turn:fixture.example:0'] }] },
+    { ...relay, iceServers: [{ ...relay.iceServers[0], credential: 'password' }] },
+    { ...relay, iceServers: [{ ...relay.iceServers[0], urls: ['turn:fixture.example', 'turn:fixture.example'] }] }])
+    assert.throws(() => iceConfiguration(value));
+});
 const sdp = () => ['v=0', 'o=- 123 2 IN IP4 127.0.0.1', 's=-', 't=0 0', 'a=group:BUNDLE 0',
   'a=msid-semantic: WMS', 'm=application 9 UDP/DTLS/SCTP webrtc-datachannel', 'c=IN IP4 0.0.0.0',
   'a=ice-ufrag:abcd', 'a=ice-pwd:abcdefghijklmnopqrstuvwxyz', `a=fingerprint:${fp}`,

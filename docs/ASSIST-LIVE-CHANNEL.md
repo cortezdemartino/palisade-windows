@@ -1,5 +1,11 @@
 # Private native Assist channel
 
+The [native ICE continuation](evidence/2026-11-15-endpoint-ice.md) adds a closed
+private-v3 PeerIce request on ordinary capacity, separate from peer health and
+safety lanes. Its ingress cancellation scope and original attempt/source checks
+survive queued HTTPS work. Relay credentials travel only to the app-owned gateway;
+no hosted page API or generic URL/signer is added. Real TURN remains Not Verified.
+
 ## Current recovery continuation
 
 [Fresh control recovery](evidence/2026-11-15-fresh-control.md) preserves the same

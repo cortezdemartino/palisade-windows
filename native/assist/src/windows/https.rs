@@ -17,14 +17,19 @@ impl Drop for Http {
 fn wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(Some(0)).collect()
 }
+fn allowed_request(path: &str, body: Option<&[u8]>) -> bool {
+    match path {
+        "/api/v1/assist/issuer" => body.is_none(),
+        "/api/v1/assist/streams/endpoint-lease" | "/api/v1/assist/streams/endpoint-ice" => {
+            body.is_some_and(|bytes| !bytes.is_empty() && bytes.len() <= 4096)
+        }
+        _ => false,
+    }
+}
 pub fn request(path: &str, body: Option<&[u8]>) -> Result<Vec<u8>, &'static str> {
     let (host, port) = crate::qualification::target()?;
     let host = wide(host);
-    if !matches!(
-        path,
-        "/api/v1/assist/issuer" | "/api/v1/assist/streams/endpoint-lease"
-    ) || body.is_some_and(|b| b.len() > 4096)
-    {
+    if !allowed_request(path, body) {
         return Err("invalid-request");
     }
     let start = Instant::now();
@@ -139,5 +144,31 @@ pub fn request(path: &str, body: Option<&[u8]>) -> Result<Vec<u8>, &'static str>
             result.extend_from_slice(&chunk[..count as usize]);
         }
         Ok(result)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::allowed_request;
+    #[test]
+    fn native_https_routes_have_fixed_methods_and_bounded_request_bodies() {
+        assert!(allowed_request("/api/v1/assist/issuer", None));
+        for path in [
+            "/api/v1/assist/streams/endpoint-lease",
+            "/api/v1/assist/streams/endpoint-ice",
+        ] {
+            assert!(allowed_request(path, Some(b"{}")));
+            assert!(!allowed_request(path, None));
+            assert!(!allowed_request(path, Some(b"")));
+            assert!(!allowed_request(path, Some(&[0; 4097])));
+        }
+        assert!(!allowed_request("/api/v1/assist/issuer", Some(b"{}")));
+        for path in [
+            "https://other.example/api/v1/assist/issuer",
+            "/api/v1/assist/streams/endpoint-ice?url=other",
+            "/api/v1/assist/streams/endpoint-ice/../other",
+            "/api/v1/assist/other",
+        ] {
+            assert!(!allowed_request(path, Some(b"{}")));
+        }
     }
 }

@@ -9,13 +9,13 @@ const { performance } = require('node:perf_hooks');
 const { hrtime } = require('node:process');
 const { installControlsProtocol } = require('../desktop-window.cjs');
 const { Liveness } = require('./local-video-liveness.cjs');
-const { FP, TOKEN, dataSdp, candidate, inputPacket, releasePacket } = require('./remote-input-policy.cjs');
+const { FP, TOKEN, dataSdp, candidate, inputPacket, releasePacket, iceConfiguration: validateIce } = require('./remote-input-policy.cjs');
 const URL = 'palisade-controls://app/assist-input.html';
 const EVENT = 'palisade:owned-input-event', COMMAND = 'palisade:owned-input-command';
 const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).sort().join(',') === [...fields].sort().join(',');
 async function createOwnedInputPeer({ enabled = false, session, helperTransport, signal,
-  inputProfile = 'legacy', resourceChannels = [], onResource, onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
+  inputProfile = 'legacy', iceConfiguration = { iceServers: [], iceTransportPolicy: 'all' }, resourceChannels = [], onResource, onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
   if (enabled !== true) throw Error('Owned input peer disabled');
   if (typeof session !== 'string' || typeof helperTransport !== 'string' ||
       !TOKEN.test(session) || !FP.test(helperTransport) || signal?.aborted ||
@@ -25,6 +25,7 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
       [onObserved, onPacket, onCandidate, onClosed, onCheck].some(fn => typeof fn !== 'function'))
     throw Error('Native input coordinator required');
   resourceChannels = Object.freeze([...resourceChannels]);
+  iceConfiguration = validateIce(iceConfiguration);
   const nonce = randomBytes(24).toString('hex'), abort = new AbortController();
   const window = new BrowserWindow({ show: false, title: 'Palisade Assist input transport',
     webPreferences: { partition: 'palisade-input-' + nonce,
@@ -187,7 +188,7 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
       connectTimer.unref?.();
       return new Promise((resolve, reject) => {
         answer = { resolve, reject };
-        send({ type: 'offer', sdp, helperTransport, resourceChannels, input: inputProfile !== 'resources' });
+        send({ type: 'offer', sdp, helperTransport, iceConfiguration, resourceChannels, input: inputProfile !== 'resources' });
       });
     },
     async candidate(value, mid) {

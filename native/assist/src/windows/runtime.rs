@@ -139,6 +139,7 @@ struct OwnedPeer {
     cancelled: Arc<AtomicBool>,
     sealed: bool,
     observed: bool,
+    ice_requested: bool,
     deadline: Instant,
 }
 /// The exact connection and original input generation. Closing an old attempt
@@ -1353,6 +1354,7 @@ impl PeerRuntime {
             cancelled,
             sealed: false,
             observed: false,
+            ice_requested: false,
             deadline: Instant::now() + Duration::from_secs(15),
         });
         self.peer_live()?;
@@ -1399,6 +1401,59 @@ impl PeerRuntime {
         Ok((input, resources))
     }
 
+    pub(crate) fn request_ice(
+        &self,
+        attempt: &str,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<serde_json::Value, &'static str> {
+        self.peer_live()?;
+        let endpoint = {
+            let mut peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+            let peer = peer.as_mut().ok_or("stale-peer")?;
+            if peer.attempt != attempt
+                || peer.sealed
+                || peer.ice_requested
+                || Instant::now() >= peer.deadline
+            {
+                return Err("stale-peer");
+            }
+            with_live_gate(&self.gate, &self.stop, |gate| {
+                self.check_connection(gate, peer)?;
+                Ok(())
+            })?;
+            peer.ice_requested = true;
+            self.gate
+                .lock()
+                .map_err(|_| "endpoint-failed")?
+                .binding()
+                .endpoint
+                .clone()
+        };
+        let revoker = self.peer_revoker(attempt)?;
+        let config = self.identity.request_ice(&endpoint, || {
+            cancelled.load(Ordering::SeqCst)
+                || revoker.cancelled.load(Ordering::SeqCst)
+                || self.stop.is_stopped()
+        })?;
+        self.peer_live()?;
+        if cancelled.load(Ordering::SeqCst) {
+            return Err("revoked");
+        }
+        let peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+        let peer = peer
+            .as_ref()
+            .filter(|peer| {
+                peer.attempt == attempt && !peer.sealed && Instant::now() < peer.deadline
+            })
+            .ok_or("stale-peer")?;
+        with_live_gate(&self.gate, &self.stop, |gate| {
+            self.check_connection(gate, peer)
+        })?;
+        if Instant::now() >= peer.deadline || cancelled.load(Ordering::SeqCst) {
+            return Err("stale-peer");
+        }
+        config.rtc()
+    }
     pub(crate) fn peer_operation(
         &self,
         attempt: &str,

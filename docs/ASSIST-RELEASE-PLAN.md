@@ -2,6 +2,12 @@
 
 ## Current Assist completion work
 
+Authenticated native [relay configuration](evidence/2026-11-15-endpoint-ice.md)
+is now wired into peer construction without caller-provided URLs or credentials.
+It is not relay qualification; use the [isolated setup procedure](ASSIST-QUALIFICATION-SETUP.md)
+and existing #5/#47/#48/#49/#33 gates. The transport checkpoint `62230cf` passed
+[exact-SHA CI](https://github.com/cortezdemartino/palisade-windows/actions/runs/43763618705).
+
 FINAL-6 uses the [master matrix](ASSIST-COMPLETION-MATRIX.md) as the authoritative
 inventory. [Resource-only/shared peer integration](evidence/2026-11-15-resource-peer.md)
 now connects transport purposes and input-independent connection lifetime; native

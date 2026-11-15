@@ -94,6 +94,13 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'peer-ice') {
+      if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'peer-ice' || result.document !== entry.document) return false;
+      const value = result.answer;
+      if (value?.outcome === 'error') return privatePeer.answer(value, 'ice');
+      if (!exact(value, ['outcome', 'result']) || value.outcome !== 'ok') return false;
+      try { require('./remote-input-policy.cjs').iceConfiguration(value.result); return true; } catch { return false; }
+    }
     if (endpoint && entry.type === 'resource-session') return exact(result, ['type', 'document', 'answer']) &&
       result.type === 'resource-session' && result.document === entry.document && privatePeer.answer(result.answer, 'close');
     if (endpoint && entry.type === 'cancel-native') return exact(result, ['type', 'cancelled']) &&
@@ -225,6 +232,14 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       } catch (error) { return Promise.reject(error); }
     };
     if (endpoint) {
+      api.peerIce = (session, attempt, document, requestSignal) => {
+        if (!privatePeer.operation({ action: 'check', session, attempt }) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
+          return Promise.reject(unavailable());
+        return send({ type: 'peer-ice', session, attempt, document }, 10000, false, requestSignal).then(reply => {
+          if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
+          return reply.answer.result;
+        });
+      };
       api.resourceSession = (session, grantId, document, requestSignal) => {
         if (!privatePeer.operation({ action: 'prepare', session, grantId }) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
           return Promise.reject(unavailable());

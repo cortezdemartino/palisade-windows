@@ -46,7 +46,7 @@
     return { fingerprint, channel: true };
   }
   async function offer(message) {
-    if (!exact(message, ['sdp', 'helperTransport', 'resourceChannels', 'input']) || started || !FP.test(message.helperTransport) ||
+    if (!exact(message, ['sdp', 'helperTransport', 'iceConfiguration', 'resourceChannels', 'input']) || started || !FP.test(message.helperTransport) ||
         !Array.isArray(message.resourceChannels) || message.resourceChannels.length > 2 ||
         new Set(message.resourceChannels).size !== message.resourceChannels.length || message.resourceChannels.some(value => !['clipboard', 'file'].includes(value)) ||
         typeof message.input !== 'boolean' || (!message.resourceChannels.length && !message.input) ||
@@ -58,9 +58,12 @@
     if (own.length !== 1) throw Error('Own certificate unavailable');
     const fingerprint = 'sha-256 ' + own[0].value.toUpperCase();
     if (!FP.test(fingerprint)) throw Error('Own certificate invalid');
-    // No page-supplied ICE servers or credentials. Reviewed relay configuration
-    // is a separate integration dependency; authenticated remote ICE is allowed.
-    peer = new RTCPeerConnection({ certificates: [certificate], iceServers: [], bundlePolicy: 'max-bundle' });
+    // Only the authenticated native response, validated by trusted main, enters
+    // this private command. Neither SDP nor hosted-page fields supply servers.
+    const ice = message.iceConfiguration;
+    if (!ice || Object.keys(ice).sort().join(',') !== 'iceServers,iceTransportPolicy' ||
+        !Array.isArray(ice.iceServers) || ice.iceServers.length > 8 || !['all', 'relay'].includes(ice.iceTransportPolicy)) throw Error('ICE refused');
+    peer = new RTCPeerConnection({ certificates: [certificate], iceServers: ice.iceServers, iceTransportPolicy: ice.iceTransportPolicy, bundlePolicy: 'max-bundle' });
     peer.onconnectionstatechange = () => {
       if (['disconnected', 'failed', 'closed'].includes(peer?.connectionState)) stop();
     };

@@ -8,12 +8,14 @@ function deferred() { let resolve; const promise = new Promise(done => { resolve
 function setup({ enabled = true } = {}) {
   const requests = [], selections = [], order = [], peerRequests = [], bootstraps = [];
   let bootstrap = async () => { throw new NativeBridgeError("binding-mismatch"); };
+  let ice = async () => ({ iceServers: [], iceTransportPolicy: 'all' });
   let peerOptions, peerClosed = 0, nativePeer = async operation => operation.action === 'prepare'
     ? { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' }
     : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } : ['observed', 'check'].includes(operation.action) ? { ready: true, inputReady: true, inputAllowed: true } : {};
   let options, closed = 0, disposed = 0, fence = null, onStart = async () => ({ operation: 'capture_fixture_01' });
   const lost = new AbortController();
   const channel = {
+    peerIce: (...args) => ice(...args),
     resourceSession: async (...args) => { bootstraps.push(args); return bootstrap(...args); },
     peer: async (operation, document) => { peerRequests.push({ operation, document }); return nativePeer(operation); },
     configureCapture: async value => { order.push(['configure', value]); return enabled; },
@@ -53,11 +55,36 @@ function setup({ enabled = true } = {}) {
   const scope = () => { const abort = new AbortController(); return { abort, signal: abort.signal, generation: 7, emit: () => true }; };
   return { runtime, requests, selections, order, scope, options: () => options, closed: () => closed,
     bootstrap: value => { bootstrap = value; }, bootstraps,
+    ice: value => { ice = value; },
     peerOptions: () => peerOptions, peerClosed: () => peerClosed, peerRequests, nativePeer: value => { nativePeer = value; },
     lose: () => lost.abort(), disposed: () => disposed,
     fence: value => { fence = value; }, onStart: value => { onStart = value; } };
 }
 const peerOffer = { op: 'peer.offer', session: 'session_fixture_0001', grantId: 'grant_fixture_0001', sdp: 'helper-offer' };
+
+test('peer construction uses only native ICE and a failed or source-stale lookup cannot fall back to direct transport', async () => {
+  const h = setup(); await h.runtime.ready;
+  const config = { iceServers: [{ urls: ['turns:fixture.example:5349?transport=tcp'],
+    username: '1800000600:' + 'p'.repeat(22), credential: Buffer.alloc(20, 1).toString('base64') }], iceTransportPolicy: 'relay' };
+  h.ice(async (session, attempt, document, signal) => {
+    assert.equal(session, peerOffer.session); assert.equal(attempt, 'A'.repeat(43));
+    assert.equal(document, 7); assert.equal(signal.aborted, false); return config;
+  });
+  await h.runtime.dispatch(peerOffer, h.scope()); assert.equal(h.peerOptions().iceConfiguration, config);
+  await h.runtime.stopAll();
+  for (const sourceLoss of [false, true]) {
+    const failed = setup(); await failed.runtime.ready;
+    const pending = deferred(), entered = deferred();
+    failed.ice(async () => { entered.resolve(); await pending.promise; if (!sourceLoss) throw new NativeBridgeError('timeout'); return config; });
+    const offer = failed.runtime.dispatch(peerOffer, failed.scope()); void offer.catch(() => {});
+    await entered.promise;
+    if (sourceLoss) await failed.runtime.dispatch({ op: 'capture.stop', operation: 'capture_fixture_01' }, failed.scope());
+    pending.resolve(); await assert.rejects(offer, { code: sourceLoss ? 'stopped' : 'timeout' });
+    assert.equal(failed.peerOptions(), undefined);
+    assert(failed.peerRequests.some(value => value.operation.action === 'close' && value.operation.attempt === 'A'.repeat(43)));
+    await failed.runtime.stopAll();
+  }
+});
 
 test('resource-only connection never reports control active and can reconnect after input Stop', async () => {
   const h = setup(); await h.runtime.ready;

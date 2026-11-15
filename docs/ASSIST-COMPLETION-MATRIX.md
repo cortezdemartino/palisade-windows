@@ -49,7 +49,7 @@ names its limited evidence class; no row is Approved for release.
 | Companion stale peer loss / Stop Control | Blocked | Exact reproducer and correction in [handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md); still present at inspected SHA | Companion |
 | Approved qualification environment | Blocked | Existing Windows #5 requires disposable device/accounts, approved installation and isolated service/issuer pin; none supplied | Owner/operator |
 | Production issuer trust | Blocked | Dedicated issuer and independently verified release pin, project-palisade#47; test issuer is sufficient for isolated tests | Owner/operator |
-| Relay-only connectivity | Not Verified | Native endpoint-ICE integration plus actual isolated TURN credentials and relay evidence, project-palisade#48 | Windows/operator |
+| Relay-only connectivity | Integrated: native configuration; actual relay Not Verified | Purpose-signed endpoint-ice, private ordinary lane and native-only gateway config preserve relay-only policy; actual isolated TURN credentials/relay evidence still required, project-palisade#48 | Windows/operator |
 | Firefox qualification | Not Verified | Existing host limitations and project-palisade#49; no weakened browser security | Companion/operator |
 | Integrated independent review | Not Verified | Focused component reviews do not satisfy candidate-specific full-chain review, project-palisade#33 | Independent reviewer |
 | Candidate CI/package | Verified: baseline only | ca983d0 [Windows CI](https://github.com/cortezdemartino/palisade-windows/actions/runs/43745042507); unpublished NSIS built, not installed | Windows |
@@ -62,7 +62,8 @@ names its limited evidence class; no row is Approved for release.
    framing before claiming working resource transport or enabling an OS action.
 2. Complete protected resource consent, text/PNG adapters, transfer staging/chunks,
    extension progress/cancel/sync and owned drop UI using the existing brokers.
-3. Verify exact-candidate tests, packaging and CI; update this matrix with narrow
+3. Native authenticated ICE is integrated; actual relay testing requires the
+   [isolated setup prerequisites](ASSIST-QUALIFICATION-SETUP.md). Verify exact-candidate tests, packaging and CI; update this matrix with narrow
    evidence classifications after each integrated slice.
 4. Run docs/54 against a real approved endpoint when Windows #5 prerequisites exist.
    Preserve every unexecuted case as Not Verified. The full product remains Blocked

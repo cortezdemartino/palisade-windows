@@ -157,6 +157,8 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       if (entry.resources) scope.retainResources?.();
       entry.inputClosed = prepared.profile === 'resources' || inputFences.has(request.session);
       if (entry.inputClosed && prepared.profile !== 'resources') throw new NativeBridgeError('stale-operation');
+      const iceConfiguration = await channel.peerIce(request.session, entry.attempt, scope.generation, scope.signal);
+      current();
       const controlStatus = state => {
         if (!state.inputReady || entry.inputClosed || entry.controlReported) return;
         if (!scope.emit({ event: 'lifecycle', session: request.session, state: 'active', reason: null }))
@@ -166,6 +168,7 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       const { createOwnedInputPeer } = require('./remote-input-peer.cjs');
       const peer = await createOwnedInputPeer({ enabled: true, session: request.session,
         helperTransport: prepared.helperTransport, inputProfile: prepared.profile, signal: scope.signal,
+        iceConfiguration,
         resourceChannels: prepared.resourceChannels ?? [],
         onResource: async () => {
           // The connected transport does not authorize resource OS actions.

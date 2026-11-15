@@ -54,6 +54,7 @@ function harness({ ownedTree = false, endpoint = false, verify = async () => own
         return { ...protocol, parseResponse: (value, op) => protocol.parseResponse(normal(value), op) };
       }
       if (name === './private-peer.cjs') return require('../src/assist/private-peer.cjs');
+      if (name === './remote-input-policy.cjs') return require('../src/assist/remote-input-policy.cjs');
       if (name === './native-extension.cjs') return require('../src/assist/native-extension.cjs');
       return require(name);
     },
@@ -82,6 +83,21 @@ test('owned process channel negotiates its distinct version/scope and rejects su
     }
     assert.equal(h.kills(), 0);
   }
+});
+
+test('endpoint ICE uses the bounded private ordinary lane with exact native response correlation', async () => {
+  const h = harness({ ownedTree: true, endpoint: true, reply(request, { send }) {
+    if (request.command.type === 'peer-ice') send(request.sequence, { type: 'peer-ice', document: request.command.document,
+      answer: { outcome: 'ok', result: { iceServers: [], iceTransportPolicy: 'all' } } });
+  } });
+  const channel = await h.open();
+  assert.deepEqual(normal(await channel.peerIce('session_fixture_01', 'A'.repeat(43), 4)),
+    { iceServers: [], iceTransportPolicy: 'all' });
+  const command = h.requests.find(value => value.command.type === 'peer-ice').command;
+  assert.deepEqual(normal(command), { type: 'peer-ice', session: 'session_fixture_01', attempt: 'A'.repeat(43), document: 4 });
+  await assert.rejects(channel.peerIce('session_fixture_01', 'bad-attempt', 4));
+  const ending = channel.close(); h.finish(); await ending;
+  assert.equal(h.kills(), 0);
 });
 
 test('global shutdown during verification forbids spawn and retains ownership until no-child proof', async () => {

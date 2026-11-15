@@ -85,4 +85,35 @@ function releasePacket(text) {
     (['button', 'key', 'input-button', 'input-key'].includes(value.kind) && value.down === false); }
   catch { return false; }
 }
-module.exports = { FP, TOKEN, dataSdp, candidate, inputPacket, releasePacket };
+// Only trusted main's authenticated native reply supplies this configuration.
+// The page-facing bridge has no ICE-server field or forwarding method.
+function iceConfiguration(value) {
+  const exact = (object, keys) => object && typeof object === 'object' && !Array.isArray(object) &&
+    Object.keys(object).sort().join(',') === [...keys].sort().join(',');
+  if (!exact(value, ['iceServers', 'iceTransportPolicy']) || !['all', 'relay'].includes(value.iceTransportPolicy) ||
+      !Array.isArray(value.iceServers) || value.iceServers.length > 8) refuse();
+  const urls = new Set(); let relay = false;
+  for (const server of value.iceServers) {
+    if (!exact(server, server?.username === undefined && server?.credential === undefined ? ['urls'] : ['urls', 'username', 'credential']) ||
+        !Array.isArray(server.urls) || !server.urls.length || server.urls.length > 8) refuse();
+    let turn;
+    for (const url of server.urls) {
+      if (typeof url !== 'string' || url.length > 320 || !/^(?:stun|stuns|turn|turns):[A-Za-z0-9.-]+(?::[0-9]{1,5})?(?:\?transport=(?:udp|tcp))?$/.test(url) || urls.has(url)) refuse();
+      const isTurn = url.startsWith('turn:') || url.startsWith('turns:');
+      if (turn !== undefined && turn !== isTurn) refuse();
+      turn = isTurn; urls.add(url);
+      const address = url.slice(url.indexOf(':') + 1).split('?')[0], [host, port] = address.split(':');
+      if (host.length > 253 || host.split('.').some(part => !part || part.length > 63 || part.startsWith('-') || part.endsWith('-')) ||
+          (/^[0-9.]+$/.test(host) && isIP(host) !== 4) || (port !== undefined && (Number(port) < 1 || Number(port) > 65535))) refuse();
+    }
+    if (turn) {
+      if (typeof server.username !== 'string' || !/^[0-9]{1,13}:[A-Za-z0-9_-]{22}$/.test(server.username) ||
+          typeof server.credential !== 'string' || !/^[A-Za-z0-9+/]{27}=$/.test(server.credential) ||
+          Buffer.from(server.credential, 'base64').toString('base64') !== server.credential) refuse();
+      relay = true;
+    } else if (server.username !== undefined || server.credential !== undefined) refuse();
+  }
+  if (urls.size > 8 || (value.iceTransportPolicy === 'relay' && !relay)) refuse();
+  return JSON.parse(JSON.stringify(value));
+}
+module.exports = { FP, TOKEN, dataSdp, candidate, inputPacket, releasePacket, iceConfiguration };

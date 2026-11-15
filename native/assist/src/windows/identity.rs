@@ -44,7 +44,9 @@ impl LeaseLane {
         if cancelled() {
             return Err("revoked");
         }
-        // The service's replay floor is per endpoint, not per Assist session.
+        // The service's replay floors are per endpoint, not per Assist session.
+        // Lease and ICE use this same launch-owned lane and purpose-limited
+        // statements; neither route can reuse a stamp after uncertain delivery.
         // Retain this lock through delivery so concurrent sessions cannot send
         // higher timestamps ahead of an earlier authenticated request.
         let mut previous = self.0.lock().map_err(|_| "lease-request-failed")?;
@@ -233,6 +235,27 @@ impl Identity {
     }
 }
 impl EndpointIdentity {
+    pub(crate) fn request_ice(
+        &self,
+        endpoint: &str,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<super::ice::Configuration, &'static str> {
+        self.2.request(&cancelled, super::lease::now, |issued_at, started| {
+            let signature=self.sign_ice_request(endpoint,issued_at)?;
+            let body=serde_json::to_vec(&serde_json::json!({"endpointId":endpoint,"issuedAt":issued_at,"signature":signature})).map_err(|_| "invalid-message")?;
+            if cancelled() { return Err("revoked"); }
+            let bytes=Zeroizing::new(super::https::request("/api/v1/assist/streams/endpoint-ice",Some(&body))?);
+            if cancelled() { return Err("revoked"); }
+            super::ice::Configuration::parse(&bytes,started,super::lease::now()?,Instant::now())
+        })
+    }
+    fn sign_ice_request(&self, endpoint: &str, issued_at: u64) -> Result<String, &'static str> {
+        Ok(URL_SAFE_NO_PAD.encode(
+            self.0
+                .sign(&crate::statements::ice(endpoint, issued_at)?)
+                .to_bytes(),
+        ))
+    }
     pub(crate) fn request_lease(
         &self,
         endpoint: &str,
@@ -327,6 +350,49 @@ mod tests {
     use super::*;
     use crate::grant::decode;
     use ed25519_dalek::{Signature, VerifyingKey};
+    #[test]
+    fn endpoint_ice_signature_is_purpose_limited_to_the_current_operational_key() {
+        let installation = Identity(SigningKey::from_bytes(&random_seed().unwrap()));
+        let signer = EndpointIdentity::for_launch(&installation).unwrap();
+        let other = EndpointIdentity::for_launch(&installation).unwrap();
+        let endpoint = "endpoint_ice_fixture";
+        let time = 1_800_000_000_000;
+        let signature = Signature::from_bytes(
+            &decode::<64>(&signer.sign_ice_request(endpoint, time).unwrap()).unwrap(),
+        );
+        let key = VerifyingKey::from_bytes(&decode::<32>(&signer.public_key()).unwrap()).unwrap();
+        key.verify_strict(&crate::statements::ice(endpoint, time).unwrap(), &signature)
+            .unwrap();
+        assert!(
+            key.verify_strict(
+                &crate::statements::lease(endpoint, "session_fixture_01", time).unwrap(),
+                &signature
+            )
+            .is_err()
+        );
+        let previous =
+            VerifyingKey::from_bytes(&decode::<32>(&other.public_key()).unwrap()).unwrap();
+        assert!(
+            previous
+                .verify_strict(&crate::statements::ice(endpoint, time).unwrap(), &signature)
+                .is_err()
+        );
+        assert!(
+            signer
+                .sign_ice_request("endpoint_ice_fixture\nother", time)
+                .is_err()
+        );
+    }
+    #[test]
+    fn canceled_endpoint_ice_request_never_allocates_a_stamp_or_starts_https() {
+        let installation = Identity(SigningKey::from_bytes(&random_seed().unwrap()));
+        let signer = EndpointIdentity::for_launch(&installation).unwrap();
+        assert!(matches!(
+            signer.request_ice("endpoint_ice_fixture", || true),
+            Err("revoked")
+        ));
+        assert_eq!(signer.2.0.lock().unwrap().issued, 0);
+    }
     #[test]
     fn endpoint_lease_requests_share_timestamp_and_delivery_order_across_sessions() {
         use std::sync::{Arc, mpsc};

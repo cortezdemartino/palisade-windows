@@ -73,6 +73,10 @@ struct Answer {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum ResultKind {
+    PeerIce {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     ResourceSession {
         document: u32,
         answer: crate::endpoint::Answer,
@@ -138,6 +142,7 @@ enum ResultKind {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
+    PeerIce,
     ResourceSession,
     CancelNative,
     PeerSafety,
@@ -162,6 +167,7 @@ enum Kind {
 impl Kind {
     fn of(command: &Command) -> Self {
         match command {
+            Command::PeerIce { .. } => Self::PeerIce,
             Command::ResourceSession { .. } => Self::ResourceSession,
             Command::CancelNative { .. } => Self::CancelNative,
             Command::Peer {
@@ -282,6 +288,7 @@ fn validated(
         | (Kind::ProbeDescendant, ResultKind::ProbeDescendant {}) => true,
         (Kind::Native | Kind::SourceStop, ResultKind::Native { .. }) => endpoint,
         (Kind::ResourceSession, ResultKind::ResourceSession { .. }) => endpoint,
+        (Kind::PeerIce, ResultKind::PeerIce { .. }) => endpoint,
         (Kind::Extension | Kind::ExtensionSafety, ResultKind::Extension { .. }) => endpoint,
         (Kind::ProbeStopHolder, ResultKind::ProbeStopHolder { pid, coordinator }) => {
             *pid > 0 && *coordinator > 0 && pid != coordinator

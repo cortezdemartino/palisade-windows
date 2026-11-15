@@ -882,6 +882,52 @@ impl Endpoint {
     }
     /// Trusted-main setup only. Resource grants are already service-active and
     /// must never be routed through input grant.offer or given a synthetic ACK.
+    pub(crate) fn peer_ice(
+        &mut self,
+        document: u32,
+        session: &str,
+        attempt: &str,
+        request: &GrantRequest,
+    ) -> Answer {
+        let result = (|| {
+            self.live()?;
+            if self.probe
+                || crate::qualification::namespace().ok().flatten().is_none()
+                || !cfg!(any(feature = "native-input", feature = "native-resources"))
+            {
+                return Err(Error::TransportMismatch);
+            }
+            if self.document != Some(document) || !self.negotiated {
+                return Err(Error::StaleOperation);
+            }
+            request.check(&self.safety, document, session)?;
+            if crate::grant::decode::<32>(attempt).is_err() {
+                return Err(Error::InvalidMessage);
+            }
+            let owned = self.sessions.get(session).ok_or(Error::BindingMismatch)?;
+            if !owned.source.live()
+                || !owned
+                    .runtime
+                    .source_confirmed()
+                    .map_err(map_runtime_error)?
+            {
+                return Err(Error::CaptureUnavailable);
+            }
+            let peer = owned.runtime.peer_handle().map_err(map_runtime_error)?;
+            let result = peer
+                .request_ice(attempt, request.flag())
+                .map_err(map_runtime_error)?;
+            request.check(&self.safety, document, session)?;
+            if !owned.source.live() {
+                return Err(Error::CaptureUnavailable);
+            }
+            Ok(result)
+        })();
+        match result {
+            Ok(value) => Answer::ok(value),
+            Err(error) => Answer::error(error),
+        }
+    }
     pub(crate) fn resource_session(
         &mut self,
         document: u32,

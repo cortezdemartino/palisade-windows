@@ -6,6 +6,7 @@ pub mod endpoint;
 pub mod enrollment;
 pub mod files;
 pub mod https;
+pub(crate) mod ice;
 pub mod identity;
 pub mod image;
 pub mod input;

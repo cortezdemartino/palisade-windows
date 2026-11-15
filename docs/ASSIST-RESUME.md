@@ -2,6 +2,14 @@
 
 ## Active work: Assist completion
 
+The [authenticated endpoint ICE continuation](evidence/2026-11-15-endpoint-ice.md)
+now fetches native-only STUN/TURN configuration through a purpose-limited signer,
+ordinary private request lane and exact prepared peer/source cancellation binding.
+The gateway preserves relay-only policy and refuses lookup failure without direct
+fallback. Real TURN/service acceptance remains Not Verified. Follow the existing
+operator gates and [isolated setup guide](ASSIST-QUALIFICATION-SETUP.md); no device
+installation, service activation or native OS-resource/input test is authorized.
+
 FINAL-6 now has a single [master completion matrix](ASSIST-COMPLETION-MATRIX.md).
 The [resource-peer continuation](evidence/2026-11-15-resource-peer.md) connects
 resource-only/shared connection purposes and scoped input Stop without granting
