@@ -68,6 +68,25 @@ impl EndpointIdentity {
                 .to_bytes(),
         ))
     }
+    pub(crate) fn transport(
+        &self,
+        binding: &crate::stream::Binding,
+        own: &str,
+    ) -> Result<String, &'static str> {
+        Ok(URL_SAFE_NO_PAD.encode(
+            self.0
+                .sign(&crate::statements::transport(
+                    &binding.session,
+                    &binding.endpoint,
+                    own,
+                    &binding.helper_transport,
+                )?)
+                .to_bytes(),
+        ))
+    }
+}
+pub(crate) fn peer_token() -> Result<String, &'static str> {
+    Ok(URL_SAFE_NO_PAD.encode(random_seed()?.as_ref()))
 }
 fn random_seed() -> Result<Zeroizing<[u8; 32]>, &'static str> {
     let mut seed = Zeroizing::new([0u8; 32]);

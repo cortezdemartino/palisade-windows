@@ -168,7 +168,7 @@ app.whenReady().then(async () => {
       await poll(() => f.peer.verified()); await pause(50);
       if (kind === 'extra-channel') await f.run(`fixture.pc.createDataChannel('files')`);
       if (kind === 'binary') await f.run('fixture.channel.send(new Uint8Array([1,2,3]))');
-      if (kind === 'oversized') await f.run(`fixture.channel.send('x'.repeat(2049))`);
+      if (kind === 'oversized') await f.run(`fixture.channel.send('x'.repeat(16385))`);
       if (kind === 'stalled-native-queue') await f.run(`for(let i=0;i<12;i++)fixture.channel.send(${script(packet(4))})`);
       if (kind === 'renderer-crash') f.ownedWindow.webContents.forcefullyCrashRenderer();
       if (kind === 'renderer-freeze') void f.ownedWindow.webContents.executeJavaScript('while(true){}').catch(() => {});

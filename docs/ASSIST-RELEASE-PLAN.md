@@ -1,6 +1,18 @@
 # Complete Windows Assist delivery plan
 
-## Current RC-3 checkpoint
+## Current Assist completion work
+
+The [authenticated native peer path](evidence/2026-11-14-authenticated-peer.md)
+connects existing DTLS, grant/lease/consent and retained executor components.
+Native readiness, source binding, ingress age and urgent cleanup remain enforced.
+This is an implementation checkpoint with isolated/process evidence. It does not
+qualify real input, enrollment or any of the 30 real cross-client cases.
+
+Continue with Profile 2 negotiation, fresh acquisition and native resources.
+Cooperative delivery remains blocked independently; unrelated engineering must
+continue. Production switches and release approvals are unchanged.
+
+## Historical RC-3 checkpoint
 
 [Normal executor custody](evidence/2026-11-13-rc3-executor-custody.md) connects the
 live monitor/coordinator to the normal process-input transport. Armed Native

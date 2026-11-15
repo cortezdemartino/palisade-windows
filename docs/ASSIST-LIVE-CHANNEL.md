@@ -39,13 +39,20 @@ revoker in the coordinator reader. Both bypass ordinary consent/HTTPS work.
 The root's separate bounded socket inspector retains the exact application
 process and consumes no ordinary coordinator/custody slot. The coordinator still
 validates each inspection frame's sequence without dispatch or duplicate reply.
-The 13-entry v3 response budget retains ordinary capacity eight, inspection and
-safety capacity, with one slot reserved for Shutdown. V1/v2 remain unchanged.
+The 17-entry v3 response budget retains eight ordinary slots, four peer slots,
+four inspection/safety/pulse slots and one exclusive Shutdown slot. Peer calls use
+a separate bounded worker referencing the same native session gate/executor.
+Consent waits cannot consume its dispatch lane. V1/v2 remain unchanged.
 
 Source Stop acknowledgement proves fencing, not child/mirror cleanup. The
 endpoint joins retained sessions before its terminal acknowledgement; the root
 still requires the original custody proof chain before final process completion.
-Authenticated peer and resource execution remain unfinished. The original
+The [authenticated peer implementation](evidence/2026-11-14-authenticated-peer.md)
+adds private typed prepare/seal/observed/check/packet messages. Native preparation
+is input-grant/consent/lease-bound and emits only a scoped connection witness.
+Certificate observation is from the isolated gateway; readiness is native-owned.
+The private ingress timestamp is from trusted main, never page JSON. Profile 2
+negotiation and resource execution remain unfinished. The original
 version 1/2 restrictions below remain in force.
 
 ## Direct native stop checks

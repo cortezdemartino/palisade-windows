@@ -20,7 +20,7 @@ function deferred() {
   let resolve; const promise = new Promise(done => { resolve = done; });
   return { promise, resolve };
 }
-async function setup({ onObserved = () => true, onPacket = () => {} } = {}) {
+async function setup({ onObserved = () => true, onPacket = () => {}, onCheck, inputProfile } = {}) {
   const ipc = new EventEmitter(), intervals = new Set();
   let now = 0, window, nonce, revocations = 0;
   function message(value) {
@@ -61,7 +61,7 @@ async function setup({ onObserved = () => true, onPacket = () => {} } = {}) {
   };
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/assist/remote-input-peer.cjs'), 'utf8'), context);
   const peer = await context.module.exports.createOwnedInputPeer({ enabled: true, session: 'session_fixture_0001', helperTransport: fp,
-    onObserved, onPacket, onCandidate() {}, onClosed() { revocations++; } });
+    onObserved, onPacket, onCheck, inputProfile, onCandidate() {}, onClosed() { revocations++; } });
   await peer.offer(sdp(fp, 'actpass'));
   function pulse() {
     for (const tick of intervals) tick();
@@ -82,6 +82,55 @@ test('expired peer proof refuses packets even when the watchdog has not run', as
     t.message({ type: 'packet', text: packet }); await flush();
     assert.equal(packets, 0); assert.equal(t.revocations(), 1); assert.equal(t.listeners(), 0);
   } finally { await t.peer.close(); }
+});
+test('queued stale gestures retain original ingress for native replay checks and ordered owned release', async () => {
+  const blocked = deferred(), received = [];
+  const t = await setup({ onPacket: async (text, _signal, stamp) => {
+    received.push({ text, stamp }); if (received.length === 1) await blocked.promise;
+  } });
+  const down = JSON.stringify({ p: 'palisade.assist.control', v: 2, session: 'session_fixture_0001', kind: 'key', down: true });
+  try {
+    t.message({ type: 'packet', text: down }); await flush();
+    t.message({ type: 'packet', text: down });
+    t.message({ type: 'packet', text: packet });
+    t.setTime(200); blocked.resolve(); await flush(); await flush();
+    assert.deepEqual(received.map(value => value.text), [down, down, packet]);
+    assert(received.every(value => /^[0-9]+$/.test(value.stamp)));
+    assert(BigInt(received[1].stamp) >= BigInt(received[0].stamp));
+    assert.equal(t.revocations(), 0);
+  } finally { blocked.resolve(); await t.peer.close(); }
+});
+test('ordinary queue saturation preserves a release slot without overtaking earlier input', async () => {
+  const blocked = deferred(), received = [];
+  const t = await setup({ onPacket: async text => { received.push(text); if (received.length === 1) await blocked.promise; } });
+  const down = JSON.stringify({ p: 'palisade.assist.control', v: 2, session: 'session_fixture_0001', kind: 'key', down: true });
+  try {
+    for (let n = 0; n < 8; n++) t.message({ type: 'packet', text: down });
+    t.message({ type: 'packet', text: packet });
+    await flush(); assert.equal(received.length, 1); assert.equal(t.revocations(), 0);
+    blocked.resolve(); for (let n = 0; n < 15; n++) await flush();
+    assert.equal(received.length, 9); assert.equal(received.at(-1), packet);
+  } finally { blocked.resolve(); await t.peer.close(); }
+});
+test('native health refusal fences an otherwise healthy certificate and channel', async () => {
+  let valid = true;
+  const t = await setup({ onCheck: async () => { if (!valid) throw Error('revoked'); } });
+  try {
+    valid = false; t.pulse(); await flush(); await flush();
+    assert.equal(t.peer.verified(), false); assert.equal(t.revocations(), 1);
+  } finally { await t.peer.close(); }
+});
+test('Profile2 packets require an explicit trusted native profile selection', async () => {
+  const text = JSON.stringify({ p: 'palisade.assist.control', v: 2, session: 'session_fixture_0001', kind: 'input-text', text: '日本語' });
+  for (const inputProfile of ['legacy', 'input2']) {
+    let received = 0;
+    const t = await setup({ inputProfile, onPacket() { received++; } });
+    try {
+      t.message({ type: 'packet', text }); await flush();
+      assert.equal(received, inputProfile === 'input2' ? 1 : 0);
+      assert.equal(t.revocations(), inputProfile === 'input2' ? 0 : 1);
+    } finally { await t.peer.close(); }
+  }
 });
 test('a short queued packet cannot cross the peer-proof deadline before dispatch', async () => {
   let packets = 0;

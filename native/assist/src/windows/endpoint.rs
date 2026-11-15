@@ -18,10 +18,82 @@ use std::{
 struct SafetyState {
     sessions: BTreeMap<(u32, String), super::runtime::RuntimeRevoker>,
     closed: BTreeSet<(u32, String)>,
+    peers: BTreeMap<(u32, String), (super::runtime::PeerRuntime, String)>,
 }
 #[derive(Clone, Default)]
 pub(crate) struct Safety(Arc<Mutex<SafetyState>>);
 impl Safety {
+    fn attach_peer(
+        &self,
+        document: u32,
+        session: &str,
+        runtime: super::runtime::PeerRuntime,
+        source_operation: String,
+    ) -> Result<(), &'static str> {
+        let mut state = self.0.lock().map_err(|_| "endpoint-safety")?;
+        let key = (document, session.to_owned());
+        if !state.sessions.contains_key(&key)
+            || state.peers.len() >= 16
+            || state.peers.contains_key(&key)
+        {
+            return Err("endpoint-safety-full");
+        }
+        state.peers.insert(key, (runtime, source_operation));
+        Ok(())
+    }
+    pub(crate) fn peer(&self, document: u32, operation: crate::peer::Operation) -> Answer {
+        let result = (|| {
+            if !cfg!(feature = "native-input") {
+                return Err(Error::TransportMismatch);
+            }
+            let (runtime, source_operation) = self
+                .0
+                .lock()
+                .map_err(|_| Error::Internal)?
+                .peers
+                .get(&(document, operation.session().to_owned()))
+                .cloned()
+                .ok_or(Error::BindingMismatch)?;
+            use crate::peer::Operation as Peer;
+            let result = match operation {
+                Peer::Prepare { grant_id, .. } => {
+                    runtime.prepare_peer(&grant_id).map(|mut value| {
+                        value["sourceOperation"] = source_operation.into();
+                        value
+                    })
+                }
+                Peer::Seal {
+                    attempt,
+                    own_fingerprint,
+                    ..
+                } => runtime.peer_operation(&attempt, Some(&own_fingerprint), None, None),
+                Peer::Observed {
+                    attempt,
+                    fingerprint,
+                    ..
+                } => runtime.peer_operation(&attempt, None, Some(&fingerprint), None),
+                Peer::Check { attempt, .. } => runtime.peer_operation(&attempt, None, None, None),
+                Peer::Packet {
+                    attempt,
+                    text,
+                    ingress_ns,
+                    ..
+                } => runtime.peer_operation(&attempt, None, None, Some((&text, &ingress_ns))),
+            };
+            result.map_err(|error| match error {
+                "stale-peer" | "peer-already-bound" => Error::StaleOperation,
+                "peer-unverified" | "invalid-statement" | "invalid-input-clock" => {
+                    Error::TransportMismatch
+                }
+                "input-not-ready" => Error::Busy,
+                _ => map_runtime_error(error),
+            })
+        })();
+        match result {
+            Ok(result) => Answer::ok(result),
+            Err(error) => Answer::error(error),
+        }
+    }
     pub(crate) fn close_input(&self, document: u32, session: &str) -> Result<(), &'static str> {
         if !crate::grant::token(session, 8, 128) {
             return Err("invalid-session");
@@ -417,6 +489,14 @@ impl Endpoint {
             .map_err(map_runtime_error)?;
             self.safety
                 .register(document, session, runtime.revoker())
+                .map_err(|_| Error::Stopped)?;
+            self.safety
+                .attach_peer(
+                    document,
+                    session,
+                    runtime.peer_handle().map_err(map_runtime_error)?,
+                    source.key.operation.clone(),
+                )
                 .map_err(|_| Error::Stopped)?;
             self.sessions.insert(
                 session.into(),

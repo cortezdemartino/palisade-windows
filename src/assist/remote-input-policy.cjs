@@ -67,14 +67,22 @@ function dataSdp(sdp, kind, expectedFingerprint) {
   for (const value of candidates) candidate(value, mid, mid);
   return Object.freeze({ fingerprint, mid, candidates: Object.freeze(candidates) });
 }
-function inputPacket(text, session) {
-  if (typeof session !== 'string' || !TOKEN.test(session) || typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > 2048 || !text) refuse();
+function inputPacket(text, session, profile = 'legacy') {
+  if (!['legacy', 'input2'].includes(profile) || typeof session !== 'string' || !TOKEN.test(session) || typeof text !== 'string' || Buffer.byteLength(text, 'utf8') > 16384 || !text) refuse();
   let value;
   try { value = JSON.parse(text); } catch { refuse(); }
   if (!value || value.p !== 'palisade.assist.control' || value.v !== 2 || value.session !== session ||
-      !['pointer-move', 'button', 'wheel', 'key', 'shortcut', 'release-all'].includes(value.kind)) refuse();
+      !(profile === 'input2' ? ['input-move', 'input-button', 'input-wheel', 'input-key', 'input-shortcut', 'input-text', 'pointer-move', 'button', 'wheel', 'key', 'shortcut', 'release-all'] :
+        ['pointer-move', 'button', 'wheel', 'key', 'shortcut', 'release-all']).includes(value.kind)) refuse();
   // Forward the original bytes. The native strict decoder rejects duplicates,
   // unknown fields, unapproved grants/generations, replay and invalid actions.
   return text;
 }
-module.exports = { FP, TOKEN, dataSdp, candidate, inputPacket };
+// Advisory queue reservation only. Native strict decoding and grant ownership
+// still authorize every release. This does not bypass the ordered dispatch tail.
+function releasePacket(text) {
+  try { const value = JSON.parse(text); return value.kind === 'release-all' ||
+    (['button', 'key', 'input-button', 'input-key'].includes(value.kind) && value.down === false); }
+  catch { return false; }
+}
+module.exports = { FP, TOKEN, dataSdp, candidate, inputPacket, releasePacket };

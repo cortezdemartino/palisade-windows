@@ -265,6 +265,15 @@ pub struct ExecutionPermit {
     action: crate::input::Action,
     executor: Option<crate::executor::ExecutorIdentity>,
 }
+/// Native-owned setup witness. It never authorizes an input operation and cannot
+/// be constructed or deserialized from a page or a transport packet.
+pub struct PeerPermit {
+    instance: u64,
+    input_epoch: u64,
+    grant: String,
+    generation: u64,
+    capability: String,
+}
 impl ExecutionPermit {
     pub(crate) fn executor_registration(&self) -> Option<(crate::executor::ExecutorIdentity, u64)> {
         self.executor.map(|id| (id, self.instance))
@@ -548,6 +557,16 @@ impl SessionGate {
         if !self.peer_verified {
             return Err("peer-unverified");
         }
+        self.authorize_grant(grant_id, capability, now, instant)
+    }
+    fn authorize_grant(
+        &mut self,
+        grant_id: &str,
+        capability: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<&StreamGrant, &'static str> {
+        self.clock(now)?;
         let until = self.lease_until.ok_or("lease-required")?;
         if instant >= until {
             self.stop();
@@ -568,6 +587,66 @@ impl SessionGate {
             return Err("not-granted");
         }
         Ok(g)
+    }
+    /// Consent and a covering signed lease permit connection setup, never input.
+    /// In particular, setup must not temporarily set `peer_verified`.
+    pub fn prepare_peer(
+        &mut self,
+        grant_id: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<PeerPermit, &'static str> {
+        if self.peer_verified {
+            return Err("peer-already-bound");
+        }
+        let capability = self
+            .grants
+            .get(grant_id)
+            .ok_or("not-granted")?
+            .capability
+            .clone();
+        if !is_input(&capability) || self.cleanup_required.is_some() {
+            return Err("input-setup-required");
+        }
+        let generation = self
+            .authorize_grant(grant_id, &capability, now, instant)?
+            .generation;
+        Ok(PeerPermit {
+            instance: self.instance,
+            input_epoch: self.input_epoch,
+            grant: grant_id.into(),
+            generation,
+            capability,
+        })
+    }
+    pub fn validate_peer_setup(
+        &mut self,
+        permit: &PeerPermit,
+        now: u64,
+        instant: Instant,
+    ) -> Result<(), &'static str> {
+        if permit.instance != self.instance || permit.input_epoch != self.input_epoch {
+            return Err("stale-peer");
+        }
+        if self
+            .authorize_grant(&permit.grant, &permit.capability, now, instant)?
+            .generation
+            != permit.generation
+        {
+            return Err("stale-peer");
+        }
+        Ok(())
+    }
+    /// Only the owning native peer coordinator supplies an observed certificate.
+    pub fn admit_peer(
+        &mut self,
+        permit: &PeerPermit,
+        observed: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<(), &'static str> {
+        self.validate_peer_setup(permit, now, instant)?;
+        self.verify_peer(observed)
     }
     pub fn check_message(
         &mut self,
@@ -795,9 +874,19 @@ impl SessionGate {
         now: u64,
         instant: Instant,
     ) -> Result<ExecutionPermit, &'static str> {
+        self.permit_profile2_at(message, source_generation, now, instant, instant)
+    }
+    fn permit_profile2_at(
+        &mut self,
+        message: &crate::input::Profile2Message,
+        source_generation: u32,
+        now: u64,
+        instant: Instant,
+        ingress: Instant,
+    ) -> Result<ExecutionPermit, &'static str> {
         let permit = self.permit(&message.message, source_generation, now, instant)?;
         let (age, start) = self.input_age.as_mut().ok_or("peer-unverified")?;
-        let arrival = instant
+        let arrival = ingress
             .checked_duration_since(*start)
             .ok_or("invalid-message")?;
         let arrival = u64::try_from(arrival.as_millis()).map_err(|_| "invalid-message")?;
@@ -826,7 +915,7 @@ impl SessionGate {
                 crate::input::InputProfile::Profile2 => {
                     let m = crate::input::parse_profile2(raw)?;
                     (
-                        self.permit_profile2(&m, source_generation, now, instant)?,
+                        self.permit_profile2_at(&m, source_generation, now, instant, ingress)?,
                         m.message,
                     )
                 }

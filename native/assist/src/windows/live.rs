@@ -163,6 +163,41 @@ fn run_inner(
         }
     });
     let (ordinary, receive) = mpsc::sync_channel(ORDINARY_CAPACITY);
+    let (peer_send, peer_receive) = mpsc::sync_channel::<crate::live::Request>(ORDINARY_CAPACITY);
+    let peer_safety = safety.clone();
+    let peer_signals = signals.clone();
+    let peer_output = output.clone();
+    let peer_worker =
+        crate::cleanup::RetainedWorker::new(thread::spawn(move || -> Result<(), &'static str> {
+            while !peer_signals.revoked() {
+                let request = match peer_receive.recv_timeout(Duration::from_millis(10)) {
+                    Ok(request) => request,
+                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(_) => break,
+                };
+                if peer_signals.revoked() {
+                    break;
+                }
+                let Command::Peer {
+                    document,
+                    operation,
+                } = request.command
+                else {
+                    return Err("invalid-peer-dispatch");
+                };
+                let answer = peer_safety
+                    .as_ref()
+                    .ok_or("endpoint-unavailable")?
+                    .peer(document, operation);
+                emit(
+                    &peer_output,
+                    request.sequence,
+                    Reply::Peer { document, answer },
+                    &peer_signals,
+                )?;
+            }
+            Ok(())
+        }));
     let shutdown = Arc::new(Mutex::new(None));
     let read_shutdown = shutdown.clone();
     let read_signals = signals.clone();
@@ -190,6 +225,9 @@ fn run_inner(
                     continue;
                 }
                 match &request.command {
+                    Command::Peer { .. } => {
+                        peer_send.try_send(request).map_err(|_| "peer-queue-full")?
+                    }
                     Command::Hello { challenge, .. } => {
                         guard
                             .lock()
@@ -471,9 +509,14 @@ fn run_inner(
         // No sessions/children are admitted in this revision. Active-resource
         // cleanup and crash-surviving ownership must precede a broader proof.
         signals.revoke();
-        if let Some(endpoint) = &mut native_endpoint {
-            endpoint.cleanup()?;
-        }
+        // Attempt every retained owner even if another join failed/panicked.
+        // Either failure is sticky and forbids a terminal success response.
+        let peer_joined = crate::cleanup::attempt(|| peer_worker.join());
+        let endpoint_cleaned = crate::cleanup::attempt(|| match &mut native_endpoint {
+            Some(endpoint) => endpoint.cleanup(),
+            None => Ok(()),
+        });
+        peer_joined.and(endpoint_cleaned)?;
         if signals.failed() {
             return Err("live-failed");
         }
@@ -508,7 +551,12 @@ fn run_inner(
         Ok(())
     })();
     signals.revoke();
+    let peer_joined = crate::cleanup::attempt(|| peer_worker.join());
+    let endpoint_cleaned = crate::cleanup::attempt(|| match &mut native_endpoint {
+        Some(endpoint) => endpoint.cleanup(),
+        None => Ok(()),
+    });
     finished.store(true, Ordering::SeqCst);
     watcher.join().map_err(|_| "live-watchdog-failed")?;
-    outcome
+    outcome.and(peer_joined).and(endpoint_cleaned)
 }

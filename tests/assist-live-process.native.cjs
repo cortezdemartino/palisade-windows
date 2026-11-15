@@ -21,6 +21,10 @@ test('actual endpoint refuses capture activation in probes and reserves source/p
       bounds: { x: 0, y: 0, width: 100, height: 100, generation: 1 } }, 4), { code: 'capture-unavailable' });
     assert.deepEqual(await channel.inspectLocalIce([12345]), { candidates: [] });
     const ordinary = Array.from({ length: 8 }, () => channel.probeWait(10000).catch(error => error));
+    // A blocked consent/setup lane must not starve authenticated-peer traffic.
+    // This probe has no runtime or authority; it must refuse on its own lane.
+    await assert.rejects(channel.peer({ action: 'prepare', session: 'session_fixture_01', grantId: 'grant_fixture_01' }, 4),
+      error => ['transport-mismatch', 'binding-mismatch'].includes(error.code));
     assert.deepEqual(await channel.inspectLocalIce([12345]), { candidates: [] });
     // These acknowledgements are from urgent readers while the first bounded
     // ordinary fixture is still waiting. Shutdown then cancels all eight.

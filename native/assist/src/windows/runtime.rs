@@ -93,6 +93,8 @@ impl RuntimeRevoker {
     }
 }
 pub struct StreamRuntime {
+    peer: Arc<Mutex<Option<OwnedPeer>>>,
+    profile: InputProfile,
     gate: Arc<Mutex<SessionGate>>,
     source: Option<Arc<Mutex<Source>>>,
     stop: crate::cancellation::SessionStop,
@@ -107,6 +109,30 @@ pub struct StreamRuntime {
     files: Option<Arc<SessionFiles>>,
     lease_cancel: Arc<AtomicBool>,
     cleanup_failed: bool,
+    expected_track: String,
+}
+struct OwnedPeer {
+    attempt: String,
+    permit: crate::stream::PeerPermit,
+    sealed: bool,
+    observed: bool,
+    deadline: Instant,
+}
+/// References the existing gate/worker; it owns no second authorization or
+/// executor. A dedicated bounded IPC lane keeps consent dialogs from starving
+/// an already authenticated peer's health checks and packet admission.
+#[derive(Clone)]
+pub(crate) struct PeerRuntime {
+    peer: Arc<Mutex<Option<OwnedPeer>>>,
+    profile: InputProfile,
+    gate: Arc<Mutex<SessionGate>>,
+    stop: crate::cancellation::SessionStop,
+    input_stop: Arc<AtomicBool>,
+    identity: Arc<EndpointIdentity>,
+    work: mpsc::SyncSender<Work>,
+    ready: Arc<AtomicBool>,
+    lease_cancel: Arc<AtomicBool>,
+    facts: Arc<Mutex<Option<lease::ServiceFacts>>>,
     expected_track: String,
 }
 fn with_live_gate<T>(
@@ -532,6 +558,8 @@ impl StreamRuntime {
             }
         });
         Ok(Self {
+            peer: Arc::new(Mutex::new(None)),
+            profile,
             gate,
             source,
             stop,
@@ -563,6 +591,21 @@ impl StreamRuntime {
                 Err("source-mismatch")
             }
         }
+    }
+    pub(crate) fn peer_handle(&self) -> Result<PeerRuntime, &'static str> {
+        Ok(PeerRuntime {
+            peer: self.peer.clone(),
+            profile: self.profile,
+            gate: self.gate.clone(),
+            stop: self.stop.clone(),
+            input_stop: self.input_stop.clone(),
+            identity: self.identity.clone(),
+            work: self.work.clone(),
+            ready: self.ready.clone(),
+            lease_cancel: self.lease_cancel.clone(),
+            facts: self.poller.as_ref().ok_or("revoked")?.facts_reader(),
+            expected_track: self.expected_track.clone(),
+        })
     }
     pub(crate) fn admit(&mut self, signed: &SignedStreamGrant) -> Result<(), &'static str> {
         with_live_gate(&self.gate, &self.stop, |gate| {
@@ -643,35 +686,6 @@ impl StreamRuntime {
             self.prompts.remove(id);
         }
         Ok(result)
-    }
-    /// Called exclusively with the DTLS fingerprint observed by the app-owned
-    /// gateway, not an SDP string or boolean supplied by the hosted page.
-    pub fn observed_peer(&self, fingerprint: &str) -> Result<(), &'static str> {
-        if !self.source_confirmed()? {
-            return Err("source-unconfirmed");
-        }
-        with_live_gate(&self.gate, &self.stop, |gate| gate.verify_peer(fingerprint))
-    }
-    pub fn packet(&self, packet: String) -> Result<(), &'static str> {
-        if !self.source_confirmed()? {
-            return Err("source-unconfirmed");
-        }
-        if packet.len() > 16_384 {
-            return Err("too-large");
-        }
-        if self.stop.is_stopped() {
-            return Err("revoked");
-        }
-        if self.input_stop.load(Ordering::SeqCst) || !self.ready.load(Ordering::SeqCst) {
-            return Err("input-not-ready");
-        }
-        let (send, receive) = mpsc::sync_channel(1);
-        self.work
-            .try_send(Work::Packet(packet, Instant::now(), send))
-            .map_err(|_| "rate-limited")?;
-        receive
-            .recv_timeout(Duration::from_millis(250))
-            .map_err(|_| "endpoint-timeout")?
     }
     pub fn authorize(&self, id: &str, capability: &str) -> Result<(), &'static str> {
         if self.stop.is_stopped() {
@@ -780,6 +794,141 @@ impl StreamRuntime {
         } else {
             Ok(())
         }
+    }
+}
+impl PeerRuntime {
+    /// Called exclusively with the DTLS fingerprint observed by the app-owned
+    /// gateway, not an SDP string or boolean supplied by the hosted page.
+    fn peer_live(&self) -> Result<(), &'static str> {
+        if self.stop.is_stopped()
+            || self.input_stop.load(Ordering::SeqCst)
+            || self.lease_cancel.load(Ordering::SeqCst)
+        {
+            return Err("revoked");
+        }
+        if self
+            .facts
+            .lock()
+            .map_err(|_| "endpoint-failed")?
+            .as_ref()
+            .and_then(|facts| facts.stream_track_name.as_deref())
+            != Some(self.expected_track.as_str())
+        {
+            return Err("source-unconfirmed");
+        }
+        if ordinary_desktop().is_err() {
+            self.stop.revoke_launch();
+            return Err("revoked");
+        }
+        Ok(())
+    }
+    pub(crate) fn prepare_peer(&self, grant: &str) -> Result<serde_json::Value, &'static str> {
+        self.peer_live()?;
+        let mut peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+        if peer.is_some() {
+            return Err("peer-already-bound");
+        }
+        let permit = with_live_gate(&self.gate, &self.stop, |gate| {
+            gate.prepare_peer(grant, lease::now()?, Instant::now())
+        })?;
+        let attempt = super::identity::peer_token()?;
+        let helper = self
+            .gate
+            .lock()
+            .map_err(|_| "endpoint-failed")?
+            .binding()
+            .helper_transport
+            .clone();
+        *peer = Some(OwnedPeer {
+            attempt: attempt.clone(),
+            permit,
+            sealed: false,
+            observed: false,
+            deadline: Instant::now() + Duration::from_secs(15),
+        });
+        self.peer_live()?;
+        Ok(
+            serde_json::json!({"attempt":attempt,"helperTransport":helper,
+            "profile":match self.profile {InputProfile::Legacy=>"legacy",InputProfile::Profile2=>"input2"}}),
+        )
+    }
+    pub(crate) fn peer_operation(
+        &self,
+        attempt: &str,
+        own: Option<&str>,
+        observed: Option<&str>,
+        packet: Option<(&str, &str)>,
+    ) -> Result<serde_json::Value, &'static str> {
+        self.peer_live()?;
+        {
+            let mut peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+            let peer = peer.as_mut().ok_or("peer-unverified")?;
+            if peer.attempt != attempt || (!peer.observed && Instant::now() >= peer.deadline) {
+                return Err("stale-peer");
+            }
+            with_live_gate(&self.gate, &self.stop, |gate| {
+                gate.validate_peer_setup(&peer.permit, lease::now()?, Instant::now())
+            })?;
+            if let Some(own) = own {
+                if peer.sealed || peer.observed {
+                    return Err("stale-peer");
+                }
+                let signature = with_live_gate(&self.gate, &self.stop, |gate| {
+                    gate.validate_peer_setup(&peer.permit, lease::now()?, Instant::now())?;
+                    self.identity.transport(gate.binding(), own)
+                })?;
+                peer.sealed = true;
+                self.peer_live()?;
+                return Ok(serde_json::json!({"transportSignature":signature}));
+            }
+            if let Some(fingerprint) = observed {
+                if !peer.sealed || peer.observed {
+                    return Err("stale-peer");
+                }
+                with_live_gate(&self.gate, &self.stop, |gate| {
+                    gate.admit_peer(&peer.permit, fingerprint, lease::now()?, Instant::now())
+                })?;
+                peer.observed = true;
+            }
+            if packet.is_some() && !peer.observed {
+                return Err("peer-unverified");
+            }
+        }
+        self.peer_live()?;
+        if let Some((text, stamp)) = packet {
+            self.packet_at(text.into(), super::packet_clock::ingress(stamp)?)?;
+        }
+        self.peer_live()?;
+        // Revalidate the exact setup witness after preparation/dispatch waits.
+        let peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+        let peer = peer.as_ref().ok_or("peer-unverified")?;
+        with_live_gate(&self.gate, &self.stop, |gate| {
+            gate.validate_peer_setup(&peer.permit, lease::now()?, Instant::now())
+        })?;
+        Ok(if packet.is_none() {
+            serde_json::json!({"ready": self.ready.load(Ordering::SeqCst)})
+        } else {
+            serde_json::json!({})
+        })
+    }
+    fn packet_at(&self, packet: String, ingress: Instant) -> Result<(), &'static str> {
+        self.peer_live()?;
+        if packet.len() > 16_384 {
+            return Err("too-large");
+        }
+        if self.stop.is_stopped() {
+            return Err("revoked");
+        }
+        if self.input_stop.load(Ordering::SeqCst) || !self.ready.load(Ordering::SeqCst) {
+            return Err("input-not-ready");
+        }
+        let (send, receive) = mpsc::sync_channel(1);
+        self.work
+            .try_send(Work::Packet(packet, ingress, send))
+            .map_err(|_| "rate-limited")?;
+        receive
+            .recv_timeout(Duration::from_millis(250))
+            .map_err(|_| "endpoint-timeout")?
     }
 }
 impl Drop for StreamRuntime {

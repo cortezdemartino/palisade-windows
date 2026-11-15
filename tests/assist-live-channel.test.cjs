@@ -48,6 +48,7 @@ function harness({ ownedTree = false, verify = async () => ownedTree ? { size: 1
       } };
       if (name === './guardian.cjs') return { verifyGuardian: verify };
       if (name === './native-protocol.cjs') return require('../src/assist/native-protocol.cjs');
+      if (name === './private-peer.cjs') return require('../src/assist/private-peer.cjs');
       return require(name);
     },
   });

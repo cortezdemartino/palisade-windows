@@ -32,6 +32,93 @@ fn sign_lease(lease: StreamLease, key: &SigningKey) -> SignedStreamLease {
         URL_SAFE_NO_PAD.encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes());
     SignedStreamLease { lease, signature }
 }
+fn peer_fixture(consented: bool, leased: bool) -> (SessionGate, String, u64, Instant) {
+    let f = fixtures();
+    let now = f["now"].as_u64().unwrap();
+    let instant = Instant::now();
+    let key = decode::<32>(f["issuerPublicKey"].as_str().unwrap()).unwrap();
+    let mut gate = SessionGate::new(key, binding(&f), now, 3, instant);
+    let mouse: SignedStreamGrant =
+        serde_json::from_value(f["grants"]["valid"][1]["signed"].clone()).unwrap();
+    gate.admit(&mouse, now).unwrap();
+    if consented {
+        gate.consent(&mouse.grant.grant_id, now).unwrap();
+    }
+    if leased {
+        let lease = serde_json::from_value(f["leases"]["valid"][0]["signed"].clone()).unwrap();
+        gate.refresh(&lease, now, instant, instant).unwrap();
+    }
+    (gate, mouse.grant.grant_id, now, instant)
+}
+#[test]
+fn peer_setup_requires_current_consent_and_lease_without_authorizing_input() {
+    for (consent, lease) in [(false, false), (true, false), (false, true)] {
+        let (mut gate, id, now, instant) = peer_fixture(consent, lease);
+        assert!(gate.prepare_peer(&id, now, instant).is_err());
+    }
+    let (mut gate, id, now, instant) = peer_fixture(true, true);
+    let permit = gate.prepare_peer(&id, now, instant).unwrap();
+    assert_eq!(
+        gate.authorize(&id, "control_mouse", now, instant)
+            .unwrap_err(),
+        "peer-unverified"
+    );
+    gate.admit_peer(
+        &permit,
+        &binding(&fixtures()).helper_transport,
+        now,
+        instant,
+    )
+    .unwrap();
+    gate.authorize(&id, "control_mouse", now, instant).unwrap();
+    assert!(gate.prepare_peer(&id, now, instant).is_err());
+}
+#[test]
+fn peer_witness_is_bound_to_gate_epoch_grant_and_unexpired_authority() {
+    let (mut gate, id, now, instant) = peer_fixture(true, true);
+    let permit = gate.prepare_peer(&id, now, instant).unwrap();
+    let (mut other, _, other_now, other_instant) = peer_fixture(true, true);
+    assert!(
+        other
+            .validate_peer_setup(&permit, other_now, other_instant)
+            .is_err()
+    );
+    gate.suspend_input();
+    assert!(gate.validate_peer_setup(&permit, now, instant).is_err());
+    for terminal in [false, true] {
+        let (mut gate, id, now, instant) = peer_fixture(true, true);
+        let permit = gate.prepare_peer(&id, now, instant).unwrap();
+        if terminal {
+            gate.stop();
+        } else {
+            gate.revoke(&id);
+        }
+        assert!(gate.validate_peer_setup(&permit, now, instant).is_err());
+    }
+    let (mut gate, id, now, instant) = peer_fixture(true, true);
+    let permit = gate.prepare_peer(&id, now, instant).unwrap();
+    assert!(
+        gate.validate_peer_setup(&permit, now + 15000, instant + Duration::from_secs(15))
+            .is_err()
+    );
+}
+#[test]
+fn resource_only_authority_cannot_prepare_input_transport_and_wrong_certificate_fails() {
+    let f = fixtures();
+    let (mut gate, id, now, instant) = peer_fixture(true, true);
+    let resource: SignedStreamGrant =
+        serde_json::from_value(f["grants"]["valid"][0]["signed"].clone()).unwrap();
+    gate.admit(&resource, now).unwrap();
+    gate.consent(&resource.grant.grant_id, now).unwrap();
+    assert!(
+        gate.prepare_peer(&resource.grant.grant_id, now, instant)
+            .is_err()
+    );
+    let permit = gate.prepare_peer(&id, now, instant).unwrap();
+    let wrong = format!("sha-256 {}", ["AB"; 32].join(":"));
+    assert!(gate.admit_peer(&permit, &wrong, now, instant).is_err());
+    assert!(gate.authorize(&id, "control_mouse", now, instant).is_err());
+}
 #[test]
 fn independent_current_grant_generations_are_not_order_dependent() {
     let f = fixtures();

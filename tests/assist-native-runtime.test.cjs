@@ -6,10 +6,14 @@ const { NativeBridgeError } = require('../src/assist/native-protocol.cjs');
 const turn = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function setup({ enabled = true } = {}) {
-  const requests = [], selections = [], order = [];
+  const requests = [], selections = [], order = [], peerRequests = [];
+  let peerOptions, peerClosed = 0, nativePeer = async operation => operation.action === 'prepare'
+    ? { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', sourceOperation: 'capture_fixture_01' }
+    : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } : ['observed', 'check'].includes(operation.action) ? { ready: true } : {};
   let options, closed = 0, disposed = 0, fence = null, onStart = async () => ({ operation: 'capture_fixture_01' });
   const lost = new AbortController();
   const channel = {
+    peer: async (operation, document) => { peerRequests.push({ operation, document }); return nativePeer(operation); },
     configureCapture: async value => { order.push(['configure', value]); return enabled; },
     request: async (request, document) => {
       requests.push({ request, document }); order.push(request.op);
@@ -25,6 +29,13 @@ function setup({ enabled = true } = {}) {
     require(name) {
       if (name === './live-channel.cjs') return { openLiveChannel: async () => channel };
       if (name === './native-protocol.cjs') return { NativeBridgeError };
+      if (name === './remote-input-peer.cjs') return { createOwnedInputPeer: async value => {
+        peerOptions = value;
+        let closed = false;
+        return { offer: async () => ({ sdp: 'owned-answer', fingerprint: 'sha-256 ' + Array(32).fill('CD').join(':') }),
+          candidate: async () => { order.push('owned-candidate'); },
+          close: async () => { if (!closed) { closed = true; peerClosed++; await value.onClosed('stopped'); } } };
+      } };
       if (name === './capture-publication.cjs') return { createCapturePublication: value => {
         options = value;
         return { dispose() { disposed++; }, dispatch: (...args) => onStart(...args) };
@@ -38,9 +49,115 @@ function setup({ enabled = true } = {}) {
   const runtime = context.module.exports.createNativeRuntime({ lifecycle: {}, captureOptions: { screen } });
   const scope = () => { const abort = new AbortController(); return { abort, signal: abort.signal, generation: 7, emit: () => true }; };
   return { runtime, requests, selections, order, scope, options: () => options, closed: () => closed,
+    peerOptions: () => peerOptions, peerClosed: () => peerClosed, peerRequests, nativePeer: value => { nativePeer = value; },
     lose: () => lost.abort(), disposed: () => disposed,
     fence: value => { fence = value; }, onStart: value => { onStart = value; } };
 }
+const peerOffer = { op: 'peer.offer', session: 'session_fixture_0001', grantId: 'grant_fixture_0001', sdp: 'helper-offer' };
+test('source stopped during native preparation cannot construct a late peer', async () => {
+  const h = setup(); await h.runtime.ready;
+  const prepared = deferred(), entered = deferred();
+  h.nativePeer(async () => { entered.resolve(); await prepared.promise;
+    return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', sourceOperation: 'capture_fixture_01' };
+  });
+  const offering = assert.rejects(h.runtime.dispatch(peerOffer, h.scope()), { code: 'stopped' });
+  await entered.promise;
+  await h.runtime.dispatch({ op: 'capture.stop', operation: 'capture_fixture_01' }, h.scope());
+  prepared.resolve(); await offering;
+  assert.equal(h.peerOptions(), undefined);
+  await h.runtime.stopAll();
+});
+test('unknown or retired source cancellation cannot close a peer on another source', async () => {
+  const h = setup(); await h.runtime.ready;
+  await h.runtime.dispatch(peerOffer, h.scope());
+  await h.runtime.dispatch({ op: 'capture.stop', operation: 'capture_retired_01' }, h.scope());
+  assert.equal(h.peerClosed(), 0);
+  await h.peerOptions().onObserved(h.peerOptions().helperTransport);
+  await h.peerOptions().onPacket('fresh-packet', null, '123');
+  assert.equal(h.peerRequests.at(-1).operation.action, 'packet');
+  await h.runtime.stopAll();
+});
+test('native executor readiness is polled without optimistic packet admission', async () => {
+  const h = setup(); await h.runtime.ready;
+  let checks = 0;
+  h.nativePeer(async operation => {
+    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'seal') return { transportSignature: 'B'.repeat(86) };
+    if (operation.action === 'check') return { ready: ++checks >= 2 };
+    return { ready: false };
+  });
+  await h.runtime.dispatch(peerOffer, h.scope());
+  assert.equal(await h.peerOptions().onObserved(h.peerOptions().helperTransport), true);
+  assert.equal(checks, 2);
+  await h.runtime.stopAll();
+});
+test('owned peer uses native binding and one-shot transport seal before observed certificate admission', async () => {
+  const h = setup(); await h.runtime.ready;
+  const scope = h.scope();
+  const result = await h.runtime.dispatch(peerOffer, scope);
+  assert.equal(result.sdp, 'owned-answer'); assert.equal(result.transportSignature, 'B'.repeat(86));
+  assert.equal(h.peerOptions().helperTransport, 'sha-256 ' + Array(32).fill('AB').join(':'));
+  assert.equal(h.peerOptions().inputProfile, 'legacy');
+  await h.peerOptions().onObserved(h.peerOptions().helperTransport);
+  await h.peerOptions().onPacket('original-bytes', scope.signal, '123456789');
+  assert.deepEqual(h.peerRequests.map(v => v.operation.action), ['prepare', 'seal', 'observed', 'packet']);
+  assert.equal(h.peerRequests.at(-1).operation.ingressNs, '123456789');
+  assert(h.peerRequests.every(v => v.document === 7 && v.operation.session === peerOffer.session));
+  assert.equal(h.peerRequests[1].operation.ownFingerprint, 'sha-256 ' + Array(32).fill('CD').join(':'));
+  await assert.rejects(h.runtime.dispatch(peerOffer, h.scope()), { code: 'stale-operation' });
+  await h.runtime.stopAll(); assert.equal(h.peerClosed(), 1);
+});
+test('certificate observation racing answer signing waits for this exact seal', async () => {
+  const h = setup(); await h.runtime.ready;
+  const seal = deferred(), entered = deferred();
+  h.nativePeer(async operation => {
+    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'seal') { entered.resolve(); await seal.promise; return { transportSignature: 'B'.repeat(86) }; }
+    return { ready: true };
+  });
+  const offering = h.runtime.dispatch(peerOffer, h.scope());
+  await entered.promise;
+  let admitted = false;
+  const observing = h.peerOptions().onObserved(h.peerOptions().helperTransport).then(() => { admitted = true; });
+  await turn(); assert.equal(admitted, false);
+  assert.equal(h.peerRequests.some(v => v.operation.action === 'observed'), false);
+  seal.resolve(); await offering; await observing;
+  assert.equal(admitted, true);
+  await h.runtime.stopAll();
+});
+test('Stop fences the owned peer while a seal or native cleanup is still pending', async () => {
+  const h = setup(); await h.runtime.ready;
+  const seal = deferred(), entered = deferred();
+  h.nativePeer(async operation => {
+    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'seal') { entered.resolve(); await seal.promise; return { transportSignature: 'B'.repeat(86) }; }
+    return { ready: true };
+  });
+  const offering = assert.rejects(h.runtime.dispatch(peerOffer, h.scope()), { code: 'stopped' });
+  await entered.promise;
+  const observing = assert.rejects(h.peerOptions().onObserved(h.peerOptions().helperTransport), { code: 'stopped' });
+  await h.runtime.dispatch({ op: 'peer.close', session: peerOffer.session }, h.scope());
+  assert.equal(h.peerClosed(), 1);
+  seal.resolve(); await offering; await observing;
+  assert.equal(h.peerRequests.some(v => v.operation.action === 'observed'), false);
+  await h.runtime.stopAll();
+});
+test('native refusal cannot create a peer, and document or source loss closes transport admission', async () => {
+  const h = setup(); await h.runtime.ready;
+  h.nativePeer(async () => { throw new NativeBridgeError('binding-mismatch'); });
+  await assert.rejects(h.runtime.dispatch(peerOffer, h.scope()), { code: 'binding-mismatch' });
+  assert.equal(h.peerOptions(), undefined);
+  await h.runtime.stopAll();
+  for (const reason of ['source', 'document']) {
+    const h = setup(); await h.runtime.ready;
+    await h.runtime.dispatch(peerOffer, h.scope());
+    if (reason === 'source') await h.runtime.dispatch({ op: 'capture.stop', operation: 'capture_fixture_01' }, h.scope());
+    else await assert.rejects(h.runtime.dispatch({ op: 'status' }, { ...h.scope(), generation: 8 }), { code: 'stale-operation' });
+    assert.equal(h.peerClosed(), 1);
+    await assert.rejects(h.peerOptions().onPacket('late-packet', null, '123'), { code: 'stopped' });
+    await h.runtime.stopAll();
+  }
+});
 test('qualified runtime verifies the selected physical display before publication, without first-monitor fallback', async () => {
   const h = setup(); await h.runtime.ready;
   const scope = h.scope();

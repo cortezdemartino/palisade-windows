@@ -1,6 +1,22 @@
 # Assist continuation checkpoint
 
-## Active work: RC-3
+## Active work: Assist completion
+
+Continue from the [authenticated peer integration](evidence/2026-11-14-authenticated-peer.md),
+starting at `974b61a7575fc93e1de36257cac79ff5cf392333`. Canonical peer offers now
+connect the isolated app-owned DTLS gateway to the retained native gate/worker.
+Setup is consent/lease-bound, certificate sealing is purpose-limited and native
+readiness precedes packet admission. A bounded peer lane bypasses blocking dialogs;
+source cancellation and terminal cleanup retain exact ownership. Actual DTLS
+fixtures use a fake sink, not native input acceptance. Public switches stay off.
+
+Next: Profile 2/extension negotiation, fresh grants and resource integration.
+Companion main inspected read-only at `060a8afa320163de14c02f75b048b89abaddbf27`;
+frozen sources/fixtures/30 cases remain unchanged. Real-service/device acceptance
+is still Not Verified. Cooperative physical arbitration remains Blocked. No
+release, signing, personal-device installation or production activation is authorized.
+
+## Historical RC-3 checkpoint
 
 Continue from the [normal executor custody checkpoint](evidence/2026-11-13-rc3-executor-custody.md).
 Starting SHA: `b0720e3e69e238dd637106d60e19c0eca8e68203`.

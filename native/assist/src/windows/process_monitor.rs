@@ -73,6 +73,10 @@ struct Answer {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum ResultKind {
+    Peer {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     CaptureSetup {
         enabled: bool,
     },
@@ -123,6 +127,7 @@ enum ResultKind {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
+    Peer,
     CaptureSetup,
     CaptureSource,
     InspectLocalIce,
@@ -141,6 +146,7 @@ enum Kind {
 impl Kind {
     fn of(command: &Command) -> Self {
         match command {
+            Command::Peer { .. } => Self::Peer,
             Command::CaptureSetup { .. } => Self::CaptureSetup,
             Command::CaptureSource { .. } => Self::CaptureSource,
             Command::InspectLocalIce { .. } => Self::InspectLocalIce,
@@ -202,6 +208,7 @@ fn validated(
         .remove(&answer.sequence)
         .ok_or("monitor-correlation")?;
     let valid = match (&kind, &mut answer.result) {
+        (Kind::Peer, ResultKind::Peer { .. }) => endpoint,
         (Kind::CaptureSetup, ResultKind::CaptureSetup { .. })
         | (Kind::CaptureSource, ResultKind::CaptureSource { .. })
         | (Kind::InspectLocalIce, ResultKind::LocalIce { .. }) => endpoint,
@@ -617,6 +624,7 @@ fn run_inner(
                     if !matches!(
                         kind,
                         Kind::Hello
+                            | Kind::Peer
                             | Kind::Pulse
                             | Kind::Shutdown
                             | Kind::SourceStop
@@ -628,6 +636,7 @@ fn run_inner(
                             !matches!(
                                 k,
                                 Kind::Hello
+                                    | Kind::Peer
                                     | Kind::Pulse
                                     | Kind::Shutdown
                                     | Kind::SourceStop
@@ -638,6 +647,16 @@ fn run_inner(
                         >= crate::live::ORDINARY_CAPACITY
                     {
                         return Err("monitor-capacity");
+                    }
+                    if kind == Kind::Peer
+                        && state
+                            .pending
+                            .values()
+                            .filter(|kind| **kind == Kind::Peer)
+                            .count()
+                            >= 4
+                    {
+                        return Err("monitor-peer-capacity");
                     }
                     if let Command::Hello { challenge, .. } = &request.command {
                         state.challenge = Some(challenge.clone());

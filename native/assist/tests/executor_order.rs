@@ -6,6 +6,52 @@ use palisade_assist_guardian::{
 };
 use serde_json::{Value, json};
 #[test]
+fn profile2_sender_age_baseline_uses_ingress_not_worker_dequeue_time() {
+    use palisade_assist_guardian::input::InputProfile;
+    let (mut gate, grant, now, _) = fixture();
+    let t = Instant::now();
+    let packet = |seq, stamp| {
+        json!({"p":"palisade.assist.control","v":2,"session":grant.grant.session,"grant":grant.grant.grant_id,"gen":grant.grant.generation,"seq":seq,"kind":"input-key","code":"KeyA","down":true,"repeat":false,"t":stamp}).to_string()
+    };
+    // The first packet waits 80ms in the native queue. That delay must not be
+    // credited to later packets as extra sender/network lifetime.
+    gate.permit_packet(
+        &packet(1, 0),
+        InputProfile::Profile2,
+        1,
+        now,
+        (t, t + Duration::from_millis(80)),
+    )
+    .unwrap();
+    assert!(matches!(
+        gate.permit_packet(
+            &packet(2, 1),
+            InputProfile::Profile2,
+            1,
+            now,
+            (
+                t + Duration::from_millis(350),
+                t + Duration::from_millis(350)
+            )
+        ),
+        Err("stale-input")
+    ));
+    // A stale packet still consumes its sequence; retry cannot reset its age.
+    assert!(matches!(
+        gate.permit_packet(
+            &packet(2, 350),
+            InputProfile::Profile2,
+            1,
+            now,
+            (
+                t + Duration::from_millis(351),
+                t + Duration::from_millis(351)
+            )
+        ),
+        Err("replay")
+    ));
+}
+#[test]
 fn runtime_ingress_bounds_queue_without_losing_delayed_releases_or_legacy() {
     use palisade_assist_guardian::input::InputProfile;
     let (mut gate, grant, now, _) = fixture();

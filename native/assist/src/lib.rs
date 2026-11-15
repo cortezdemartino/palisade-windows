@@ -15,6 +15,7 @@ pub mod input_age;
 pub mod issuer;
 pub mod live;
 pub mod observation;
+pub mod peer;
 pub mod qualification;
 pub mod statements;
 pub mod stream;

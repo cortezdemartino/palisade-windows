@@ -11,7 +11,9 @@ pub const PROTOCOL: &str = "palisade.assist.live";
 pub const MAX_FRAME: usize = 65_536;
 pub const ORDINARY_CAPACITY: usize = 8;
 pub const OUTPUT_CAPACITY: usize = 10;
-pub const ENDPOINT_OUTPUT_CAPACITY: usize = 13;
+// Eight dialog/setup requests, four live-peer requests, four safety/pulse
+// requests, and an exclusive terminal cleanup slot.
+pub const ENDPOINT_OUTPUT_CAPACITY: usize = 17;
 
 #[derive(Default)]
 pub struct Signals {
@@ -55,6 +57,10 @@ pub struct Request {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
+    Peer {
+        document: u32,
+        operation: crate::peer::Operation,
+    },
     CaptureSetup {
         enabled: bool,
     },
@@ -147,7 +153,9 @@ impl Ingress {
                     self.closed = true;
                     signals.revoke();
                 }
-                Command::Native { .. } if self.version != 3 => return Err("operation-unavailable"),
+                Command::Native { .. } | Command::Peer { .. } if self.version != 3 => {
+                    return Err("operation-unavailable");
+                }
                 Command::CaptureSetup { .. }
                 | Command::CaptureSource { .. }
                 | Command::InspectLocalIce { .. }
@@ -194,6 +202,10 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    Peer {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     CaptureSetup {
         enabled: bool,
     },

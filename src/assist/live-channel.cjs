@@ -6,6 +6,7 @@ const { randomBytes } = require('node:crypto');
 const { TextDecoder } = require('node:util');
 const { verifyGuardian } = require('./guardian.cjs');
 const nativeProtocol = require('./native-protocol.cjs');
+const privatePeer = require('./private-peer.cjs');
 const PROTOCOL = 'palisade.assist.live', MAX_FRAME = 65_536, CAPACITY = 8;
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const exact = (v, fields) => v && typeof v === 'object' && !Array.isArray(v) &&
@@ -64,8 +65,9 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
   }
   function send(command, timeoutMs = 2500, safety = false) {
     if (closed || !child || (!safety && revoked) || sequence >= 0xffffffff || writeBlocked ||
-        pending.size >= (endpoint ? 13 : 10) || (endpoint && command.type !== 'shutdown' && pending.size >= 12) ||
-        (!safety && [...pending.values()].filter(v => !v.safety && !['pulse', 'shutdown'].includes(v.type)).length >= CAPACITY)) return Promise.reject(unavailable());
+        pending.size >= (endpoint ? 17 : 10) || (endpoint && command.type !== 'shutdown' && pending.size >= 16) ||
+        (command.type === 'peer' && [...pending.values()].filter(v => v.type === 'peer').length >= 4) ||
+        (!safety && command.type !== 'peer' && [...pending.values()].filter(v => !v.safety && !['pulse', 'shutdown', 'peer'].includes(v.type)).length >= CAPACITY)) return Promise.reject(unavailable());
     const bytes = Buffer.from(JSON.stringify({ sequence, command }));
     if (!bytes.length || bytes.length > MAX_FRAME) return Promise.reject(unavailable());
     const id = sequence++, prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length);
@@ -83,6 +85,8 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'peer') return exact(result, ['type', 'document', 'answer']) &&
+      result.type === 'peer' && result.document === entry.document && privatePeer.answer(result.answer, entry.operation.action);
     if (endpoint && entry.type === 'capture-setup') return exact(result, ['type', 'enabled']) && result.type === entry.type && typeof result.enabled === 'boolean';
     if (endpoint && entry.type === 'capture-source') return exact(result, ['type', 'accepted']) && result.type === entry.type && typeof result.accepted === 'boolean';
     if (endpoint && entry.type === 'inspect-local-ice') return exact(result, ['type', 'candidates']) && result.type === 'local-ice' &&
@@ -196,6 +200,14 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       } catch (error) { return Promise.reject(error); }
     };
     if (endpoint) {
+      api.peer = (operation, document) => {
+        if (!privatePeer.operation(operation) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
+          return Promise.reject(unavailable());
+        return send({ type: 'peer', document, operation }, ['prepare', 'observed'].includes(operation.action) ? 10000 : 2500).then(reply => {
+          if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
+          return reply.answer.result;
+        });
+      };
       api.configureCapture = enabled => typeof enabled === 'boolean' ? send({ type: 'capture-setup', enabled }).then(v => v.enabled) : Promise.reject(unavailable());
       api.selectCapture = (selection, document) => {
         if (!Number.isInteger(document) || document < 0 || document >= 0xffffffff) return Promise.reject(unavailable());

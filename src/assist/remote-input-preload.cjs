@@ -10,7 +10,7 @@
   const FP = /^sha-256 (?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/;
   let peer = null, channel = null, helperTransport = null, admitted = false,
     verified = false, ended = false, started = false, lastMain = performance.now(),
-    lastSequence = 0, work = Promise.resolve(), tokens = 240, rateAt = performance.now();
+    lastSequence = 0, work = Promise.resolve(), tokens = 240, releaseTokens = 64, rateAt = performance.now();
   const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
     Object.keys(value).sort().join(',') === ['type', 'nonce', 'document', ...fields].sort().join(',');
   function send(message) {
@@ -69,10 +69,17 @@
       incoming.onmessage = event => {
         if (ended) return;
         const time = performance.now();
+        releaseTokens = Math.min(64, releaseTokens + Math.max(0, time - rateAt) * 0.032);
         tokens = Math.min(240, tokens + Math.max(0, time - rateAt) * 0.12); rateAt = time;
-        if (tokens < 1 || typeof event.data !== 'string' || !event.data || event.data.length > 2048 ||
-            encoder.encode(event.data).byteLength > 2048) { stop(); return; }
-        tokens--;
+        if (typeof event.data !== 'string' || !event.data || event.data.length > 16384 ||
+            encoder.encode(event.data).byteLength > 16384) { stop(); return; }
+        // Reserve bounded release traffic, still in SCTP/main/native order.
+        let release = false;
+        try { const value = JSON.parse(event.data); release = value.kind === 'release-all' ||
+          (['key', 'button', 'input-key', 'input-button'].includes(value.kind) && value.down === false); }
+        catch { stop(); return; }
+        if (release ? releaseTokens < 1 : tokens < 1) { stop(); return; }
+        if (release) releaseTokens--; else tokens--;
         if (!admitted) return; // Bound and discard, never queue before native acceptance.
         if (!verified || peer?.connectionState !== 'connected' || peer.sctp?.transport?.state !== 'connected') { stop(); return; }
         send({ type: 'packet', text: event.data });

@@ -6,19 +6,21 @@ const { BrowserWindow, ipcMain } = require('electron');
 const path = require('node:path');
 const { randomBytes } = require('node:crypto');
 const { performance } = require('node:perf_hooks');
+const { hrtime } = require('node:process');
 const { installControlsProtocol } = require('../desktop-window.cjs');
 const { Liveness } = require('./local-video-liveness.cjs');
-const { FP, TOKEN, dataSdp, candidate, inputPacket } = require('./remote-input-policy.cjs');
+const { FP, TOKEN, dataSdp, candidate, inputPacket, releasePacket } = require('./remote-input-policy.cjs');
 const URL = 'palisade-controls://app/assist-input.html';
 const EVENT = 'palisade:owned-input-event', COMMAND = 'palisade:owned-input-command';
 const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).sort().join(',') === [...fields].sort().join(',');
 async function createOwnedInputPeer({ enabled = false, session, helperTransport, signal,
-  onObserved, onPacket, onCandidate, onClosed } = {}) {
+  inputProfile = 'legacy', onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
   if (enabled !== true) throw Error('Owned input peer disabled');
   if (typeof session !== 'string' || typeof helperTransport !== 'string' ||
       !TOKEN.test(session) || !FP.test(helperTransport) || signal?.aborted ||
-      [onObserved, onPacket, onCandidate, onClosed].some(fn => typeof fn !== 'function'))
+      !['legacy', 'input2'].includes(inputProfile) ||
+      [onObserved, onPacket, onCandidate, onClosed, onCheck].some(fn => typeof fn !== 'function'))
     throw Error('Native input coordinator required');
   const nonce = randomBytes(24).toString('hex'), abort = new AbortController();
   const window = new BrowserWindow({ show: false, title: 'Palisade Assist input transport',
@@ -37,8 +39,8 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
   profile.setDisplayMediaRequestHandler((_request, done) => done(null), { useSystemPicker: false });
   profile.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, done) => done({ cancel: details.url !== URL }));
   let document = null, ended = false, offered = false, answer = null, info = null,
-    observed = false, verifying = false, requestId = 0, queued = 0, tail = Promise.resolve(),
-    tokens = 240, rateAt = performance.now(), candidateCount = 0;
+    observed = false, verifying = false, checking = false, requestId = 0, queued = 0, releases = 0, tail = Promise.resolve(),
+    tokens = 240, releaseTokens = 64, rateAt = performance.now(), candidateCount = 0;
   const pending = new Map(), remoteCandidates = new Set(), liveness = new Liveness();
   let bootResolve, bootReject, finishedResolve, finishedReject, connectTimer;
   const boot = new Promise((resolve, reject) => { bootResolve = resolve; bootReject = reject; });
@@ -115,17 +117,20 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
           }).catch(() => { void close('native-refused'); });
         }
       } else if (message.type === 'packet') {
+        const ingressNs = hrtime.bigint().toString();
         if (!schema(message, ['text']) || !observed) throw Error('unverified-packet');
-        const text = inputPacket(message.text, session), arrived = performance.now();
+        const text = inputPacket(message.text, session, inputProfile), arrived = performance.now(), release = releasePacket(text);
+        releaseTokens = Math.min(64, releaseTokens + Math.max(0, arrived - rateAt) * 0.032);
         tokens = Math.min(240, tokens + Math.max(0, arrived - rateAt) * 0.12); rateAt = arrived;
-        if (tokens < 1 || queued >= 8) throw Error('flood');
-        tokens--; queued++;
+        if (release ? releaseTokens < 1 || releases >= 4 : tokens < 1 || queued >= 8) throw Error('flood');
+        if (release) { releaseTokens--; releases++; } else { tokens--; queued++; }
         tail = tail.then(async () => {
           if (ended) return;
           if (liveness.expired('peer')) throw Error('expired-peer');
-          if (performance.now() - arrived >= 100) throw Error('stale-packet');
-          await onPacket(text, abort.signal);
-        }).catch(() => { void close('input-refused'); }).finally(() => { queued--; });
+          // Native admission consumes valid stale sequences without executing
+          // them. Always preserve ingress so resending cannot refresh their age.
+          await onPacket(text, abort.signal, ingressNs);
+        }).catch(() => { void close('input-refused'); }).finally(() => { if (release) releases--; else queued--; });
       } else if (message.type === 'failed') {
         if (!schema(message, [])) throw Error('failed');
         void close('transport-failed');
@@ -138,6 +143,10 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
     if (liveness.expired('peer')) { void close('transport-timeout'); return; }
     const value = liveness.issue('peer');
     if (value) send({ type: 'heartbeat', sequence: value.sequence, challenge: value.challenge });
+    if (observed && !checking) {
+      checking = true;
+      Promise.resolve().then(onCheck).catch(() => { void close('native-refused'); }).finally(() => { checking = false; });
+    }
   }, 250);
   startTimer.unref?.(); watch.unref?.();
   ipcMain.on(EVENT, receive);
