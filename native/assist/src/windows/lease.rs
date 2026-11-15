@@ -1,7 +1,7 @@
 //! Independently authenticated polling. No renderer cookies, tokens or supplied URLs.
 use crate::{
     stream::{SessionGate, SignedStreamGrant, SignedStreamLease},
-    windows::{https, identity::EndpointIdentity},
+    windows::identity::EndpointIdentity,
 };
 use serde::Deserialize;
 use serde_json::Value;
@@ -201,7 +201,6 @@ impl LeasePoller {
         let worker_facts = facts.clone();
         let worker = thread::spawn(move || {
             let _facts_lifetime = FactsLifetime(worker_facts.clone());
-            let mut previous = 0;
             while !flag.load(Ordering::SeqCst) {
                 let started = Instant::now();
                 let result = (|| {
@@ -210,28 +209,19 @@ impl LeasePoller {
                         .map_err(|_| "endpoint-failed")?
                         .binding()
                         .clone();
-                    let issued_at = now()?;
-                    if issued_at <= previous {
-                        return Err("clock-not-increasing");
-                    };
-                    previous = issued_at;
-                    let signature = identity.sign_lease_request(
-                        &binding.endpoint,
-                        &binding.session,
-                        issued_at,
-                    )?;
-                    let body=serde_json::to_vec(&serde_json::json!({"endpointId":binding.endpoint,"session":binding.session,"issuedAt":issued_at,"signature":signature})).map_err(|_|"invalid-message")?;
                     let response =
-                        https::request("/api/v1/assist/streams/endpoint-lease", Some(&body))?;
+                        identity.request_lease(&binding.endpoint, &binding.session, || {
+                            flag.load(Ordering::SeqCst)
+                        })?;
                     if flag.load(Ordering::SeqCst) {
                         return Err("revoked");
                     }
                     let mut guard = gate.lock().map_err(|_| "endpoint-failed")?;
                     let observed = match apply_response(
                         &mut guard,
-                        &response,
+                        &response.bytes,
                         now()?,
-                        started,
+                        response.started,
                         Instant::now(),
                     ) {
                         Ok(observed) => observed,

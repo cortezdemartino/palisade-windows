@@ -9,6 +9,8 @@ use std::{
     },
     path::{Path, PathBuf},
     ptr,
+    sync::Mutex,
+    time::Instant,
 };
 use windows_sys::Win32::{
     Foundation::LocalFree,
@@ -24,7 +26,52 @@ pub struct Identity(SigningKey);
 /// Operational endpoint signer. Create once per native authority launch and
 /// retain that exact instance for enrollment, ACK, lease and transport purposes.
 /// It is never loaded from the installation's persistent DPAPI identity.
-pub struct EndpointIdentity(SigningKey, String);
+pub struct EndpointIdentity(SigningKey, String, LeaseLane);
+#[derive(Default)]
+struct RequestClock {
+    wall: u64,
+    issued: u64,
+}
+#[derive(Default)]
+struct LeaseLane(Mutex<RequestClock>);
+impl LeaseLane {
+    fn request<T>(
+        &self,
+        cancelled: impl Fn() -> bool,
+        clock: impl Fn() -> Result<u64, &'static str>,
+        send: impl FnOnce(u64, Instant) -> Result<T, &'static str>,
+    ) -> Result<T, &'static str> {
+        if cancelled() {
+            return Err("revoked");
+        }
+        // The service's replay floor is per endpoint, not per Assist session.
+        // Retain this lock through delivery so concurrent sessions cannot send
+        // higher timestamps ahead of an earlier authenticated request.
+        let mut previous = self.0.lock().map_err(|_| "lease-request-failed")?;
+        if cancelled() {
+            return Err("revoked");
+        }
+        let now = clock()?;
+        if now < previous.wall {
+            return Err("clock-not-increasing");
+        }
+        let issued = now.max(previous.issued.checked_add(1).ok_or("invalid-time")?);
+        if issued > 8_640_000_000_000_000 || issued.saturating_sub(now) > 1000 {
+            return Err("clock-not-increasing");
+        }
+        previous.wall = now;
+        previous.issued = issued; // a failed delivery must never reuse its stamp
+        let result = send(issued, Instant::now())?;
+        if cancelled() {
+            return Err("revoked");
+        }
+        Ok(result)
+    }
+}
+pub(crate) struct LeaseResponse {
+    pub bytes: Vec<u8>,
+    pub started: Instant,
+}
 impl Identity {
     pub fn load_current_user() -> Result<Self, &'static str> {
         Self::load(&storage()?.join("endpoint-v1.dpapi"))
@@ -43,6 +90,7 @@ impl EndpointIdentity {
         Ok(Self(
             SigningKey::from_bytes(&seed),
             installation.public_key(),
+            LeaseLane::default(),
         ))
     }
     pub fn public_key(&self) -> String {
@@ -185,6 +233,19 @@ impl Identity {
     }
 }
 impl EndpointIdentity {
+    pub(crate) fn request_lease(
+        &self,
+        endpoint: &str,
+        session: &str,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<LeaseResponse, &'static str> {
+        self.2.request(cancelled, super::lease::now, |issued_at, started| {
+            let signature=self.sign_lease_request(endpoint,session,issued_at)?;
+            let body=serde_json::to_vec(&serde_json::json!({"endpointId":endpoint,"session":session,"issuedAt":issued_at,"signature":signature})).map_err(|_| "invalid-message")?;
+            let bytes=super::https::request("/api/v1/assist/streams/endpoint-lease",Some(&body))?;
+            Ok(LeaseResponse { bytes, started })
+        })
+    }
     pub fn sign_lease_request(
         &self,
         endpoint: &str,
@@ -266,6 +327,153 @@ mod tests {
     use super::*;
     use crate::grant::decode;
     use ed25519_dalek::{Signature, VerifyingKey};
+    #[test]
+    fn endpoint_lease_requests_share_timestamp_and_delivery_order_across_sessions() {
+        use std::sync::{Arc, mpsc};
+        let lane = Arc::new(LeaseLane::default());
+        let order = Arc::new(Mutex::new(Vec::new()));
+        let (entered, seen) = mpsc::channel();
+        let (release, wait) = mpsc::channel();
+        let first_lane = lane.clone();
+        let first_order = order.clone();
+        let first = std::thread::spawn(move || {
+            first_lane.request(
+                || false,
+                || Ok(1000),
+                |stamp, _| {
+                    first_order.lock().unwrap().push(stamp);
+                    entered.send(()).unwrap();
+                    wait.recv().unwrap();
+                    Ok(stamp)
+                },
+            )
+        });
+        seen.recv().unwrap();
+        assert!(matches!(
+            lane.0.try_lock(),
+            Err(std::sync::TryLockError::WouldBlock)
+        ));
+        let second_lane = lane.clone();
+        let second_order = order.clone();
+        let second = std::thread::spawn(move || {
+            second_lane.request(
+                || false,
+                || Ok(1000),
+                |stamp, _| {
+                    second_order.lock().unwrap().push(stamp);
+                    Ok(stamp)
+                },
+            )
+        });
+        release.send(()).unwrap();
+        assert_eq!(first.join().unwrap(), Ok(1000));
+        assert_eq!(second.join().unwrap(), Ok(1001));
+        assert_eq!(*order.lock().unwrap(), [1000, 1001]);
+    }
+    #[test]
+    fn failed_or_canceled_delivery_never_reuses_an_endpoint_stamp() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let lane = LeaseLane::default();
+        let cancel = AtomicBool::new(false);
+        assert_eq!(
+            lane.request(
+                || false,
+                || Ok(1000),
+                |_, _| Err::<(), _>("network-failure")
+            ),
+            Err("network-failure")
+        );
+        assert_eq!(
+            lane.request(
+                || cancel.load(Ordering::SeqCst),
+                || Ok(1000),
+                |stamp, _| {
+                    assert_eq!(stamp, 1001);
+                    cancel.store(true, Ordering::SeqCst);
+                    Ok(())
+                }
+            ),
+            Err("revoked")
+        );
+        assert_eq!(
+            lane.request(|| false, || Ok(1000), |stamp, _| Ok(stamp)),
+            Ok(1002)
+        );
+        assert_eq!(
+            lane.request(
+                || true,
+                || panic!("canceled work must not allocate time"),
+                |_, _| Ok(())
+            ),
+            Err("revoked")
+        );
+    }
+    #[test]
+    fn canceled_waiter_cannot_start_network_work_after_a_sibling_response() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicBool, Ordering},
+            mpsc,
+        };
+        let lane = Arc::new(LeaseLane::default());
+        let cancel = Arc::new(AtomicBool::new(false));
+        let (entered, seen) = mpsc::channel();
+        let (release, wait) = mpsc::channel();
+        let first_lane = lane.clone();
+        let first = std::thread::spawn(move || {
+            first_lane.request(
+                || false,
+                || Ok(1000),
+                |_, _| {
+                    entered.send(()).unwrap();
+                    wait.recv().unwrap();
+                    Ok(())
+                },
+            )
+        });
+        seen.recv().unwrap();
+        let next_lane = lane.clone();
+        let next_cancel = cancel.clone();
+        let (checked, observed_check) = mpsc::channel();
+        let second = std::thread::spawn(move || {
+            let first_check = AtomicBool::new(true);
+            next_lane.request(
+                || {
+                    let stopped = next_cancel.load(Ordering::SeqCst);
+                    if first_check.swap(false, Ordering::SeqCst) {
+                        checked.send(()).unwrap();
+                    }
+                    stopped
+                },
+                || Ok(1000),
+                |_, _| panic!("canceled waiter must not send"),
+            )
+        });
+        observed_check.recv().unwrap(); // cancellation follows the initial false snapshot
+        cancel.store(true, Ordering::SeqCst);
+        release.send(()).unwrap();
+        first.join().unwrap().unwrap();
+        assert_eq!(second.join().unwrap(), Err::<(), _>("revoked"));
+        assert_eq!(lane.0.lock().unwrap().issued, 1000);
+    }
+    #[test]
+    fn native_request_time_refuses_clock_rollback_exhaustion_and_unbounded_future_stamps() {
+        let lane = LeaseLane::default();
+        lane.request(|| false, || Ok(1000), |_, _| Ok(())).unwrap();
+        assert_eq!(
+            lane.request(|| false, || Ok(999), |_, _| Ok(())),
+            Err("clock-not-increasing")
+        );
+        lane.0.lock().unwrap().issued = 2000;
+        assert_eq!(
+            lane.request(|| false, || Ok(1000), |_, _| Ok(())),
+            Err("clock-not-increasing")
+        );
+        assert_eq!(
+            lane.request(|| false, || Ok(8_640_000_000_000_001), |_, _| Ok(())),
+            Err("clock-not-increasing")
+        );
+    }
     #[test]
     fn real_current_user_dpapi_persistence_and_corruption_refusal() {
         let dir = std::env::temp_dir().join(format!(

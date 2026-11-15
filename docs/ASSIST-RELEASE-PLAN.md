@@ -14,6 +14,8 @@ input/resources stay disabled. [Fresh acquisition](evidence/2026-11-15-fresh-con
 now uses joined cleanup, a new native generation and native request-bound
 cancellation. Next: native resources,
 including retained transfer lifetimes and truthful cleanup/progress events.
+[Endpoint-wide lease ordering](evidence/2026-11-15-endpoint-lease-order.md) removes
+the per-session request timestamp collision before resource bootstrap.
 Cooperative delivery remains blocked independently; unrelated engineering must
 continue. Production switches and release approvals are unchanged.
 

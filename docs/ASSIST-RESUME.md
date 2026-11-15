@@ -24,6 +24,10 @@ from stopping a successor. Partial per-capability consent completes before peer
 setup; a late acknowledgement does not reset that peer. This is unit/process
 integration, not WIN-L02 physical acceptance.
 
+The [endpoint-wide lease correction](evidence/2026-11-15-endpoint-lease-order.md)
+shares authenticated request ordering across the same launch's session pollers,
+preparing for resource-only bootstrap without service replay collisions.
+
 Next: resource integration. Retained resource lifetimes,
 resource consent/channels and cleanup events are still unfinished; all related
 flags remain false. Do not describe strict resource refusal as a working transfer.
