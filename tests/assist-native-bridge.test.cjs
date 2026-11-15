@@ -14,6 +14,54 @@ const status = {
   capture: { operation: null, state: "idle", trackSid: null },
   controller: { session: null, state: "idle" },
 };
+const extProtocol = 'palisade.assist.native.ext';
+function features(version) {
+  const keys = version === 1 ? ['cleanupEvents', 'clipboardText', 'files'] :
+    ['cleanupEvents', 'clipboardImage', 'clipboardSync', 'clipboardText', 'dropSurface', 'fileResume', 'files', 'input2', 'multiFile', ...(version === 3 ? ['localYield'] : [])];
+  return Object.fromEntries(keys.map(key => [key, false]));
+}
+test('extension negotiation uses only an offered version and preserves independent request namespaces', async () => {
+  const t = setup(); await t.connect(DOC); await t.request('hello', { versions: [1] });
+  const waiting = deferred();
+  t.dispatch(async request => request.op === 'ext.hello' ? { version: 3, features: features(3) } :
+    request.op === 'status' ? waiting.promise : {});
+  const native = t.request('status', {}, 'same_request_01');
+  const negotiated = await t.request('ext.hello', { p: extProtocol, versions: [3, 2, 1] }, 'same_request_01');
+  assert.equal(negotiated.p, extProtocol); assert.equal(negotiated.v, 1);
+  assert.equal(negotiated.result.version, 3); assert.equal(negotiated.result.features.localYield, false);
+  waiting.resolve(status); assert.equal((await native).ok, true);
+  assert.equal((await t.request('resource.send-image', { p: extProtocol, v: 2, session: 'session_01', grantId: 'grant_0001' })).error, 'unsupported-version');
+  t.bridge.dispose();
+});
+test('extension backend cannot select an unoffered version or change its negotiated version', async () => {
+  for (const chosen of [2, 4]) {
+    const t = setup(); await t.connect(DOC); await t.request('hello', { versions: [1] });
+    t.dispatch(async () => ({ version: chosen, features: features(chosen) }));
+    const result = await t.request('ext.hello', { p: extProtocol, versions: [3, 1] });
+    assert.equal(result.ok, false); assert(t.stops() > 0); t.bridge.dispose();
+  }
+});
+test('resource safety requests retain capacity without canceling an input grant or peer', async () => {
+  const t = setup(); await t.connect(DOC); await t.request('hello', { versions: [1] });
+  t.dispatch(async request => request.op === 'ext.hello' ? { version: 2, features: features(2) } : {});
+  await t.request('ext.hello', { p: extProtocol, versions: [2, 1] });
+  const waits = [], observed = [];
+  t.dispatch(async (request, scope) => {
+    observed.push({ request, scope });
+    if (request.op === 'resource.cancel' || (request.op === 'resource.sync' && request.state === 'off')) return {};
+    const pending = deferred(); waits.push({ pending, request }); return pending.promise;
+  });
+  const calls = Array.from({ length: 8 }, (_, index) => t.request('grant.offer', { session: 'session_0' + index, grant: '{}' }));
+  await turn();
+  const cancel = await t.request('resource.cancel', { p: extProtocol, v: 2, session: 'session_00', transfer: 'transfer_001' });
+  assert.equal(cancel.ok, true); assert.equal(observed[0].scope.signal.aborted, false);
+  const off = await t.request('resource.sync', { p: extProtocol, v: 2, session: 'session_00', grantId: 'grant_0001', state: 'off' });
+  assert.equal(off.ok, true); assert.equal(observed[0].scope.signal.aborted, false);
+  assert.equal(t.stops(), 0);
+  for (const { pending } of waits) pending.resolve({ signature: 'A'.repeat(86) });
+  assert((await Promise.all(calls)).every(result => result.ok));
+  t.bridge.dispose();
+});
 test('bridge peer.close during a pending grant fences only that session through the actual runtime adapter', async () => {
   const grants = new Map(), requests = [];
   let closed = 0;
@@ -118,6 +166,7 @@ function setup(options = {}) {
           ? require("../src/security-policy.cjs")
           : name === "./native-protocol.cjs"
             ? contract
+            : name === './native-extension.cjs' ? require('../src/assist/native-extension.cjs')
             : require(name),
   };
   vm.runInNewContext(

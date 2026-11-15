@@ -57,6 +57,11 @@ pub struct Request {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
+    Extension {
+        document: u32,
+        version: u8,
+        operation: crate::extension::Operation,
+    },
     Peer {
         document: u32,
         operation: crate::peer::Operation,
@@ -153,7 +158,9 @@ impl Ingress {
                     self.closed = true;
                     signals.revoke();
                 }
-                Command::Native { .. } | Command::Peer { .. } if self.version != 3 => {
+                Command::Native { .. } | Command::Peer { .. } | Command::Extension { .. }
+                    if self.version != 3 =>
+                {
                     return Err("operation-unavailable");
                 }
                 Command::CaptureSetup { .. }
@@ -202,6 +209,10 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    Extension {
+        document: u32,
+        answer: crate::extension::Answer,
+    },
     Peer {
         document: u32,
         answer: crate::endpoint::Answer,

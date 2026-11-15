@@ -8,7 +8,10 @@ Native readiness, source binding, ingress age and urgent cleanup remain enforced
 This is an implementation checkpoint with isolated/process evidence. It does not
 qualify real input, enrollment or any of the 30 real cross-client cases.
 
-Continue with Profile 2 negotiation, fresh acquisition and native resources.
+The [extension continuation](evidence/2026-11-14-native-extension.md) adds frozen
+v1/v2/v3 negotiation and immutable qualification-only Profile 2 selection. Public
+input/resources stay disabled. Next: fresh acquisition and native resources,
+including retained transfer lifetimes and truthful cleanup/progress events.
 Cooperative delivery remains blocked independently; unrelated engineering must
 continue. Production switches and release approvals are unchanged.
 

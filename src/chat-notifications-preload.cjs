@@ -27,9 +27,11 @@ const nativeOriginArgument = typeof process !== 'undefined' && Array.isArray(pro
 const nativeOrigin = nativeOriginArgument ? nativeOriginArgument.slice('--palisade-assist-native-origin='.length) : 'https://palisade.onyxops.org';
 if (typeof process !== 'undefined' && process.isMainFrame && location.origin === nativeOrigin && Array.isArray(process.argv) && process.argv.includes('--palisade-assist-native')) {
   const documentId = crypto.randomUUID(), listeners = new Set(), calls = new Set();
-  let alive = true, lastSequence = 0;
+  let alive = true;
+  const lastSequences = new Map();
   const connect = 'palisade:assist-native-connect', request = 'palisade:assist-native-request', expired = 'palisade:assist-native-expired', probe = 'palisade:assist-native-probe', witness = 'palisade:assist-native-witness', eventChannel = 'palisade:assist-native-event';
   const nativeProtocol = 'palisade.assist.native';
+  const extensionProtocol = 'palisade.assist.native.ext';
   const answerProbe = (_event, value) => {
     if (alive && value && typeof value.challenge === 'string' && /^[a-f0-9]{48}$/.test(value.challenge)) ipcRenderer.send(witness, { document: documentId, challenge: value.challenge });
   };
@@ -40,8 +42,10 @@ if (typeof process !== 'undefined' && process.isMainFrame && location.origin ===
     const text = envelope.text;
     if (!alive || typeof text !== 'string' || text.length > 32768) return;
     let value; try { value = JSON.parse(text); } catch { return; }
-    if (value?.p !== nativeProtocol || value.v !== 1 || !['peer.candidate', 'capture.status', 'lifecycle'].includes(value.event) || !Number.isSafeInteger(value.seq) || value.seq <= lastSequence) return;
-    lastSequence = value.seq;
+    const native = value?.p === nativeProtocol && value.v === 1 && ['peer.candidate', 'capture.status', 'lifecycle'].includes(value.event);
+    const extension = value?.p === extensionProtocol && [1, 2, 3].includes(value.v) && ['resource.status', 'cleanup', 'sync.status', 'input.yield'].includes(value.event);
+    if ((!native && !extension) || !Number.isSafeInteger(value.seq) || value.seq <= (lastSequences.get(value.p) || 0)) return;
+    lastSequences.set(value.p, value.seq);
     for (const listener of listeners) { try { listener(text); } catch {} }
   };
   ipcRenderer.on(eventChannel, receive);
@@ -49,7 +53,9 @@ if (typeof process !== 'undefined' && process.isMainFrame && location.origin ===
     request: async text => {
       if (!alive || typeof text !== 'string' || !text.length || text.length > 32768) throw Error('Invalid native message');
       let value; try { value = JSON.parse(text); } catch { throw Error('Invalid native message'); }
-      const safety = ['stop', 'capture.stop', 'capture.cancel', 'peer.close'].includes(value?.op);
+      if (![nativeProtocol, extensionProtocol].includes(value?.p)) throw Error('Invalid native message');
+      const safety = value.p === nativeProtocol ? ['stop', 'capture.stop', 'capture.cancel', 'peer.close'].includes(value?.op) :
+        value.op === 'resource.cancel' || (value.op === 'resource.sync' && value.state === 'off');
       if (!/^[A-Za-z0-9_-]{8,64}$/.test(value?.id || '') ||
           (!safety && [...calls].filter(call => !call.safety).length >= 8) ||
           (safety && value.op !== 'stop' && calls.size >= 12) ||
@@ -66,7 +72,7 @@ if (typeof process !== 'undefined' && process.isMainFrame && location.origin ===
           })(),
           new Promise((_resolve, reject) => { call.reject = reject; timer = call.timer = setTimeout(() => {
             call.done = true;
-            ipcRenderer.send(expired, { document: documentId, id: value.id });
+            ipcRenderer.send(expired, { document: documentId, id: value.id, protocol: value.p });
             reject(Error('Native Assist timeout'));
           }, 120000); }),
         ]);

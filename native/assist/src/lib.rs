@@ -7,6 +7,7 @@ pub mod cooperative;
 pub mod custody;
 pub mod endpoint;
 pub mod executor;
+pub mod extension;
 pub mod framing;
 pub mod grant;
 pub mod guard;

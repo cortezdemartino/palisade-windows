@@ -187,7 +187,13 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
     if (document === null) document = scope.generation;
     if (document !== scope.generation) { await stopAll(); throw new NativeBridgeError('stale-operation'); }
     const captureRequest = request.op.startsWith('capture.');
+    const extensionRequest = request.p === 'palisade.assist.native.ext';
     const cancel = () => {
+      if (extensionRequest && request.op !== 'ext.hello') {
+        // No resource broker is admitted yet. Resource cancellation must never
+        // fall through to input/session revocation when its dispatch is added.
+        return;
+      }
       if (captureRequest) { void fenceSource(request.operation).catch(() => {}); }
       else if (['grant.offer', 'peer.offer', 'peer.candidate', 'peer.close'].includes(request.op)) {
         void fenceInput(request.session).catch(() => {});
@@ -199,6 +205,7 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       const channel = await opening;
       await configured;
       if (ended || failed || scope.signal.aborted) throw new NativeBridgeError('stopped');
+      if (extensionRequest) return await channel.extension(request, scope.generation);
       if (request.op === 'enroll.key') report('Awaiting local trust confirmation');
       if (request.op === 'enroll.prove') report('Awaiting native consent');
       if (request.op === 'peer.close') { await fenceInput(request.session); return {}; }

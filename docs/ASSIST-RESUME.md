@@ -10,7 +10,15 @@ readiness precedes packet admission. A bounded peer lane bypasses blocking dialo
 source cancellation and terminal cleanup retain exact ownership. Actual DTLS
 fixtures use a fake sink, not native input acceptance. Public switches stay off.
 
-Next: Profile 2/extension negotiation, fresh grants and resource integration.
+The [extension/Profile 2 continuation](evidence/2026-11-14-native-extension.md)
+connects separate v1/v2/v3 negotiation through the same bridge and native IPC.
+Public/default/Probe input2 remains false/Legacy; only an independently pinned,
+explicit native-input qualification build can declare/select Profile 2.
+The peer checkpoint at `fc2c6f013a2214421110686721c49a47f1751e57` passed exact-SHA CI.
+
+Next: fresh grants and resource integration. Retained resource lifetimes,
+resource consent/channels and cleanup events are still unfinished; all related
+flags remain false. Do not describe strict resource refusal as a working transfer.
 Companion main inspected read-only at `060a8afa320163de14c02f75b048b89abaddbf27`;
 frozen sources/fixtures/30 cases remain unchanged. Real-service/device acceptance
 is still Not Verified. Cooperative physical arbitration remains Blocked. No

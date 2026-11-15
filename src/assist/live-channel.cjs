@@ -7,6 +7,7 @@ const { TextDecoder } = require('node:util');
 const { verifyGuardian } = require('./guardian.cjs');
 const nativeProtocol = require('./native-protocol.cjs');
 const privatePeer = require('./private-peer.cjs');
+const extension = require('./native-extension.cjs');
 const PROTOCOL = 'palisade.assist.live', MAX_FRAME = 65_536, CAPACITY = 8;
 const decoder = new TextDecoder('utf-8', { fatal: true });
 const exact = (v, fields) => v && typeof v === 'object' && !Array.isArray(v) &&
@@ -73,7 +74,7 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     const id = sequence++, prefix = Buffer.alloc(4); prefix.writeUInt32LE(bytes.length);
     let resolve, reject;
     const answer = new Promise((done, fail) => { resolve = done; reject = fail; });
-    const entry = { type: command.type, safety, document: command.document, operation: command.operation, release: command.release, resolve, reject, done: false, timer: null };
+    const entry = { type: command.type, safety, document: command.document, version: command.version, operation: command.operation, release: command.release, resolve, reject, done: false, timer: null };
     pending.set(id, entry);
     if (timeoutMs) entry.timer = setTimeout(() => {
       if (entry.done) return;
@@ -85,6 +86,18 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'extension') {
+      if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'extension' || result.document !== entry.document) return false;
+      const answer = result.answer;
+      if (!exact(answer, answer?.outcome === 'ok' ? ['outcome', 'result'] : ['outcome', 'code'])) return false;
+      try {
+        const parsed = extension.parseExtResponse({ p: extension.EXT_PROTOCOL, v: entry.operation.op === 'ext.hello' ? 1 : entry.version,
+          id: 'private_reply', ...(answer.outcome === 'ok' ? { ok: true, result: answer.result } : { ok: false, error: answer.code }) },
+          entry.operation.op, entry.operation.op === 'ext.hello' ? 3 : entry.version);
+        return answer.outcome === 'error' || (answer.outcome === 'ok' &&
+          (entry.operation.op !== 'ext.hello' || entry.operation.versions.includes(parsed.result.version)));
+      } catch { return false; }
+    }
     if (endpoint && entry.type === 'peer') return exact(result, ['type', 'document', 'answer']) &&
       result.type === 'peer' && result.document === entry.document && privatePeer.answer(result.answer, entry.operation.action);
     if (endpoint && entry.type === 'capture-setup') return exact(result, ['type', 'enabled']) && result.type === entry.type && typeof result.enabled === 'boolean';
@@ -200,6 +213,18 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       } catch (error) { return Promise.reject(error); }
     };
     if (endpoint) {
+      api.extension = (request, document) => {
+        try {
+          const canonical = extension.parseExtRequest(request, request.v);
+          if (!Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked) throw unavailable();
+          const { p, v, id, ...operation } = canonical;
+          return send({ type: 'extension', document, version: v, operation }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs,
+            extension.isExtSafety(operation.op, operation)).then(reply => {
+              if (reply.answer.outcome === 'error') throw new extension.ExtBridgeError(reply.answer.code);
+              return reply.answer.result;
+            });
+        } catch (error) { return Promise.reject(error); }
+      };
       api.peer = (operation, document) => {
         if (!privatePeer.operation(operation) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
           return Promise.reject(unavailable());

@@ -11,6 +11,25 @@ const binary = process.env.PALISADE_ASSIST_TEST_BINARY || path.resolve('.assist/
 const manifestFile = process.env.PALISADE_ASSIST_TEST_MANIFEST || path.resolve('src/assist/guardian-integrity.json');
 const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: randomBytes(32).toString('base64url') };
 const canonical = (op, fields = {}) => ({ p: 'palisade.assist.native', v: 1, id: randomBytes(12).toString('base64url'), op, ...fields });
+const extension = (op, version, fields = {}) => ({ p: 'palisade.assist.native.ext', v: version, id: randomBytes(12).toString('base64url'), op, ...fields });
+
+test('actual native extension negotiates frozen versions and refuses resources independently under blocked ordinary work', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await channel.request(canonical('hello', { versions: [1] }), 4);
+    const result = await channel.extension(extension('ext.hello', 1, { versions: [3, 2, 1] }), 4);
+    assert.equal(result.version, 3); assert.equal(result.features.input2, false); assert.equal(result.features.localYield, false);
+    assert(Object.values(result.features).every(value => value === false));
+    await assert.rejects(channel.extension(extension('ext.hello', 1, { versions: [2, 1] }), 4), { code: 'unsupported-version' });
+    await assert.rejects(channel.extension(extension('resource.send-text', 3, { session: 'session_001', grantId: 'grant_0001' }), 4), { code: 'unsupported' });
+    const ordinary = Array.from({ length: 8 }, () => channel.probeWait(10000).catch(error => error));
+    await assert.rejects(channel.extension(extension('resource.cancel', 3, { session: 'session_001', transfer: 'transfer_001' }), 4), { code: 'not-active' });
+    await assert.rejects(channel.extension(extension('resource.sync', 3, { session: 'session_001', grantId: 'grant_0001', state: 'off' }), 4), { code: 'not-active' });
+    await channel.close(); await Promise.all(ordinary);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
 test('actual endpoint refuses capture activation in probes and reserves source/peer Stop under a full ordinary budget', async () => {
   const lifecycle = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });

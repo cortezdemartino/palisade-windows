@@ -4,6 +4,7 @@ const { randomBytes } = require("node:crypto");
 const { performance } = require("node:perf_hooks");
 const { isPalisadeUrl, PALISADE_ORIGIN } = require("../security-policy.cjs");
 const protocol = require("./native-protocol.cjs");
+const extension = require("./native-extension.cjs");
 const CHANNELS = Object.freeze({
   connect: "palisade:assist-native-connect",
   request: "palisade:assist-native-request",
@@ -15,6 +16,24 @@ const CHANNELS = Object.freeze({
 const UUID = /^[a-f0-9-]{36}$/;
 const ID = /^[A-Za-z0-9_-]{8,64}$/;
 const SAFETY = new Set(["capture.cancel", "capture.stop", "peer.close"]);
+const isExtension = op => typeof op === 'string' && (op === 'ext.hello' || op.startsWith('resource.'));
+const isSafety = request => SAFETY.has(request.op) || (isExtension(request.op) && extension.isExtSafety(request.op, request));
+const keyOf = request => (isExtension(request.op) ? 'ext:' : 'native:') + request.id;
+function cancels(request, other) {
+  if (request.operation) return other.operation === request.operation;
+  if (request.session !== other.session) return false;
+  if (request.op === 'resource.cancel') return isExtension(other.op) && other.transfer === request.transfer;
+  if (request.op === 'resource.sync') return other.op === 'resource.sync' && other.grantId === request.grantId;
+  if (request.op === 'peer.close') {
+    if (isExtension(other.op)) return false;
+    if (other.op === 'grant.offer') {
+      try { if (!['control_mouse', 'control_keyboard'].includes(JSON.parse(other.grant).grant.capability)) return false; }
+      catch {} // Malformed offers have no resource authority to preserve.
+    }
+    return true;
+  }
+  return false;
+}
 const exact = (value, fields) =>
   value &&
   typeof value === "object" &&
@@ -44,7 +63,9 @@ function installNativeBridge(
     generation = 0,
     document = null,
     negotiated = false,
+    extensionVersion = null,
     sequence = 0,
+    extensionSequence = 0,
     rateTime = now(),
     tokens = 64,
     shutdown = null,
@@ -67,28 +88,33 @@ function installNativeBridge(
     event.senderFrame === contents.mainFrame &&
     isPalisadeUrl(contents.getURL()) &&
     isPalisadeUrl(event.senderFrame?.url);
-  const reply = (id, op, result, error) => {
+  const reply = (id, op, result, error, version = extensionVersion || 1, offered = null) => {
+    const ext = isExtension(op);
+    const envelope = { p: ext ? extension.EXT_PROTOCOL : protocol.NATIVE_PROTOCOL, v: ext && op !== 'ext.hello' ? version : 1, id };
     const text = JSON.stringify(
       error
-        ? { p: protocol.NATIVE_PROTOCOL, v: 1, id, ok: false, error }
-        : { p: protocol.NATIVE_PROTOCOL, v: 1, id, ok: true, result },
+        ? { ...envelope, ok: false, error }
+        : { ...envelope, ok: true, result },
     );
-    protocol.parseResponse(text, op);
+    if (ext) {
+      extension.parseExtResponse(text, op, op === 'ext.hello' ? 3 : version);
+      if (!error && op === 'ext.hello' && offered && !offered.includes(result.version)) throw Error('Unoffered extension version');
+    } else protocol.parseResponse(text, op);
     return text;
   };
-  const failure = (id, op, error) => reply(id, op, null, error);
+  const failure = (id, op, error, version) => reply(id, op, null, error, version);
   function settle(entry, error, result) {
     if (entry.done) return;
     entry.done = true;
     clearTimeout(entry.timer);
-    pending.delete(entry.request.id);
+    pending.delete(keyOf(entry.request));
     if (error) {
       entry.abort.abort(error);
       if (lifetimes.get(lifetimeKey(entry.request)) === entry)
         lifetimes.delete(lifetimeKey(entry.request));
     }
     try {
-      entry.resolve(reply(entry.request.id, entry.request.op, result, error));
+      entry.resolve(reply(entry.request.id, entry.request.op, result, error, entry.request.v, entry.request.versions));
     } catch {
       entry.resolve(failure(entry.request.id, entry.request.op, "internal"));
     }
@@ -96,6 +122,8 @@ function installNativeBridge(
   function invalidate(reason) {
     generation++;
     negotiated = false;
+    extensionVersion = null;
+    extensionSequence = 0;
     document = null;
     seen.clear();
     for (const probe of probes.values()) {
@@ -168,7 +196,9 @@ function installNativeBridge(
       entry.request.op === "grant.offer" &&
       payload?.event === "lifecycle" &&
       payload.session === entry.request.session;
-    if (entry.request.op !== "stop" && !capture && !peer && !consent)
+    const resource = isExtension(entry.request.op) && entry.request.session && payload?.session === entry.request.session &&
+      ['resource.status', 'sync.status'].includes(payload?.event);
+    if (entry.request.op !== "stop" && !capture && !peer && !consent && !resource)
       return false;
     const terminal = ["stopped", "cancelled", "failed"].includes(
       payload?.state,
@@ -186,13 +216,15 @@ function installNativeBridge(
     )
       return false;
     try {
+      const ext = isExtension(entry.request.op);
       const message = JSON.stringify({
         ...payload,
-        p: protocol.NATIVE_PROTOCOL,
-        v: 1,
-        seq: ++sequence,
+        p: ext ? extension.EXT_PROTOCOL : protocol.NATIVE_PROTOCOL,
+        v: ext ? entry.request.v : 1,
+        seq: ext ? ++extensionSequence : ++sequence,
       });
-      protocol.parseEvent(message);
+      if (ext) extension.parseExtEvent(message, entry.request.v);
+      else protocol.parseEvent(message);
       contents.send(CHANNELS.event, {
         document: entry.document,
         text: message,
@@ -262,11 +294,12 @@ function installNativeBridge(
   const expired = (event, message) => {
     if (
       !trusted(event) ||
-      !exact(message, ["document", "id"]) ||
+      (!exact(message, ["document", "id"]) && !exact(message, ["document", "id", "protocol"])) ||
       document !== message.document
     )
       return;
-    const entry = pending.get(message.id);
+    if (message.protocol !== undefined && ![protocol.NATIVE_PROTOCOL, extension.EXT_PROTOCOL].includes(message.protocol)) return;
+    const entry = pending.get((message.protocol === extension.EXT_PROTOCOL ? 'ext:' : 'native:') + message.id);
     if (entry && entry.document === message.document) settle(entry, "timeout");
   };
   ipcMain.on(CHANNELS.expired, expired);
@@ -284,24 +317,26 @@ function installNativeBridge(
     )
       throw Error("Invalid native message");
     let request;
+    const ext = extension.protocolOf(message.text) === 'ext';
     try {
-      request = protocol.parseRequest(message.text);
+      request = ext ? extension.parseExtRequest(message.text, extensionVersion || 1) : protocol.parseRequest(message.text);
     } catch (error) {
-      let id;
+      let id, malformed;
       try {
-        id = JSON.parse(message.text).id;
+        malformed = JSON.parse(message.text); id = malformed.id;
       } catch {}
       if (!ID.test(id || "")) throw Error("Invalid native message");
       return failure(
         id,
-        "status",
-        protocol.NATIVE_ERRORS.includes(error.code)
+        ext && isExtension(malformed?.op) ? malformed.op : ext ? 'ext.hello' : "status",
+        (ext ? extension.EXT_ERRORS : protocol.NATIVE_ERRORS).includes(error.code)
           ? error.code
-          : "invalid-message",
+          : "invalid-message", extensionVersion || 1,
       );
     }
     const id = request.id;
-    if (pending.has(id) || seen.has(id))
+    const requestKey = keyOf(request);
+    if (pending.has(requestKey) || seen.has(requestKey))
       return failure(id, request.op, "stale-operation");
     if (request.op === "enroll.key" && request.origin !== origin)
       return failure(id, request.op, "issuer-mismatch");
@@ -309,12 +344,10 @@ function installNativeBridge(
       end("local-stop", true);
       return reply(id, request.op, {});
     }
-    if (SAFETY.has(request.op)) {
+    if (isSafety(request)) {
       for (const [key, entry] of lifetimes) {
         if (
-          (request.operation &&
-            entry.request.operation === request.operation) ||
-          (request.session && entry.request.session === request.session)
+          cancels(request, entry.request)
         ) {
           entry.abort.abort("cancelled");
           lifetimes.delete(key);
@@ -322,14 +355,12 @@ function installNativeBridge(
       }
       for (const entry of [...pending.values()]) {
         if (
-          (request.operation &&
-            entry.request.operation === request.operation) ||
-          (request.session && entry.request.session === request.session)
+          cancels(request, entry.request)
         )
           settle(entry, "cancelled");
       }
       if (
-        [...pending.values()].filter((entry) => SAFETY.has(entry.request.op))
+        [...pending.values()].filter((entry) => isSafety(entry.request))
           .length >= 4
       )
         return failure(id, request.op, "busy");
@@ -340,7 +371,7 @@ function installNativeBridge(
       rateTime = now();
       if (
         tokens < 1 ||
-        [...pending.values()].filter((entry) => !SAFETY.has(entry.request.op))
+        [...pending.values()].filter((entry) => !isSafety(entry.request))
           .length >= protocol.NATIVE_LIMITS.outstanding
       )
         return failure(id, request.op, "busy");
@@ -348,15 +379,17 @@ function installNativeBridge(
     }
     if (request.op === "hello" && !request.versions.includes(1))
       return failure(id, request.op, "unsupported-version");
-    if (request.op !== "hello" && !SAFETY.has(request.op) && !negotiated)
+    if (request.op !== "hello" && !isSafety(request) && !negotiated)
       return failure(id, request.op, "unsupported-version");
+    if (ext && request.op !== 'ext.hello' && (!extensionVersion || request.v !== extensionVersion))
+      return failure(id, request.op, 'unsupported-version', request.v);
     const key = lifetimeKey(request);
     if (key && lifetimes.has(key))
       return failure(id, request.op, "stale-operation");
     if (key && lifetimes.size >= 16) return failure(id, request.op, "busy");
     // Bounded replay memory; IDs are correlation only, never authority. Native
     // grants/nonces/generations enforce security across the entire session.
-    seen.set(id, now());
+    seen.set(requestKey, now());
     while (seen.size > 4096) seen.delete(seen.keys().next().value);
     return new Promise((resolve) => {
       const entry = {
@@ -370,7 +403,7 @@ function installNativeBridge(
       };
       entry.timer = setTimeout(() => settle(entry, "timeout"), timeoutMs);
       entry.timer.unref?.();
-      pending.set(id, entry);
+      pending.set(requestKey, entry);
       if (key) {
         lifetimes.set(key, entry);
         owners.set(key, entry);
@@ -398,17 +431,21 @@ function installNativeBridge(
           (result) => {
             if (!current(entry)) return;
             try {
-              reply(id, request.op, result);
+              reply(id, request.op, result, null, request.v, request.versions);
             } catch {
               end("error");
               return;
             }
             if (request.op === "hello") negotiated = true;
+            if (request.op === 'ext.hello') {
+              if (extensionVersion && extensionVersion !== result.version) { end('error'); return; }
+              extensionVersion = result.version;
+            }
             settle(entry, null, result);
           },
           (error) => {
             if (!current(entry)) return;
-            if (!protocol.NATIVE_ERRORS.includes(error?.code)) {
+            if (!(ext ? extension.EXT_ERRORS : protocol.NATIVE_ERRORS).includes(error?.code)) {
               end("error");
               return;
             }

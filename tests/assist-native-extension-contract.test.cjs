@@ -22,6 +22,17 @@ const control = import(dataUrl(fs.readFileSync(
   path.join(root, "assist-control-profile2.web.ts"), "utf8"
 )));
 const errorCode = (error, code) => error && error.code === code;
+test('trusted-main extension port matches frozen v1 and v2 fixtures without runtime TypeScript', () => {
+  const api = require('../src/assist/native-extension.cjs');
+  for (const [version, fixture] of [[1, fixtures], [2, require('./fixtures/assist-native-ext-v2.json')]]) {
+    for (const m of fixture.requests.valid) assert.deepEqual(api.parseExtRequest(JSON.stringify(m), version), m);
+    for (const r of fixture.responses.valid) assert.deepEqual(api.parseExtResponse(JSON.stringify(r.message), r.op, version), r.message);
+    for (const m of fixture.events.valid) assert.deepEqual(api.parseExtEvent(JSON.stringify(m), version), m);
+    for (const r of fixture.requests.invalid) assert.throws(() => api.parseExtRequest(JSON.stringify(r.message), r.version || version), error => errorCode(error, r.error), r.name);
+    for (const r of fixture.responses.invalid) assert.throws(() => api.parseExtResponse(JSON.stringify(r.message), r.op, version), error => errorCode(error, r.error), r.name);
+    for (const r of fixture.events.invalid) assert.throws(() => api.parseExtEvent(JSON.stringify(r.message), version), error => errorCode(error, r.error), r.name);
+  }
+});
 
 test("canonical native-extension source and fixtures retain exact web Git blob provenance", () => {
   assert.equal(provenance.commit, "82ac7de4ec2bbd5cc2fd48f3d15dbde6ea5fd375");

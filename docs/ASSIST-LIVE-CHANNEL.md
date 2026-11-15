@@ -52,7 +52,11 @@ adds private typed prepare/seal/observed/check/packet messages. Native preparati
 is input-grant/consent/lease-bound and emits only a scoped connection witness.
 Certificate observation is from the isolated gateway; readiness is native-owned.
 The private ingress timestamp is from trusted main, never page JSON. Profile 2
-negotiation and resource execution remain unfinished. The original
+negotiation is now routed through typed private `extension` requests. Its
+separate safety requests bypass ordinary dialogs, with native version/document
+validation. Resources remain unavailable, and cleanup/localYield flags remain
+false. Profile 2 is fixed only by the native declaration in an explicit pinned
+qualification build; extension version alone grants nothing. The original
 version 1/2 restrictions below remain in force.
 
 ## Direct native stop checks

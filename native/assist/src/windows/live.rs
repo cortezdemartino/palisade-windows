@@ -225,6 +225,25 @@ fn run_inner(
                     continue;
                 }
                 match &request.command {
+                    Command::Extension {
+                        document,
+                        version,
+                        operation,
+                    } if operation.safety() => {
+                        let answer = safety
+                            .as_ref()
+                            .ok_or("endpoint-unavailable")?
+                            .extension_safety(*document, *version, operation);
+                        emit(
+                            &read_output,
+                            request.sequence,
+                            Reply::Extension {
+                                document: *document,
+                                answer,
+                            },
+                            &read_signals,
+                        )?;
+                    }
                     Command::Peer { .. } => {
                         peer_send.try_send(request).map_err(|_| "peer-queue-full")?
                     }
@@ -348,6 +367,22 @@ fn run_inner(
                 continue;
             }
             match request.command {
+                Command::Extension {
+                    document,
+                    version,
+                    operation,
+                } => {
+                    let answer = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-unavailable")?
+                        .extension(document, version, operation);
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::Extension { document, answer },
+                        &signals,
+                    )?;
+                }
                 Command::CaptureSetup { enabled } => {
                     let enabled = native_endpoint
                         .as_mut()

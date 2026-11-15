@@ -16,6 +16,7 @@ use std::{
 };
 #[derive(Default)]
 struct SafetyState {
+    extension: Option<(u32, u8)>,
     sessions: BTreeMap<(u32, String), super::runtime::RuntimeRevoker>,
     closed: BTreeSet<(u32, String)>,
     peers: BTreeMap<(u32, String), (super::runtime::PeerRuntime, String)>,
@@ -23,6 +24,26 @@ struct SafetyState {
 #[derive(Clone, Default)]
 pub(crate) struct Safety(Arc<Mutex<SafetyState>>);
 impl Safety {
+    pub(crate) fn extension_safety(
+        &self,
+        document: u32,
+        version: u8,
+        operation: &crate::extension::Operation,
+    ) -> crate::extension::Answer {
+        use crate::extension::{Answer, Error};
+        Answer::from_result((|| {
+            operation.validate(version)?;
+            if !operation.safety() {
+                return Err(Error::InvalidMessage);
+            }
+            if self.0.lock().map_err(|_| Error::Internal)?.extension != Some((document, version)) {
+                return Err(Error::UnsupportedVersion);
+            }
+            // Resource execution remains unavailable until the native brokers
+            // and bound encrypted channels are connected. No activity is implied.
+            Err(Error::NotActive)
+        })())
+    }
     fn attach_peer(
         &self,
         document: u32,
@@ -138,6 +159,7 @@ struct Session {
 }
 
 pub struct Endpoint {
+    extension_version: Option<u8>,
     document: Option<u32>,
     negotiated: bool,
     probe: bool,
@@ -158,6 +180,18 @@ pub struct Endpoint {
     cleanup_failed: bool,
 }
 impl Endpoint {
+    fn qualified_input(&self) -> bool {
+        !self.probe
+            && cfg!(feature = "native-input")
+            && crate::qualification::namespace().ok().flatten().is_some()
+    }
+    fn input_profile(&self) -> super::runtime::InputProfile {
+        if self.qualified_input() && self.extension_version.is_some_and(|v| v >= 2) {
+            super::runtime::InputProfile::Profile2
+        } else {
+            super::runtime::InputProfile::Legacy
+        }
+    }
     pub fn new(probe: bool, cancelled: Arc<AtomicBool>) -> Self {
         Self::with_custody(probe, cancelled, None)
     }
@@ -168,6 +202,7 @@ impl Endpoint {
     ) -> Self {
         let stop = cancelled.clone().into();
         Self {
+            extension_version: None,
             document: None,
             negotiated: false,
             probe,
@@ -244,6 +279,49 @@ impl Endpoint {
             Err(code) => Answer::error(code),
         }
     }
+    pub(crate) fn extension(
+        &mut self,
+        document: u32,
+        version: u8,
+        operation: crate::extension::Operation,
+    ) -> crate::extension::Answer {
+        use crate::extension::{Answer, Error, Operation as Ext};
+        Answer::from_result((|| {
+            self.live().map_err(|_| Error::Stopped)?;
+            if self.document != Some(document) || !self.negotiated {
+                return Err(Error::UnsupportedVersion);
+            }
+            operation.validate(version)?;
+            if let Ext::Hello { versions } = operation {
+                let chosen = match self.extension_version {
+                    Some(current) if versions.contains(&u64::from(current)) => current,
+                    Some(_) => return Err(Error::UnsupportedVersion),
+                    None if !self.sessions.is_empty() => return Err(Error::Busy),
+                    None => [3u8, 2, 1]
+                        .into_iter()
+                        .find(|v| versions.contains(&u64::from(*v)))
+                        .ok_or(Error::UnsupportedVersion)?,
+                };
+                self.extension_version = Some(chosen);
+                self.safety.0.lock().map_err(|_| Error::Internal)?.extension =
+                    Some((document, chosen));
+                let mut features =
+                    json!({"cleanupEvents":false,"clipboardText":false,"files":false});
+                if chosen >= 2 {
+                    features = json!({"cleanupEvents":false,"clipboardImage":false,"clipboardSync":false,"clipboardText":false,"dropSurface":false,"fileResume":false,"files":false,"input2":false,"multiFile":false});
+                    features["input2"] = self.qualified_input().into();
+                }
+                if chosen == 3 {
+                    features["localYield"] = false.into();
+                }
+                return Ok(json!({"version":chosen,"features":features}));
+            }
+            if self.extension_version != Some(version) {
+                return Err(Error::UnsupportedVersion);
+            }
+            Err(Error::Unsupported)
+        })())
+    }
     fn execute(&mut self, document: u32, operation: Operation) -> Result<serde_json::Value, Error> {
         self.live()?;
         match self.document {
@@ -271,7 +349,7 @@ impl Endpoint {
             // enrollment or replay tombstones. The private seal remains once-only.
             self.negotiated = true;
             return Ok(
-                json!({"version":1,"features":{"capture":self.capture.is_some(),"clipboard":false,"files":false,"input":false}}),
+                json!({"version":1,"features":{"capture":self.capture.is_some(),"clipboard":false,"files":false,"input":self.qualified_input()}}),
             );
         }
         if !self.negotiated {
@@ -471,7 +549,7 @@ impl Endpoint {
             if self.sessions.len() >= 16 {
                 return Err(Error::Busy);
             }
-            let runtime = super::runtime::StreamRuntime::begin(
+            let runtime = super::runtime::StreamRuntime::begin_with_profile(
                 EnrolledIdentity {
                     issuer,
                     identity: identity.clone(),
@@ -485,6 +563,7 @@ impl Endpoint {
                     custody: self.custody.as_ref().ok_or(Error::Stopped)?.clone(),
                     source: source.clone(),
                 },
+                self.input_profile(),
             )
             .map_err(map_runtime_error)?;
             self.safety
@@ -686,6 +765,76 @@ mod tests {
     use super::*;
     fn endpoint() -> Endpoint {
         Endpoint::new(true, Arc::new(AtomicBool::new(false)))
+    }
+    #[test]
+    fn native_extension_negotiation_is_offered_document_bound_and_never_advertises_unqualified_features()
+     {
+        use crate::extension::{Answer as ExtAnswer, Error as ExtError, Operation as Ext};
+        for offered in [vec![1], vec![2, 1], vec![3, 2, 1]] {
+            let mut e = endpoint();
+            e.dispatch(4, hello());
+            let expected = *offered.iter().max().unwrap();
+            let answer = e.extension(
+                4,
+                1,
+                Ext::Hello {
+                    versions: offered.clone(),
+                },
+            );
+            let ExtAnswer::Ok { result } = answer else {
+                panic!("extension negotiation refused");
+            };
+            assert_eq!(result["version"], expected);
+            assert!(
+                result["features"]
+                    .as_object()
+                    .unwrap()
+                    .values()
+                    .all(|v| *v == false)
+            );
+            assert!(matches!(
+                e.input_profile(),
+                super::super::runtime::InputProfile::Legacy
+            ));
+            assert!(matches!(
+                e.extension(4, 1, Ext::Hello { versions: vec![4] }),
+                ExtAnswer::Error {
+                    code: ExtError::UnsupportedVersion
+                }
+            ));
+            assert!(matches!(
+                e.extension(
+                    5,
+                    1,
+                    Ext::Hello {
+                        versions: offered.clone()
+                    }
+                ),
+                ExtAnswer::Error {
+                    code: ExtError::UnsupportedVersion
+                }
+            ));
+            assert!(matches!(
+                e.safety.extension_safety(
+                    4,
+                    expected as u8,
+                    &Ext::Cancel {
+                        session: "session_01".into(),
+                        transfer: "transfer_001".into()
+                    }
+                ),
+                ExtAnswer::Error {
+                    code: ExtError::NotActive
+                }
+            ));
+            e.revoke();
+            assert!(matches!(
+                e.extension(4, 1, Ext::Hello { versions: offered }),
+                ExtAnswer::Error {
+                    code: ExtError::Stopped
+                }
+            ));
+        }
     }
     #[test]
     fn urgent_peer_close_before_registration_is_retained_without_ending_resources_or_other_documents()

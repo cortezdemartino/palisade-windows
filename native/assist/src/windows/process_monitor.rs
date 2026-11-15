@@ -73,6 +73,10 @@ struct Answer {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 enum ResultKind {
+    Extension {
+        document: u32,
+        answer: crate::extension::Answer,
+    },
     Peer {
         document: u32,
         answer: crate::endpoint::Answer,
@@ -127,6 +131,8 @@ enum ResultKind {
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Kind {
+    Extension,
+    ExtensionSafety,
     Peer,
     CaptureSetup,
     CaptureSource,
@@ -146,6 +152,8 @@ enum Kind {
 impl Kind {
     fn of(command: &Command) -> Self {
         match command {
+            Command::Extension { operation, .. } if operation.safety() => Self::ExtensionSafety,
+            Command::Extension { .. } => Self::Extension,
             Command::Peer { .. } => Self::Peer,
             Command::CaptureSetup { .. } => Self::CaptureSetup,
             Command::CaptureSource { .. } => Self::CaptureSource,
@@ -256,6 +264,7 @@ fn validated(
         | (Kind::ProbeWait, ResultKind::ProbeWait {})
         | (Kind::ProbeDescendant, ResultKind::ProbeDescendant {}) => true,
         (Kind::Native | Kind::SourceStop, ResultKind::Native { .. }) => endpoint,
+        (Kind::Extension | Kind::ExtensionSafety, ResultKind::Extension { .. }) => endpoint,
         (Kind::ProbeStopHolder, ResultKind::ProbeStopHolder { pid, coordinator }) => {
             *pid > 0 && *coordinator > 0 && pid != coordinator
         }
@@ -625,6 +634,7 @@ fn run_inner(
                         kind,
                         Kind::Hello
                             | Kind::Peer
+                            | Kind::ExtensionSafety
                             | Kind::Pulse
                             | Kind::Shutdown
                             | Kind::SourceStop
@@ -637,6 +647,7 @@ fn run_inner(
                                 k,
                                 Kind::Hello
                                     | Kind::Peer
+                                    | Kind::ExtensionSafety
                                     | Kind::Pulse
                                     | Kind::Shutdown
                                     | Kind::SourceStop

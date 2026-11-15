@@ -13,6 +13,21 @@ const prefix = "palisade:assist-native-";
 const wire = (op, id = "request_fixture_01") =>
   JSON.stringify({ p: "palisade.assist.native", v: 1, id, op });
 const turn = () => new Promise((resolve) => setImmediate(resolve));
+test('native and extension status sequences are separate on the unchanged two-member surface', async () => {
+  const t = setup(), native = t.api.palisadeAssistNative, received = [];
+  const document = t.invocations[0][1].document;
+  native.subscribe(text => received.push(JSON.parse(text)));
+  const emit = (p, v, seq, event) => t.ipc.emit(prefix + 'event', {}, { document, text: JSON.stringify({ p, v, seq, event }) });
+  emit('palisade.assist.native', 1, 10, 'lifecycle');
+  emit('palisade.assist.native.ext', 3, 1, 'input.yield');
+  emit('palisade.assist.native.ext', 3, 1, 'input.yield');
+  emit('palisade.assist.native', 1, 9, 'lifecycle');
+  emit('palisade.assist.native.ext', 2, 2, 'sync.status');
+  emit('palisade.assist.native.ext', 4, 3, 'cleanup');
+  assert.deepEqual(received.map(v => [v.p, v.seq]), [['palisade.assist.native', 10], ['palisade.assist.native.ext', 1], ['palisade.assist.native.ext', 2]]);
+  assert.equal(Object.keys(native).sort().join(','), 'request,subscribe');
+  t.events.emit('unload');
+});
 function setup(overrides = {}) {
   const api = {},
     events = new EventEmitter(),

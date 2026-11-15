@@ -67,3 +67,13 @@ test("extension v3 negotiates downward, retains resources and rejects excess ver
   for (const item of fixture.bridge.requests.invalid)
     check(() => api.parseExtRequest(item.message, item.version), item.error);
 });
+test('trusted-main v3 extension port preserves every frozen cooperative bridge fixture', () => {
+  const api = require('../src/assist/native-extension.cjs');
+  assert.deepEqual(api.parseExtRequest(fixture.bridge.hello), fixture.bridge.hello);
+  for (const item of fixture.bridge.results.valid) assert.deepEqual(api.parseExtResponse(item.response, 'ext.hello', item.offered), item.response);
+  for (const item of fixture.bridge.results.invalid) check(() => api.parseExtResponse(item.response, 'ext.hello', item.offered), item.error);
+  for (const item of fixture.bridge.requests.valid) assert.deepEqual(api.parseExtRequest(item.message, item.version), item.message);
+  for (const item of fixture.bridge.requests.invalid) check(() => api.parseExtRequest(item.message, item.version), item.error);
+  for (const message of fixture.bridge.events.valid) assert.deepEqual(api.parseExtEvent(message, 3), message);
+  for (const item of fixture.bridge.events.invalid) check(() => api.parseExtEvent(item.message, item.version), item.error);
+});
