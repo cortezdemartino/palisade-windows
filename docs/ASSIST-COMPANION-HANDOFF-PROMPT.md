@@ -1,5 +1,24 @@
 # Companion Assist qualification handoff
 
+FINAL-6 inspection at `74e8fa8525677f7f0cba8d3106f00a7e65f3c042` confirms the
+two required corrections below are still present. Frozen sources, nine fixture
+families and all 30 cases remain byte-identical. Windows remains the sole writable
+repository in this chat; the companion assignment owns web/backend changes.
+
+Also reconcile channel capabilities after a new resource direction is approved.
+`syncNative` currently retains an existing peer, but `NativeInputPeer` fixes its
+resource channel list at construction. An initial clipboard-only peer cannot
+silently gain a file channel. Add a safely validated channel or retire/replace
+the peer while preserving valid transfer authorization and interrupted staging.
+Never pre-open channels without current signed permission. Test clipboard-first,
+file-first, late direction approval, revocation, replacement and in-progress data.
+
+The new immediate cooperative handoff requirement must not change frozen v3's
+2,000-ms rule. Keep existing versions/fixtures and classify immediate handoff as
+Blocked until native delivery safety is proven. A negotiated successor needs
+reviewed semantics and additional fixtures; no speculative wire format is
+declared integrated by this handoff. No deployment or production activation.
+
 Continue in `cortezdemartino/project-palisade` on main. The Windows repository is
 read-only in that assignment. Start from current main, retaining candidate
 `5fd1958358e2a56d965a4952c35eb6281d461b3e` and evidence

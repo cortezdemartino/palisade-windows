@@ -18,7 +18,7 @@ use std::{
 struct SafetyState {
     requests: BTreeMap<u32, GrantRequest>,
     close_revisions: BTreeMap<(u32, String), u64>,
-    peer_stops: BTreeMap<(u32, String, String), super::runtime::InputRevoker>,
+    peer_stops: BTreeMap<(u32, String, String), super::runtime::PeerRevoker>,
     extension: Option<(u32, u8)>,
     sessions: BTreeMap<(u32, String), super::runtime::RuntimeRevoker>,
     closed: BTreeSet<(u32, String)>,
@@ -219,12 +219,16 @@ impl Safety {
                     let attempt = value["attempt"].as_str().ok_or(Error::Internal)?.to_owned();
                     let mut state = self.0.lock().map_err(|_| Error::Internal)?;
                     if state.peer_stops.len() >= 128 {
-                        runtime.input_revoker().revoke();
+                        runtime
+                            .peer_revoker(&attempt)
+                            .map_err(map_runtime_error)?
+                            .revoke();
                         return Err(Error::Busy);
                     }
-                    state
-                        .peer_stops
-                        .insert((document, session, attempt), runtime.input_revoker());
+                    state.peer_stops.insert(
+                        (document, session, attempt.clone()),
+                        runtime.peer_revoker(&attempt).map_err(map_runtime_error)?,
+                    );
                     value["sourceOperation"] = source_operation.into();
                     Ok(value)
                 }
@@ -1172,7 +1176,7 @@ mod tests {
             .unwrap();
         safety.0.lock().unwrap().peer_stops.insert(
             (4, "session_fixture_01".into(), attempt.clone()),
-            old.input_revoker(),
+            crate::windows::runtime::PeerRevoker::no_authority(old.input_revoker()),
         );
         assert!(matches!(
             safety.close_peer(4, "session_fixture_01", &attempt),

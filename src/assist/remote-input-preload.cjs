@@ -8,7 +8,9 @@
   const documentId = crypto.randomUUID(), encoder = new TextEncoder();
   const EVENT = 'palisade:owned-input-event', COMMAND = 'palisade:owned-input-command';
   const FP = /^sha-256 (?:[0-9A-F]{2}:){31}[0-9A-F]{2}$/;
-  let peer = null, channel = null, helperTransport = null, admitted = false,
+  const channels = new Map();
+  const seenChannels = new Set();
+  let peer = null, channel = null, helperTransport = null, admitted = false, resourceChannels = [], input = true,
     verified = false, ended = false, started = false, lastMain = performance.now(),
     lastSequence = 0, work = Promise.resolve(), tokens = 240, releaseTokens = 64, rateAt = performance.now();
   const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
@@ -21,7 +23,8 @@
     admitted = false; verified = false;
     send({ type: 'failed' }); ended = true;
     clearInterval(watch);
-    if (channel) { try { channel.close(); } catch {} }
+    for (const value of channels.values()) { try { value.close(); } catch {} }
+    channels.clear();
     if (peer) { try { peer.close(); } catch {} }
     channel = null; peer = null;
     ipcRenderer.removeListener(COMMAND, receive);
@@ -29,7 +32,8 @@
   async function observed() {
     if (!peer) return { fingerprint: null, channel: false };
     const dtls = peer.sctp?.transport;
-    if (peer.connectionState !== 'connected' || peer.sctp?.state !== 'connected' || dtls?.state !== 'connected' || channel?.readyState !== 'open') {
+    const open = () => [...channels.values()].some(value => value.readyState === 'open');
+    if (peer.connectionState !== 'connected' || peer.sctp?.state !== 'connected' || dtls?.state !== 'connected' || !open()) {
       if (verified || admitted) throw Error('Peer lost');
       return { fingerprint: null, channel: false };
     }
@@ -37,14 +41,17 @@
     if (certificates.length !== 1 || certificates[0].byteLength > 16384) throw Error('Certificate unavailable');
     const bytes = new Uint8Array(await crypto.subtle.digest('SHA-256', certificates[0]));
     const fingerprint = 'sha-256 ' + [...bytes].map(value => value.toString(16).padStart(2, '0').toUpperCase()).join(':');
-    if (ended || !peer || fingerprint !== helperTransport || peer.connectionState !== 'connected' || dtls.state !== 'connected' || channel?.readyState !== 'open') throw Error('Certificate mismatch');
+    if (ended || !peer || fingerprint !== helperTransport || peer.connectionState !== 'connected' || dtls.state !== 'connected' || !open()) throw Error('Certificate mismatch');
     verified = true;
     return { fingerprint, channel: true };
   }
   async function offer(message) {
-    if (!exact(message, ['sdp', 'helperTransport']) || started || !FP.test(message.helperTransport) ||
+    if (!exact(message, ['sdp', 'helperTransport', 'resourceChannels', 'input']) || started || !FP.test(message.helperTransport) ||
+        !Array.isArray(message.resourceChannels) || message.resourceChannels.length > 2 ||
+        new Set(message.resourceChannels).size !== message.resourceChannels.length || message.resourceChannels.some(value => !['clipboard', 'file'].includes(value)) ||
+        typeof message.input !== 'boolean' || (!message.resourceChannels.length && !message.input) ||
         typeof message.sdp !== 'string' || message.sdp.length > 16384) throw Error('Offer refused');
-    started = true; helperTransport = message.helperTransport;
+    started = true; helperTransport = message.helperTransport; resourceChannels = message.resourceChannels; input = message.input;
     const certificate = await RTCPeerConnection.generateCertificate({ name: 'ECDSA', namedCurve: 'P-256' });
     if (ended) return;
     const own = certificate.getFingerprints().filter(row => row.algorithm === 'sha-256');
@@ -61,13 +68,31 @@
     peer.onicecandidate = event => send({ type: 'candidate', candidate: event.candidate?.candidate ?? '', mid: event.candidate?.sdpMid ?? null });
     peer.ondatachannel = event => {
       const incoming = event.channel;
-      if (ended || channel || incoming.label !== 'control' || incoming.protocol !== '' ||
+      const control = incoming.label === 'control';
+      if (ended || seenChannels.has(incoming.label) || !(control ? input : resourceChannels.includes(incoming.label)) || incoming.protocol !== '' ||
           !incoming.ordered || incoming.negotiated || incoming.maxRetransmits !== null ||
           incoming.maxPacketLifeTime !== null) { incoming.close(); stop(); return; }
-      channel = incoming; incoming.binaryType = 'arraybuffer';
-      incoming.onclose = stop; incoming.onerror = stop;
+      channels.set(incoming.label, incoming);
+      seenChannels.add(incoming.label);
+      if (control) channel = incoming;
+      incoming.binaryType = 'arraybuffer';
+      incoming.onclose = () => {
+        if (control) { stop(); return; }
+        channels.delete(incoming.label);
+        if (verified && channels.size === 0) stop();
+      };
+      incoming.onerror = stop;
       incoming.onmessage = event => {
         if (ended) return;
+        if (!control) {
+          const data = event.data;
+          if (typeof data === 'string' ? !data || data.length > 16384 || encoder.encode(data).byteLength > 65536 :
+              !(data instanceof ArrayBuffer) || data.byteLength < 5 || data.byteLength > 65540) { stop(); return; }
+          if (!admitted) return;
+          if (!verified || peer?.connectionState !== 'connected' || peer.sctp?.transport?.state !== 'connected') { stop(); return; }
+          send({ type: 'resource', lane: incoming.label, data: typeof data === 'string' ? data : new Uint8Array(data) });
+          return;
+        }
         const time = performance.now();
         releaseTokens = Math.min(64, releaseTokens + Math.max(0, time - rateAt) * 0.032);
         tokens = Math.min(240, tokens + Math.max(0, time - rateAt) * 0.12); rateAt = time;
@@ -80,7 +105,7 @@
         catch { stop(); return; }
         if (release ? releaseTokens < 1 : tokens < 1) { stop(); return; }
         if (release) releaseTokens--; else tokens--;
-        if (!admitted) return; // Bound and discard, never queue before native acceptance.
+        if (!admitted || !input) return; // Bound and discard, never queue before native acceptance.
         if (!verified || peer?.connectionState !== 'connected' || peer.sctp?.transport?.state !== 'connected') { stop(); return; }
         send({ type: 'packet', text: event.data });
       };
@@ -102,6 +127,9 @@
     } else if (message.type === 'admit') {
       if (!exact(message, []) || !verified || admitted) { stop(); return; }
       admitted = true;
+    } else if (message.type === 'fence-input') {
+      if (!exact(message, [])) { stop(); return; }
+      input = false; // Leave the association and independent resource channels alive.
     } else if (message.type === 'offer') {
       work = work.then(() => offer(message)).catch(stop);
     } else if (message.type === 'candidate') {

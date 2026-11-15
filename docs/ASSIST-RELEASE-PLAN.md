@@ -2,6 +2,14 @@
 
 ## Current Assist completion work
 
+FINAL-6 uses the [master matrix](ASSIST-COMPLETION-MATRIX.md) as the authoritative
+inventory. [Resource-only/shared peer integration](evidence/2026-11-15-resource-peer.md)
+now connects transport purposes and input-independent connection lifetime; native
+clipboard/file actions, consent, transfer status and outbound framing remain
+unfinished. The [seamless handoff decision](evidence/2026-11-15-seamless-control-decision.md)
+is Blocked: neither a two-second delay nor virtual-device identity proves physical
+delivery ownership. No production activation, release or installation is authorized.
+
 The [authenticated native peer path](evidence/2026-11-14-authenticated-peer.md)
 connects existing DTLS, grant/lease/consent and retained executor components.
 Native readiness, source binding, ingress age and urgent cleanup remain enforced.

@@ -200,7 +200,7 @@ function installNativeBridge(
       ['resource.status', 'sync.status'].includes(payload?.event);
     if (entry.request.op !== "stop" && !capture && !peer && !consent && !resource)
       return false;
-    const terminal = (entry.request.op === 'peer.offer' && payload?.event === 'lifecycle' && payload.state === 'suspended') || ["stopped", "cancelled", "failed"].includes(
+    const terminal = (entry.request.op === 'peer.offer' && !entry.resourceConnection && payload?.event === 'lifecycle' && payload.state === 'suspended') || ["stopped", "cancelled", "failed"].includes(
       payload?.state,
     );
     if (
@@ -347,7 +347,7 @@ function installNativeBridge(
     if (isSafety(request)) {
       for (const [key, entry] of lifetimes) {
         if (
-          cancels(request, entry.request)
+          cancels(request, entry.request) && !(request.op === 'peer.close' && entry.resourceConnection)
         ) {
           entry.abort.abort("cancelled");
           lifetimes.delete(key);
@@ -355,7 +355,7 @@ function installNativeBridge(
       }
       for (const entry of [...pending.values()]) {
         if (
-          cancels(request, entry.request)
+          cancels(request, entry.request) && !(request.op === 'peer.close' && entry.resourceConnection)
         )
           settle(entry, "cancelled");
       }
@@ -421,6 +421,13 @@ function installNativeBridge(
         signal: entry.abort.signal,
         generation: entry.generation,
         emit: (payload) => emit(entry, payload),
+        retainResources: () => {
+          // Trusted runtime only, after verified native transport setup. This
+          // changes cancellation ownership, never any resource authorization.
+          if (entry.request.op !== 'peer.offer' || !current(entry)) return false;
+          entry.resourceConnection = true;
+          return true;
+        },
         retire: () => {
           // Trusted runtime only: retire an intentionally replaced connection
           // without publishing an unscoped terminal event about its successor.

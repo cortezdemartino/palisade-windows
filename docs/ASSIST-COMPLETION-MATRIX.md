@@ -45,7 +45,7 @@ names its limited evidence class; no row is Approved for release.
 | --- | --- | --- | --- |
 | Frozen compatibility | Verified: source/fixture comparison | Six sources, nine fixture families and all 30 cases match inspected companion; manifest SHA-256 `f9ac9d835333e341907ae63f2d2a497ef4944607ea60fc344e81ad64115606b0` | Windows/companion |
 | Resource-only authority bootstrap | Integrated | Same registry, gate, original deadline and endpoint-wide lease lane; grants no OS consent or input readiness | Windows |
-| Independent resource/input transport liveness | Not Started | Input Stop must fence its worker without destroying independently authorized clipboard/file association | Windows/companion |
+| Independent resource/input transport liveness | Integrated: transport only | Native purpose/cancel witness and trusted bridge lifetime preserve shared association through input Stop; 18 synthetic/fake-sink DTLS fixtures pass. Resource actions and companion fixes remain unfinished | Windows/companion |
 | Companion stale peer loss / Stop Control | Blocked | Exact reproducer and correction in [handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md); still present at inspected SHA | Companion |
 | Approved qualification environment | Blocked | Existing Windows #5 requires disposable device/accounts, approved installation and isolated service/issuer pin; none supplied | Owner/operator |
 | Production issuer trust | Blocked | Dedicated issuer and independently verified release pin, project-palisade#47; test issuer is sufficient for isolated tests | Owner/operator |
@@ -57,8 +57,9 @@ names its limited evidence class; no row is Approved for release.
 
 ## Next executable work
 
-1. Connect resource-only and shared authenticated DTLS to the retained native gate;
-   separate input admission from connection liveness without enabling an OS action.
+1. Resource-only/shared DTLS now connects to the retained native gate with separate
+   readiness and cancellation. Finish permission-scoped payload dispatch and outbound
+   framing before claiming working resource transport or enabling an OS action.
 2. Complete protected resource consent, text/PNG adapters, transfer staging/chunks,
    extension progress/cancel/sync and owned drop UI using the existing brokers.
 3. Verify exact-candidate tests, packaging and CI; update this matrix with narrow

@@ -3,6 +3,11 @@
 ## Current integration status, November 15
 
 **Full Windows Assist remains unfinished and inactive.**
+[FINAL-6 inventory](ASSIST-COMPLETION-MATRIX.md) is authoritative. The
+[resource connection continuation](evidence/2026-11-15-resource-peer.md) adds
+resource-only/shared DTLS setup without input readiness or OS-resource consent.
+It preserves resource connection ownership through input Stop. Payload actions
+remain refused; real clipboard/files and their UI/status integration are unfinished.
 [Authenticated peers](evidence/2026-11-14-authenticated-peer.md),
 [extension/Profile 2 routing](evidence/2026-11-14-native-extension.md) and
 [fresh control recovery](evidence/2026-11-15-fresh-control.md) now connect to the

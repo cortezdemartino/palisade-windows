@@ -20,7 +20,7 @@ const script = value => JSON.stringify(value);
 let phase = 'startup', number = 0;
 const cases = [], blocked = [];
 const deadline = setTimeout(() => { console.error('Remote peer fixture timeout:', phase); app.exit(1); }, 110000);
-async function fixture({ label = 'control', nativeWait = false, cleanupWait = false, stallPacket = false, fingerprintOverride, corruptOffer = false } = {}) {
+async function fixture({ label = 'control', nativeWait = false, cleanupWait = false, stallPacket = false, fingerprintOverride, corruptOffer = false, inputProfile = 'legacy', resourceChannels = [] } = {}) {
   const helper = new BrowserWindow({ show: false, webPreferences: { partition: 'assist-remote-helper-' + (++number),
     sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false,
     backgroundThrottling: false } });
@@ -53,8 +53,10 @@ async function fixture({ label = 'control', nativeWait = false, cleanupWait = fa
   const nativeDecision = new Promise(resolve => { nativeResolve = resolve; });
   const cleanup = new Promise(resolve => { cleanupResolve = resolve; });
   const packetWork = new Promise(resolve => { packetResolve = resolve; });
+  const resourceReceived = [];
   const peer = await createOwnedInputPeer({ enabled: true, session: 'session_fixture_0001',
-    signal: cancellation.signal,
+    signal: cancellation.signal, inputProfile, resourceChannels,
+    onResource: async (lane, data) => { resourceReceived.push({ lane, data }); },
     helperTransport: fingerprintOverride ?? own.fingerprint,
     onObserved: async (fingerprint, signal) => { observations.push(fingerprint); if (nativeWait) await nativeDecision; return !signal.aborted; },
     onPacket: async (text, signal) => { packetSignal = signal; received.push(text); if (stallPacket) await packetWork; assert.equal(typeof signal.aborted, 'boolean'); },
@@ -80,7 +82,7 @@ async function fixture({ label = 'control', nativeWait = false, cleanupWait = fa
     const offer = corruptOffer ? own.sdp.replace(own.fingerprint, fingerprintOverride) : own.sdp;
     const answer = await peer.offer(offer);
     await run(`fixture.answer(${script(answer.sdp)})`);
-    return { peer, helper, ownedWindow, run, received, observations, dispose, nativeResolve, cleanupResolve, packetResolve,
+    return { peer, helper, ownedWindow, run, received, resourceReceived, observations, dispose, nativeResolve, cleanupResolve, packetResolve,
       cancellation, packetSignal: () => packetSignal, closed: () => closed, reason: () => reason };
   } catch (error) { await dispose(); throw error; }
 }
@@ -178,6 +180,48 @@ app.whenReady().then(async () => {
       f.packetResolve(); await f.peer.finished; cases.push(phase);
     } finally { await f.dispose(); }
   }
+  phase = 'resource-only-observed-certificate-without-control';
+  f = await fixture({ label: 'clipboard', inputProfile: 'resources', resourceChannels: ['clipboard'] });
+  try {
+    await poll(() => f.peer.verified()); await pause(50);
+    await f.run(`fixture.channel.send('bounded encrypted text')`);
+    await poll(() => f.resourceReceived.length === 1);
+    assert.equal(f.resourceReceived[0].lane, 'clipboard');
+    assert.equal(f.received.length, 0);
+    assert.equal(f.resourceReceived[0].data, 'bounded encrypted text');
+    cases.push(phase);
+  } finally { await f.dispose(); }
+
+  phase = 'resource-channel-without-current-direction-refused';
+  f = await fixture({ label: 'file', inputProfile: 'resources', resourceChannels: ['clipboard'] });
+  try { await poll(f.closed); assert.equal(f.resourceReceived.length, 0); cases.push(phase); }
+  finally { await f.dispose(); }
+
+  phase = 'shared-resource-transport-survives-input-fence';
+  f = await fixture({ resourceChannels: ['clipboard', 'file'] });
+  try {
+    await poll(() => f.peer.verified()); await pause(50);
+    await f.run(`fixture.resource=fixture.pc.createDataChannel('clipboard');fixture.resource.onopen=()=>{fixture.resourceOpen=true;};true`);
+    await poll(() => f.run('fixture.resourceOpen===true'));
+    f.peer.fenceInput();
+    await f.run(`fixture.channel.send(${script(packet(20))});fixture.resource.send('after input stop');`);
+    await poll(() => f.resourceReceived.length === 1);
+    assert.equal(f.received.length, 0);
+    assert.equal(f.peer.verified(), true); assert.equal(f.closed(), false);
+    cases.push(phase);
+  } finally { await f.dispose(); }
+
+  phase = 'resource-binary-chunk-boundary-and-duplicate-channel';
+  f = await fixture({ label: 'file', inputProfile: 'resources', resourceChannels: ['file'] });
+  try {
+    await poll(() => f.peer.verified()); await pause(50);
+    await f.run('fixture.channel.send(new Uint8Array(65540))');
+    await poll(() => f.resourceReceived.length === 1);
+    assert.equal(f.resourceReceived[0].data.byteLength, 65540);
+    await f.run(`fixture.pc.createDataChannel('file')`);
+    await poll(f.closed); cases.push(phase);
+  } finally { await f.dispose(); }
+
   assert.deepEqual(blocked, []);
   fs.writeFileSync(path.resolve('out/assist-remote-input-result.json'), JSON.stringify({ passed: true, electron: process.versions.electron,
     cases, fakeNativeSink: true, actualDtls: true, inputInjected: false }));

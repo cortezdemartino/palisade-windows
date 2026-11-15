@@ -37,11 +37,15 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       failed = true; void stopAll().catch(() => {});
       return Promise.reject(new NativeBridgeError('stopped'));
     }
+    const entry = peers.get(session);
+    if (entry) {
+      entry.inputClosed = true;
+      entry.peer?.fenceInput();
+      if (!entry.resources) { entry.closed = true; void entry.peer?.close('stopped').catch(() => {}); }
+    }
     const work = opening.then(channel => channel.request({ p: 'palisade.assist.native', v: 1,
       id: randomBytes(16).toString('hex'), op: 'peer.close', session }, document));
     inputFences.set(session, work);
-    const entry = peers.get(session);
-    if (entry) { entry.closed = true; void entry.peer?.close('stopped').catch(() => {}); }
     void work.catch(() => { void stopAll().catch(() => {}); });
     return work;
   };
@@ -103,10 +107,10 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
   }
   async function offerPeer(channel, request, scope) {
     const previous = peers.get(request.session);
-    if (inputFences.has(request.session) || (previous && !previous.closed) || (!previous && peers.size >= 16))
+    if ((previous && !previous.closed) || (!previous && peers.size >= 16))
       throw new NativeBridgeError('stale-operation');
     const entry = { peer: null, closed: false, attempt: null, sealed: null, sourceOperation: null, generation: null,
-      retire: scope.retire, replacing: false };
+      retire: scope.retire, replacing: false, resources: false, inputClosed: false, controlReported: false };
     // Reserve before the first await; concurrent offers cannot create two peers.
     peers.set(request.session, entry);
     const current = () => {
@@ -126,6 +130,13 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
     try {
       let prepared;
       let bootstrapped = false;
+      if (inputFences.has(request.session)) {
+        // A stopped input grant cannot allocate another peer. Only native
+        // verification of a current independent resource grant admits setup.
+        try { await channel.resourceSession(request.session, request.grantId, scope.generation, scope.signal); }
+        catch { throw new NativeBridgeError('stale-operation'); }
+        bootstrapped = true; current();
+      }
       const prepareDeadline = performance.now() + 110000;
       const authorityDeadline = performance.now() + 10000;
       for (;;) {
@@ -142,9 +153,26 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
         }
       }
       entry.attempt = prepared.attempt; entry.sourceOperation = prepared.sourceOperation; entry.generation = prepared.generation; current();
+      entry.resources = prepared.resources === true;
+      if (entry.resources) scope.retainResources?.();
+      entry.inputClosed = prepared.profile === 'resources' || inputFences.has(request.session);
+      if (entry.inputClosed && prepared.profile !== 'resources') throw new NativeBridgeError('stale-operation');
+      const controlStatus = state => {
+        if (!state.inputReady || entry.inputClosed || entry.controlReported) return;
+        if (!scope.emit({ event: 'lifecycle', session: request.session, state: 'active', reason: null }))
+          throw new NativeBridgeError('stale-operation');
+        entry.controlReported = true; report('Remote control active');
+      };
       const { createOwnedInputPeer } = require('./remote-input-peer.cjs');
       const peer = await createOwnedInputPeer({ enabled: true, session: request.session,
         helperTransport: prepared.helperTransport, inputProfile: prepared.profile, signal: scope.signal,
+        resourceChannels: prepared.resourceChannels ?? [],
+        onResource: async () => {
+          // The connected transport does not authorize resource OS actions.
+          // Resource adapters remain unavailable and enrollment flags stay false.
+          await native({ action: 'check' }); current();
+          throw new NativeBridgeError('transport-mismatch');
+        },
         onObserved: async fingerprint => {
           await entry.sealed; current();
           let state = await native({ action: 'observed', fingerprint }); current();
@@ -154,15 +182,30 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
             await pause(25, undefined, { signal: scope.signal }); current();
             state = await native({ action: 'check' }); current();
           }
-          if (!scope.emit({ event: 'lifecycle', session: request.session, state: 'active', reason: null }))
-            throw new NativeBridgeError('stale-operation');
-          report('Remote control active'); return true;
+          controlStatus(state);
+          if (prepared.profile === 'resources') report('Secure resource connection established');
+          return true;
         },
         onCheck: async () => {
           const state = await native({ action: 'check' }); current();
           if (!state.ready) throw new NativeBridgeError('stopped');
+          controlStatus(state);
+          if (state.inputAllowed === false) {
+            entry.peer?.fenceInput();
+            const notify = !entry.inputClosed && entry.controlReported;
+            entry.inputClosed = true;
+            if (notify) {
+              scope.emit({ event: 'lifecycle', session: request.session, state: 'suspended', reason: 'error' });
+              report('Control revoked; resource connection remains available');
+            }
+          }
         },
-        onPacket: async (text, _signal, ingressNs) => { await native({ action: 'packet', text, ingressNs }); current(); },
+        onPacket: async (text, _signal, ingressNs) => {
+          current();
+          if (entry.inputClosed || prepared.profile === 'resources') throw new NativeBridgeError('stopped');
+          if (!entry.controlReported) return; // Early gestures are discarded, never replayed after READY.
+          await native({ action: 'packet', text, ingressNs }); current();
+        },
         onCandidate: value => {
           current();
           if (!scope.emit({ event: 'peer.candidate', session: request.session, ...value }))
@@ -170,10 +213,11 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
         },
         onClosed: () => {
           entry.closed = true; rejectSeal(new NativeBridgeError('stopped'));
-          if (!entry.replacing) {
+          if (!entry.replacing && prepared.profile !== 'resources' && !entry.inputClosed) {
             report('Control revoked; cleanup pending');
             try { scope.emit({ event: 'lifecycle', session: request.session, state: 'suspended', reason: 'error' }); } catch {}
           }
+          if (entry.resources) { scope.retire?.(); report('Resource connection closed'); }
           return fenceOwnedPeer(request.session, entry);
         },
       });
@@ -268,7 +312,7 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       }
       if (request.op === 'peer.candidate') {
         const entry = peers.get(request.session);
-        if (!entry?.peer || entry.closed || inputFences.has(request.session)) throw new NativeBridgeError('stale-operation');
+        if (!entry?.peer || entry.closed || (inputFences.has(request.session) && !entry.resources)) throw new NativeBridgeError('stale-operation');
         await channel.peer({ action: 'check', session: request.session, attempt: entry.attempt }, scope.generation);
         if (ended || entry.closed || scope.signal.aborted) throw new NativeBridgeError('stopped');
         await entry.peer.candidate(request.candidate, request.mid);

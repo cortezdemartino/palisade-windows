@@ -134,10 +134,34 @@ pub struct StreamRuntime {
 }
 struct OwnedPeer {
     attempt: String,
-    permit: crate::stream::PeerPermit,
+    permit: Option<crate::stream::PeerPermit>,
+    resources: Option<crate::stream::PeerPermit>,
+    cancelled: Arc<AtomicBool>,
     sealed: bool,
     observed: bool,
     deadline: Instant,
+}
+/// The exact connection and original input generation. Closing an old attempt
+/// cannot revoke a successor or unrelated session/resource grants.
+#[derive(Clone)]
+pub(crate) struct PeerRevoker {
+    cancelled: Arc<AtomicBool>,
+    input: Option<InputRevoker>,
+}
+impl PeerRevoker {
+    #[cfg(test)]
+    pub(crate) fn no_authority(input: InputRevoker) -> Self {
+        Self {
+            cancelled: Arc::new(AtomicBool::new(false)),
+            input: Some(input),
+        }
+    }
+    pub(crate) fn revoke(&self) {
+        self.cancelled.store(true, Ordering::SeqCst);
+        if let Some(input) = &self.input {
+            input.revoke();
+        }
+    }
 }
 /// References the existing gate/worker; it owns no second authorization or
 /// executor. A dedicated bounded IPC lane keeps consent dialogs from starving
@@ -1194,16 +1218,21 @@ impl PeerRuntime {
         let facts = current_view(&self.facts, &self.expected_track)?;
         gate.validate_peer_cohort(permit, &facts.current_grants, lease::now()?, Instant::now())
     }
-    pub(crate) fn input_revoker(&self) -> InputRevoker {
-        self.input_revoker.clone()
+    pub(crate) fn peer_revoker(&self, attempt: &str) -> Result<PeerRevoker, &'static str> {
+        let peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+        let peer = peer
+            .as_ref()
+            .filter(|peer| peer.attempt == attempt)
+            .ok_or("stale-peer")?;
+        Ok(PeerRevoker {
+            cancelled: peer.cancelled.clone(),
+            input: peer.permit.as_ref().map(|_| self.input_revoker.clone()),
+        })
     }
     /// Called exclusively with the DTLS fingerprint observed by the app-owned
     /// gateway, not an SDP string or boolean supplied by the hosted page.
     fn peer_live(&self) -> Result<(), &'static str> {
-        if self.stop.is_stopped()
-            || self.input_stop.load(Ordering::SeqCst)
-            || self.lease_cancel.load(Ordering::SeqCst)
-        {
+        if self.stop.is_stopped() || self.lease_cancel.load(Ordering::SeqCst) {
             return Err("revoked");
         }
         if self
@@ -1224,20 +1253,89 @@ impl PeerRuntime {
     }
     pub(crate) fn prepare_peer(&self, grant: &str) -> Result<serde_json::Value, &'static str> {
         self.peer_live()?;
-        if !cfg!(feature = "native-input") {
-            return Err("native-input-disabled");
-        }
         let mut peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
         if peer.is_some() {
             return Err("peer-already-bound");
         }
-        let permit = with_live_gate(&self.gate, &self.stop, |gate| {
-            let facts = current_view(&self.facts, &self.expected_track)?;
-            if !gate.input_cohort_decided(&facts.current_grants, grant, lease::now()?)? {
-                return Err("consent-pending");
-            }
-            gate.prepare_peer(grant, lease::now()?, Instant::now())
-        })?;
+        let (permit, resources, cancelled, channels) =
+            with_live_gate(&self.gate, &self.stop, |gate| {
+                let facts = current_view(&self.facts, &self.expected_track)?;
+                let selected = gate.pending_grant(grant, lease::now()?)?;
+                if !facts
+                    .current_grants
+                    .iter()
+                    .any(|record| record.canonical() == selected.canonical())
+                {
+                    return Err("not-granted");
+                }
+                let input = matches!(
+                    selected.capability.as_str(),
+                    "control_mouse" | "control_keyboard"
+                );
+                let permit = if input {
+                    if !cfg!(feature = "native-input") || self.input_stop.load(Ordering::SeqCst) {
+                        return Err("native-input-disabled");
+                    }
+                    if !gate.input_cohort_decided(&facts.current_grants, grant, lease::now()?)? {
+                        return Err("consent-pending");
+                    }
+                    Some(gate.prepare_peer(grant, lease::now()?, Instant::now())?)
+                } else {
+                    None
+                };
+                let cancelled = permit.as_ref().map_or_else(
+                    || Arc::new(AtomicBool::new(false)),
+                    |permit| permit.cancellation(),
+                );
+                let resources = if cfg!(feature = "native-resources") {
+                    let ids: Vec<_> = if input {
+                        facts
+                            .current_grants
+                            .iter()
+                            .map(|g| g.grant_id.clone())
+                            .collect()
+                    } else {
+                        vec![grant.to_owned()]
+                    };
+                    ids.into_iter().find_map(|id| {
+                        gate.prepare_resource_peer(
+                            &id,
+                            lease::now().ok()?,
+                            Instant::now(),
+                            cancelled.clone(),
+                        )
+                        .ok()
+                    })
+                } else {
+                    None
+                };
+                if permit.is_none() && resources.is_none() {
+                    return Err("not-granted");
+                }
+                let mut channels = Vec::new();
+                if resources.is_some() {
+                    for record in &facts.current_grants {
+                        if gate
+                            .resource_transport_grant(
+                                &record.grant_id,
+                                lease::now()?,
+                                Instant::now(),
+                            )
+                            .is_ok()
+                        {
+                            let lane = if record.capability.starts_with("clipboard_") {
+                                "clipboard"
+                            } else {
+                                "file"
+                            };
+                            if !channels.contains(&lane) {
+                                channels.push(lane);
+                            }
+                        }
+                    }
+                }
+                Ok((permit, resources, cancelled, channels))
+            })?;
         let attempt = super::identity::peer_token()?;
         let helper = self
             .gate
@@ -1246,9 +1344,13 @@ impl PeerRuntime {
             .binding()
             .helper_transport
             .clone();
+        let input = permit.is_some();
+        let resource_channels = resources.is_some();
         *peer = Some(OwnedPeer {
             attempt: attempt.clone(),
             permit,
+            resources,
+            cancelled,
             sealed: false,
             observed: false,
             deadline: Instant::now() + Duration::from_secs(15),
@@ -1256,9 +1358,47 @@ impl PeerRuntime {
         self.peer_live()?;
         Ok(
             serde_json::json!({"attempt":attempt,"helperTransport":helper,"generation":self.generation,
-            "profile":match self.profile {InputProfile::Legacy=>"legacy",InputProfile::Profile2=>"input2"}}),
+            "resources":resource_channels,
+            "resourceChannels":channels,
+            "profile":if !input {"resources"} else {match self.profile {InputProfile::Legacy=>"legacy",InputProfile::Profile2=>"input2"}}}),
         )
     }
+    fn check_connection(
+        &self,
+        gate: &mut SessionGate,
+        peer: &OwnedPeer,
+    ) -> Result<(bool, bool), &'static str> {
+        if peer.cancelled.load(Ordering::SeqCst) {
+            return Err("stale-peer");
+        }
+        let input = peer.permit.as_ref().is_some_and(|permit| {
+            !self.input_stop.load(Ordering::SeqCst) && self.check_cohort(gate, permit).is_ok()
+        });
+        if peer.permit.is_some() && !input {
+            self.input_revoker.revoke();
+        }
+        let resources = peer.resources.as_ref().is_some_and(|permit| {
+            let Ok(grant) = gate.resource_peer_grant(
+                permit,
+                peer.observed,
+                lease::now().unwrap_or(0),
+                Instant::now(),
+            ) else {
+                return false;
+            };
+            current_view(&self.facts, &self.expected_track).is_ok_and(|facts| {
+                facts
+                    .current_grants
+                    .iter()
+                    .any(|g| g.canonical() == grant.canonical())
+            })
+        });
+        if gate.ended() || (!input && !resources) {
+            return Err("revoked");
+        }
+        Ok((input, resources))
+    }
+
     pub(crate) fn peer_operation(
         &self,
         attempt: &str,
@@ -1274,14 +1414,14 @@ impl PeerRuntime {
                 return Err("stale-peer");
             }
             with_live_gate(&self.gate, &self.stop, |gate| {
-                self.check_cohort(gate, &peer.permit)
+                self.check_connection(gate, peer)
             })?;
             if let Some(own) = own {
                 if peer.sealed || peer.observed {
                     return Err("stale-peer");
                 }
                 let signature = with_live_gate(&self.gate, &self.stop, |gate| {
-                    self.check_cohort(gate, &peer.permit)?;
+                    self.check_connection(gate, peer)?;
                     self.identity.transport(gate.binding(), own)
                 })?;
                 peer.sealed = true;
@@ -1293,9 +1433,24 @@ impl PeerRuntime {
                     return Err("stale-peer");
                 }
                 with_live_gate(&self.gate, &self.stop, |gate| {
-                    gate.admit_peer(&peer.permit, fingerprint, lease::now()?, Instant::now())
+                    let (input, resources) = self.check_connection(gate, peer)?;
+                    if let Some(permit) = peer.permit.as_ref().filter(|_| input) {
+                        gate.admit_peer(permit, fingerprint, lease::now()?, Instant::now())?;
+                    }
+                    if let Some(permit) = peer.resources.as_ref().filter(|_| resources) {
+                        gate.admit_resource_peer(
+                            permit,
+                            fingerprint,
+                            lease::now()?,
+                            Instant::now(),
+                        )?;
+                    }
+                    Ok(())
                 })?;
                 peer.observed = true;
+            }
+            if packet.is_some() && peer.permit.is_none() {
+                return Err("input-not-ready");
             }
             if packet.is_some() && !peer.observed {
                 return Err("peer-unverified");
@@ -1309,11 +1464,12 @@ impl PeerRuntime {
         // Revalidate the exact setup witness after preparation/dispatch waits.
         let peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
         let peer = peer.as_ref().ok_or("peer-unverified")?;
-        with_live_gate(&self.gate, &self.stop, |gate| {
-            self.check_cohort(gate, &peer.permit)
+        let (input, resources) = with_live_gate(&self.gate, &self.stop, |gate| {
+            self.check_connection(gate, peer)
         })?;
         Ok(if packet.is_none() {
-            serde_json::json!({"ready": self.ready.load(Ordering::SeqCst)})
+            serde_json::json!({"ready":peer.observed && (resources || (input && self.ready.load(Ordering::SeqCst))),
+                "inputAllowed":input, "inputReady":peer.observed && input && self.ready.load(Ordering::SeqCst)})
         } else {
             serde_json::json!({})
         })

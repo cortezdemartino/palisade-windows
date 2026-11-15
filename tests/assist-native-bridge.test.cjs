@@ -602,3 +602,22 @@ test('intentional peer retirement frees its lifetime without publishing a termin
   assert.equal(scope.emit({ event: 'lifecycle', session: fields.session, state: 'active', reason: null }), true);
   assert.equal(t.stops(), 0); t.bridge.dispose();
 });
+
+test('native-verified shared connection retains its lifetime through input-only Stop and suspended input status', async () => {
+  const t = setup(); await t.connect(DOC); await t.request('hello', { versions: [1] });
+  let peerScope;
+  t.dispatch(async (request, scope) => {
+    if (request.op === 'peer.offer') {
+      peerScope = scope; assert.equal(scope.retainResources(), true);
+      return { sdp: 'answer', transportSignature: 'A'.repeat(86) };
+    }
+    return {};
+  });
+  const fields = { session: 'session_resource_01', grantId: 'grant_resource_01', sdp: 'offer' };
+  assert.equal((await t.request('peer.offer', fields)).ok, true);
+  assert.equal((await t.request('peer.close', { session: fields.session })).ok, true);
+  assert.equal(peerScope.signal.aborted, false);
+  assert.equal(peerScope.emit({ event: 'lifecycle', session: fields.session, state: 'suspended', reason: 'error' }), true);
+  assert.equal(peerScope.emit({ event: 'peer.candidate', session: fields.session, candidate: '', mid: null }), true);
+  t.bridge.dispose(); assert.equal(peerScope.signal.aborted, true); assert(t.stops() > 0);
+});

@@ -2,6 +2,17 @@
 
 ## Active work: Assist completion
 
+FINAL-6 now has a single [master completion matrix](ASSIST-COMPLETION-MATRIX.md).
+The [resource-peer continuation](evidence/2026-11-15-resource-peer.md) connects
+resource-only/shared connection purposes and scoped input Stop without granting
+OS-resource consent or input READY. Resource data actions remain refused and all
+related flags stay false. Continue exact-peer-bound resource dispatch, protected
+UI, clipboard/files/sync/resume/drop and status lifetimes; do not call transport
+plumbing a working transfer. The [seamless-control decision](evidence/2026-11-15-seamless-control-decision.md)
+records the current delivery blocker and the incompatibility of an immediate
+handoff with frozen 2,000-ms v3. Preserve all frozen bytes and 30 real acceptance
+cases. Companion `74e8fa8` remains read-only and still needs its documented fixes.
+
 Continue from the [authenticated peer integration](evidence/2026-11-14-authenticated-peer.md),
 starting at `974b61a7575fc93e1de36257cac79ff5cf392333`. Canonical peer offers now
 connect the isolated app-owned DTLS gateway to the retained native gate/worker.

@@ -1,5 +1,12 @@
 # Native cooperative input
 
+FINAL-6 requires immediate safe handoff, without the frozen v3 fixed idle delay.
+That requirement remains **Blocked**, separately from the existing simulated v3
+scheduler. The [current engineering decision](evidence/2026-11-15-seamless-control-decision.md)
+evaluates SendInput, Raw Input/hooks and virtual HID without claiming an unproven
+mechanism or changing frozen compatibility. A future seamless capability needs
+explicit negotiation, new fixtures, independent review and physical acceptance.
+
 Status: scheduler and executor integration **Implemented / Verified in simulation**.
 The native Windows observation adapter and bounded hold model are **Implemented /
 Experimental**, with fake-source verification only. Actual hook/raw-device behavior,

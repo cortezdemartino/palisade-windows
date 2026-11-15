@@ -15,13 +15,16 @@ const EVENT = 'palisade:owned-input-event', COMMAND = 'palisade:owned-input-comm
 const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).sort().join(',') === [...fields].sort().join(',');
 async function createOwnedInputPeer({ enabled = false, session, helperTransport, signal,
-  inputProfile = 'legacy', onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
+  inputProfile = 'legacy', resourceChannels = [], onResource, onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
   if (enabled !== true) throw Error('Owned input peer disabled');
   if (typeof session !== 'string' || typeof helperTransport !== 'string' ||
       !TOKEN.test(session) || !FP.test(helperTransport) || signal?.aborted ||
-      !['legacy', 'input2'].includes(inputProfile) ||
+      !['legacy', 'input2', 'resources'].includes(inputProfile) || !Array.isArray(resourceChannels) || resourceChannels.length > 2 ||
+      new Set(resourceChannels).size !== resourceChannels.length || resourceChannels.some(value => !['clipboard', 'file'].includes(value)) ||
+      (inputProfile === 'resources' && !resourceChannels.length) || (resourceChannels.length > 0 && typeof onResource !== 'function') ||
       [onObserved, onPacket, onCandidate, onClosed, onCheck].some(fn => typeof fn !== 'function'))
     throw Error('Native input coordinator required');
+  resourceChannels = Object.freeze([...resourceChannels]);
   const nonce = randomBytes(24).toString('hex'), abort = new AbortController();
   const window = new BrowserWindow({ show: false, title: 'Palisade Assist input transport',
     webPreferences: { partition: 'palisade-input-' + nonce,
@@ -40,7 +43,8 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
   profile.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, done) => done({ cancel: details.url !== URL }));
   let document = null, ended = false, offered = false, answer = null, info = null,
     observed = false, verifying = false, checking = false, requestId = 0, queued = 0, releases = 0, tail = Promise.resolve(),
-    tokens = 240, releaseTokens = 64, rateAt = performance.now(), candidateCount = 0;
+    tokens = 240, releaseTokens = 64, rateAt = performance.now(), candidateCount = 0,
+    inputEnded = inputProfile === 'resources', resourceQueued = 0, resourceTail = Promise.resolve();
   const pending = new Map(), remoteCandidates = new Set(), liveness = new Liveness();
   let bootResolve, bootReject, finishedResolve, finishedReject, connectTimer;
   const boot = new Promise((resolve, reject) => { bootResolve = resolve; bootReject = reject; });
@@ -119,18 +123,29 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
       } else if (message.type === 'packet') {
         const ingressNs = hrtime.bigint().toString();
         if (!schema(message, ['text']) || !observed) throw Error('unverified-packet');
+        if (inputEnded) return; // Input-only Stop fences already queued gestures as well.
         const text = inputPacket(message.text, session, inputProfile), arrived = performance.now(), release = releasePacket(text);
         releaseTokens = Math.min(64, releaseTokens + Math.max(0, arrived - rateAt) * 0.032);
         tokens = Math.min(240, tokens + Math.max(0, arrived - rateAt) * 0.12); rateAt = arrived;
         if (release ? releaseTokens < 1 || releases >= 4 : tokens < 1 || queued >= 8) throw Error('flood');
         if (release) { releaseTokens--; releases++; } else { tokens--; queued++; }
         tail = tail.then(async () => {
-          if (ended) return;
+          if (ended || inputEnded) return;
           if (liveness.expired('peer')) throw Error('expired-peer');
           // Native admission consumes valid stale sequences without executing
           // them. Always preserve ingress so resending cannot refresh their age.
           await onPacket(text, abort.signal, ingressNs);
         }).catch(() => { void close('input-refused'); }).finally(() => { if (release) releases--; else queued--; });
+      } else if (message.type === 'resource') {
+        if (!schema(message, ['lane', 'data']) || !observed || !resourceChannels.includes(message.lane) ||
+            !['clipboard', 'file'].includes(message.lane) || ++resourceQueued > 4) throw Error('resource');
+        const data = message.data;
+        if (typeof data === 'string' ? !data || data.length > 16384 || Buffer.byteLength(data) > 65536 :
+            !(data instanceof Uint8Array) || data.byteLength < 5 || data.byteLength > 65540) throw Error('resource-frame');
+        resourceTail = resourceTail.then(async () => {
+          if (ended || liveness.expired('peer')) throw Error('expired-peer');
+          await onResource(message.lane, data, abort.signal);
+        }).catch(() => { void close('resource-refused'); }).finally(() => { resourceQueued--; });
       } else if (message.type === 'failed') {
         if (!schema(message, [])) throw Error('failed');
         void close('transport-failed');
@@ -172,7 +187,7 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
       connectTimer.unref?.();
       return new Promise((resolve, reject) => {
         answer = { resolve, reject };
-        send({ type: 'offer', sdp, helperTransport });
+        send({ type: 'offer', sdp, helperTransport, resourceChannels, input: inputProfile !== 'resources' });
       });
     },
     async candidate(value, mid) {
@@ -192,6 +207,7 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
       });
     },
     close,
+    fenceInput() { inputEnded = true; send({ type: 'fence-input' }); },
     finished,
     verified: () => observed && !ended && !liveness.expired('peer'),
   });

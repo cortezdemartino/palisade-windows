@@ -9,8 +9,8 @@ function setup({ enabled = true } = {}) {
   const requests = [], selections = [], order = [], peerRequests = [], bootstraps = [];
   let bootstrap = async () => { throw new NativeBridgeError("binding-mismatch"); };
   let peerOptions, peerClosed = 0, nativePeer = async operation => operation.action === 'prepare'
-    ? { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' }
-    : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } : ['observed', 'check'].includes(operation.action) ? { ready: true } : {};
+    ? { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' }
+    : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } : ['observed', 'check'].includes(operation.action) ? { ready: true, inputReady: true, inputAllowed: true } : {};
   let options, closed = 0, disposed = 0, fence = null, onStart = async () => ({ operation: 'capture_fixture_01' });
   const lost = new AbortController();
   const channel = {
@@ -36,6 +36,7 @@ function setup({ enabled = true } = {}) {
         let closed = false;
         return { offer: async () => ({ sdp: 'owned-answer', fingerprint: 'sha-256 ' + Array(32).fill('CD').join(':') }),
           candidate: async () => { order.push('owned-candidate'); },
+          fenceInput() { order.push('fence-owned-input'); },
           close: async () => { if (!closed) { closed = true; peerClosed++; await value.onClosed('stopped'); } } };
       } };
       if (name === './capture-publication.cjs') return { createCapturePublication: value => {
@@ -57,15 +58,61 @@ function setup({ enabled = true } = {}) {
     fence: value => { fence = value; }, onStart: value => { onStart = value; } };
 }
 const peerOffer = { op: 'peer.offer', session: 'session_fixture_0001', grantId: 'grant_fixture_0001', sdp: 'helper-offer' };
+
+test('resource-only connection never reports control active and can reconnect after input Stop', async () => {
+  const h = setup(); await h.runtime.ready;
+  h.bootstrap(async () => ({}));
+  h.nativePeer(async operation => operation.action === 'prepare' ? {
+    attempt: 'R'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'),
+    profile: 'resources', resources: true, resourceChannels: ['clipboard'], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01'
+  } : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } :
+    ['check', 'observed'].includes(operation.action) ? { ready: true, inputReady: false, inputAllowed: false } : {});
+  await h.runtime.dispatch({ op: 'peer.close', session: peerOffer.session }, h.scope());
+  const scope = h.scope(), events = []; let retained = 0;
+  scope.emit = value => { events.push(value); return true; }; scope.retainResources = () => { retained++; };
+  await h.runtime.dispatch(peerOffer, scope);
+  assert.equal(h.bootstraps.length, 1); assert.equal(retained, 1);
+  const peer = h.peerOptions(); await peer.onObserved(peer.helperTransport);
+  await assert.rejects(peer.onPacket('input is forbidden', null, '1'), { code: 'stopped' });
+  await peer.onClosed(); assert.equal(events.length, 0);
+  assert.equal(h.peerRequests.some(value => value.operation.action === 'packet'), false);
+  await h.runtime.stopAll();
+});
+
+test('shared resource readiness discards early gestures without permanently fencing a starting input worker', async () => {
+  const h = setup(); await h.runtime.ready;
+  let ready = false;
+  h.nativePeer(async operation => operation.action === 'prepare' ? {
+    attempt: 'S'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'),
+    profile: 'input2', resources: true, resourceChannels: ['file'], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01'
+  } : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } :
+    ['check', 'observed'].includes(operation.action) ? { ready: true, inputReady: ready, inputAllowed: true } : {});
+  const scope = h.scope(), events = []; scope.emit = value => { events.push(value); return true; };
+  await h.runtime.dispatch(peerOffer, scope);
+  const peer = h.peerOptions(); await peer.onObserved(peer.helperTransport);
+  await peer.onPacket('early discarded gesture', null, '1'); await peer.onCheck();
+  assert.equal(h.peerRequests.some(value => value.operation.action === 'packet'), false);
+  assert.equal(h.order.includes('fence-owned-input'), false); assert.equal(events.length, 0);
+  ready = true; await peer.onCheck();
+  await peer.onPacket('fresh gesture', null, '2');
+  assert.equal(h.peerRequests.at(-1).operation.text, 'fresh gesture');
+  assert.equal(events.length, 1); assert.equal(events[0].state, 'active');
+  await h.runtime.dispatch({ op: 'peer.close', session: peerOffer.session }, h.scope());
+  assert.equal(h.peerClosed(), 0); assert(h.order.includes('fence-owned-input'));
+  await assert.rejects(peer.onPacket('stopped gesture', null, '3'), { code: 'stopped' });
+  await h.runtime.dispatch({ op: 'peer.candidate', session: peerOffer.session, candidate: '', mid: null }, h.scope());
+  assert.equal(h.peerClosed(), 0);
+  await h.runtime.stopAll();
+});
 test('fresh input offers can connect only after a new native grant exchange and old callbacks cannot stop a successor', async () => {
   const h = setup(); await h.runtime.ready;
   let prepared = 0;
   h.nativePeer(async operation => {
     if (operation.action === 'inspect') return { disposition: 'replacement', generation: 'G'.repeat(43) };
     if (operation.action === 'grant-state') return { generation: 'H'.repeat(43) };
-    if (operation.action === 'prepare') return { attempt: (++prepared === 1 ? 'A' : 'B').repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: (prepared === 1 ? 'G' : 'H').repeat(43), sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'prepare') return { attempt: (++prepared === 1 ? 'A' : 'B').repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: (prepared === 1 ? 'G' : 'H').repeat(43), sourceOperation: 'capture_fixture_01' };
     if (operation.action === 'seal') return { transportSignature: 'C'.repeat(86) };
-    return ['check', 'observed'].includes(operation.action) ? { ready: true } : {};
+    return ['check', 'observed'].includes(operation.action) ? { ready: true, inputReady: true, inputAllowed: true } : {};
   });
   await h.runtime.dispatch(peerOffer, h.scope());
   const old = h.peerOptions();
@@ -93,7 +140,7 @@ test('a same-generation permission ACK and a refused replacement leave the worki
   h.nativePeer(async operation => {
     if (operation.action === 'inspect') return { disposition: 'additional', generation: 'G'.repeat(43) };
     if (operation.action === 'grant-state') return { generation: 'G'.repeat(43) };
-    return ['check', 'observed'].includes(operation.action) ? { ready: true } : {};
+    return ['check', 'observed'].includes(operation.action) ? { ready: true, inputReady: true, inputAllowed: true } : {};
   });
   await h.runtime.dispatch({ op: 'grant.offer', session: peerOffer.session,
     grant: JSON.stringify({ grant: { grantId: 'keyboard_grant_01', capability: 'control_keyboard' } }) }, h.scope());
@@ -142,7 +189,7 @@ test('source stopped during native preparation cannot construct a late peer', as
   const h = setup(); await h.runtime.ready;
   const prepared = deferred(), entered = deferred();
   h.nativePeer(async () => { entered.resolve(); await prepared.promise;
-    return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
+    return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
   });
   const offering = assert.rejects(h.runtime.dispatch(peerOffer, h.scope()), { code: 'stopped' });
   await entered.promise;
@@ -165,10 +212,10 @@ test('native executor readiness is polled without optimistic packet admission', 
   const h = setup(); await h.runtime.ready;
   let checks = 0;
   h.nativePeer(async operation => {
-    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
     if (operation.action === 'seal') return { transportSignature: 'B'.repeat(86) };
     if (operation.action === 'check') return { ready: ++checks >= 2 };
-    return { ready: false };
+    return { ready: false, inputReady: false, inputAllowed: true };
   });
   await h.runtime.dispatch(peerOffer, h.scope());
   assert.equal(await h.peerOptions().onObserved(h.peerOptions().helperTransport), true);
@@ -195,9 +242,9 @@ test('certificate observation racing answer signing waits for this exact seal', 
   const h = setup(); await h.runtime.ready;
   const seal = deferred(), entered = deferred();
   h.nativePeer(async operation => {
-    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
     if (operation.action === 'seal') { entered.resolve(); await seal.promise; return { transportSignature: 'B'.repeat(86) }; }
-    return { ready: true };
+    return { ready: true, inputReady: true, inputAllowed: true };
   });
   const offering = h.runtime.dispatch(peerOffer, h.scope());
   await entered.promise;
@@ -213,9 +260,9 @@ test('Stop fences the owned peer while a seal or native cleanup is still pending
   const h = setup(); await h.runtime.ready;
   const seal = deferred(), entered = deferred();
   h.nativePeer(async operation => {
-    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
+    if (operation.action === 'prepare') return { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' };
     if (operation.action === 'seal') { entered.resolve(); await seal.promise; return { transportSignature: 'B'.repeat(86) }; }
-    return { ready: true };
+    return { ready: true, inputReady: true, inputAllowed: true };
   });
   const offering = assert.rejects(h.runtime.dispatch(peerOffer, h.scope()), { code: 'stopped' });
   await entered.promise;

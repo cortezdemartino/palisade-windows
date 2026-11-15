@@ -21,17 +21,24 @@ test('trusted peer operations have closed per-action shapes and bounded packet i
   assert.equal(operation({ action: 'execute', session, command: 'arbitrary' }), false);
 });
 test('peer result vocabulary is correlated to the exact private operation', () => {
-  const prepare = { outcome: 'ok', result: { attempt, helperTransport: fingerprint, profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' } };
+  const prepare = { outcome: 'ok', result: { attempt, helperTransport: fingerprint, profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' } };
   const seal = { outcome: 'ok', result: { transportSignature: 'B'.repeat(86) } };
   assert.equal(answer({ outcome: 'ok', result: { disposition: 'current', generation: 'G'.repeat(43) } }, 'inspect'), true);
   assert.equal(answer({ outcome: 'ok', result: { generation: 'G'.repeat(43) } }, 'grant-state'), true);
   assert.equal(answer({ outcome: 'ok', result: { ...prepare.result, generation: 'short' } }, 'prepare'), false);
   assert.equal(answer(prepare, 'prepare'), true); assert.equal(answer(prepare, 'seal'), false);
   assert.equal(answer(seal, 'seal'), true); assert.equal(answer(seal, 'observed'), false);
-  assert.equal(answer({ outcome: 'ok', result: { ready: true } }, 'observed'), true);
+  assert.equal(answer({ outcome: 'ok', result: { ready: true, inputReady: true, inputAllowed: true } }, 'observed'), true);
   assert.equal(answer({ outcome: 'ok', result: {} }, 'unknown'), false);
   assert.equal(answer({ outcome: 'error', code: 'grant-invalid' }, 'prepare'), true);
   assert.equal(answer({ outcome: 'error', code: 'raw-stack-trace' }, 'prepare'), false);
   assert.equal(answer({ ...prepare, extra: true }, 'prepare'), false);
   assert.equal(answer({ outcome: 'ok', result: { ...prepare.result, profile: 'cooperative' } }, 'prepare'), false);
+  const resource = { ...prepare.result, profile: 'resources', resources: true, resourceChannels: ['clipboard'] };
+  assert.equal(answer({ outcome: 'ok', result: resource }, 'prepare'), true);
+  for (const patch of [{ resources: false }, { resourceChannels: [] }, { resourceChannels: ['control'] },
+    { resourceChannels: ['clipboard', 'clipboard'] }, { resourceChannels: ['clipboard', 'file', 'other'] }])
+    assert.equal(answer({ outcome: 'ok', result: { ...resource, ...patch } }, 'prepare'), false);
+  assert.equal(answer({ outcome: 'ok', result: { ready: false, inputReady: true, inputAllowed: true } }, 'check'), false);
+  assert.equal(answer({ outcome: 'ok', result: { ready: true, inputReady: true, inputAllowed: false } }, 'check'), false);
 });

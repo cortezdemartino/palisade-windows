@@ -263,6 +263,7 @@ pub struct SessionGate {
     instance: u64,
     peer_verified: bool,
     resource_peer_verified: bool,
+    resource_peer_cancelled: Option<Arc<AtomicBool>>,
     input_age: Option<(crate::input_age::InputAgeGuard, Instant)>,
     executor: Option<(crate::executor::ExecutorIdentity, bool)>,
     cleanup_nonce: u64,
@@ -286,6 +287,13 @@ pub struct PeerPermit {
     grant: String,
     generation: u64,
     capability: String,
+    resource: bool,
+    cancelled: Arc<AtomicBool>,
+}
+impl PeerPermit {
+    pub(crate) fn cancellation(&self) -> Arc<AtomicBool> {
+        self.cancelled.clone()
+    }
 }
 pub(crate) enum InputOffer {
     Existing,
@@ -341,6 +349,7 @@ impl SessionGate {
                 .expect("endpoint instance exhausted"),
             peer_verified: false,
             resource_peer_verified: false,
+            resource_peer_cancelled: None,
             input_age: None,
             executor: None,
             cleanup_nonce: 0,
@@ -1034,6 +1043,10 @@ impl SessionGate {
             !self.peer_verified
         } else {
             !self.resource_peer_verified
+                || self
+                    .resource_peer_cancelled
+                    .as_ref()
+                    .is_some_and(|flag| flag.load(Ordering::SeqCst))
         } {
             return Err("peer-unverified");
         }
@@ -1101,7 +1114,95 @@ impl SessionGate {
             grant: grant_id.into(),
             generation,
             capability,
+            resource: false,
+            cancelled: Arc::new(AtomicBool::new(false)),
         })
+    }
+    /// Connection authority only. Resource actions still require their own
+    /// current direction, native consent and operation-specific confirmation.
+    pub(crate) fn prepare_resource_peer(
+        &mut self,
+        grant_id: &str,
+        now: u64,
+        instant: Instant,
+        cancelled: Arc<AtomicBool>,
+    ) -> Result<PeerPermit, &'static str> {
+        let grant = self.resource_transport_grant(grant_id, now, instant)?;
+        if cancelled.load(Ordering::SeqCst) {
+            return Err("stale-peer");
+        }
+        Ok(PeerPermit {
+            instance: self.instance,
+            input_epoch: self.input_epoch,
+            grant: grant.grant_id,
+            generation: grant.generation,
+            capability: grant.capability,
+            resource: true,
+            cancelled,
+        })
+    }
+    pub(crate) fn resource_peer_grant(
+        &mut self,
+        permit: &PeerPermit,
+        admitted: bool,
+        now: u64,
+        instant: Instant,
+    ) -> Result<StreamGrant, &'static str> {
+        self.tick(now, instant)?;
+        if !permit.resource
+            || permit.instance != self.instance
+            || permit.cancelled.load(Ordering::SeqCst)
+        {
+            return Err("stale-peer");
+        }
+        if !admitted {
+            let grant = self.resource_transport_grant(&permit.grant, now, instant)?;
+            if grant.generation != permit.generation || grant.capability != permit.capability {
+                return Err("stale-peer");
+            }
+            return Ok(grant);
+        }
+        // A connection belongs to the immutable participants/source, not to
+        // one resource direction. Revoking clipboard must not revoke files.
+        let ids: Vec<_> = self.grants.keys().cloned().collect();
+        for id in ids {
+            if let Ok(grant) = self.resource_transport_grant(&id, now, instant) {
+                return Ok(grant);
+            }
+            if self.ended {
+                break;
+            }
+        }
+        Err("not-granted")
+    }
+    pub(crate) fn admit_resource_peer(
+        &mut self,
+        permit: &PeerPermit,
+        observed: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<(), &'static str> {
+        self.resource_peer_grant(permit, false, now, instant)?;
+        if observed != self.binding.helper_transport {
+            self.stop();
+            return Err("peer-mismatch");
+        }
+        if self.peer_verified
+            && self
+                .resource_peer_cancelled
+                .as_ref()
+                .is_some_and(|previous| !Arc::ptr_eq(previous, &permit.cancelled))
+        {
+            return Err("input-setup-required");
+        }
+        self.resource_peer_verified = true;
+        if let Some(previous) = &self.resource_peer_cancelled {
+            if !Arc::ptr_eq(previous, &permit.cancelled) {
+                previous.store(true, Ordering::SeqCst);
+            }
+        }
+        self.resource_peer_cancelled = Some(permit.cancellation());
+        Ok(())
     }
     pub fn validate_peer_setup(
         &mut self,
@@ -1110,7 +1211,11 @@ impl SessionGate {
         instant: Instant,
     ) -> Result<(), &'static str> {
         self.tick(now, instant)?;
-        if permit.instance != self.instance || permit.input_epoch != self.input_epoch {
+        if permit.resource
+            || permit.cancelled.load(Ordering::SeqCst)
+            || permit.instance != self.instance
+            || permit.input_epoch != self.input_epoch
+        {
             return Err("stale-peer");
         }
         if self
@@ -1144,7 +1249,14 @@ impl SessionGate {
         instant: Instant,
     ) -> Result<(), &'static str> {
         self.validate_peer_setup(permit, now, instant)?;
-        self.verify_peer(observed)
+        self.verify_peer(observed)?;
+        if let Some(previous) = &self.resource_peer_cancelled {
+            if !Arc::ptr_eq(previous, &permit.cancelled) {
+                previous.store(true, Ordering::SeqCst);
+            }
+        }
+        self.resource_peer_cancelled = Some(permit.cancellation());
+        Ok(())
     }
     pub fn check_message(
         &mut self,
@@ -1243,6 +1355,7 @@ impl SessionGate {
         self.ended = true;
         self.peer_verified = false;
         self.resource_peer_verified = false;
+        self.resource_peer_cancelled = None;
         self.staged_input.clear();
         self.grant_operations.clear();
         self.consent.clear();
@@ -1655,6 +1768,173 @@ mod request_tests {
                     .is_err()
             );
         }
+    }
+    fn resource_gate() -> (
+        SessionGate,
+        SignedStreamGrant,
+        SignedStreamGrant,
+        u64,
+        Instant,
+    ) {
+        let (mut gate, key, mouse, now, t) = setup();
+        let mut make = |capability| {
+            let mut grant = other(&mouse, &key, 10, capability).grant;
+            grant.endpoint = None;
+            let grant = sign(grant, &key);
+            gate.admit(&grant, now).unwrap();
+            grant
+        };
+        let clipboard = make("clipboard_to_host");
+        let file = make("file_to_host");
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let mut lease: StreamLease =
+            serde_json::from_value(fixture["leases"]["valid"][0]["signed"]["lease"].clone())
+                .unwrap();
+        lease.generation = 10;
+        lease.grants = vec![
+            clipboard.grant.grant_id.clone(),
+            file.grant.grant_id.clone(),
+        ];
+        let signed = SignedStreamLease {
+            signature: URL_SAFE_NO_PAD
+                .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
+            lease,
+        };
+        gate.refresh(&signed, now, t, t).unwrap();
+        (gate, clipboard, file, now, t)
+    }
+    #[test]
+    fn resource_peer_observation_never_grants_os_consent_or_input_readiness() {
+        let (mut gate, clipboard, _, now, t) = resource_gate();
+        let permit = gate
+            .prepare_resource_peer(
+                &clipboard.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        let helper = gate.binding().helper_transport.clone();
+        gate.admit_resource_peer(&permit, &helper, now, t).unwrap();
+        assert!(gate.resource_peer_verified);
+        assert!(!gate.peer_verified);
+        assert!(gate.input_age.is_none());
+        assert!(!gate.input_active(now, t));
+        assert!(
+            gate.authorize(&clipboard.grant.grant_id, "clipboard_to_host", now, t)
+                .is_err()
+        );
+        assert!(gate.validate_peer_setup(&permit, now, t).is_err());
+        gate.consent(&clipboard.grant.grant_id, now).unwrap();
+        gate.authorize(&clipboard.grant.grant_id, "clipboard_to_host", now, t)
+            .unwrap();
+        permit.cancellation().store(true, Ordering::SeqCst);
+        assert!(
+            gate.authorize(&clipboard.grant.grant_id, "clipboard_to_host", now, t)
+                .is_err()
+        );
+    }
+    #[test]
+    fn resource_setup_requires_its_exact_grant_and_input_stop_preserves_resources() {
+        let (mut gate, clipboard, file, now, t) = resource_gate();
+        let permit = gate
+            .prepare_resource_peer(
+                &clipboard.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        let helper = gate.binding().helper_transport.clone();
+        gate.revoke(&clipboard.grant.grant_id);
+        assert!(gate.resource_peer_grant(&permit, false, now, t).is_err());
+        assert!(gate.admit_resource_peer(&permit, &helper, now, t).is_err());
+        let permit = gate
+            .prepare_resource_peer(
+                &file.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        gate.admit_resource_peer(&permit, &helper, now, t).unwrap();
+        gate.suspend_input();
+        assert!(gate.input_generation_ended());
+        assert!(gate.resource_peer_grant(&permit, true, now, t).is_ok());
+        gate.revoke(&file.grant.grant_id);
+        assert!(gate.resource_peer_grant(&permit, true, now, t).is_err());
+    }
+    #[test]
+    fn admitted_resource_peer_keeps_other_direction_and_old_cancel_cannot_revoke_replacement() {
+        let (mut gate, clipboard, file, now, t) = resource_gate();
+        let first = gate
+            .prepare_resource_peer(
+                &clipboard.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        let helper = gate.binding().helper_transport.clone();
+        gate.admit_resource_peer(&first, &helper, now, t).unwrap();
+        gate.revoke(&clipboard.grant.grant_id);
+        assert_eq!(
+            gate.resource_peer_grant(&first, true, now, t)
+                .unwrap()
+                .grant_id,
+            file.grant.grant_id
+        );
+        let second = gate
+            .prepare_resource_peer(
+                &file.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        gate.admit_resource_peer(&second, &helper, now, t).unwrap();
+        assert!(first.cancelled.load(Ordering::SeqCst));
+        assert!(gate.resource_peer_grant(&first, true, now, t).is_err());
+        first.cancelled.store(true, Ordering::SeqCst);
+        assert!(gate.resource_peer_grant(&second, true, now, t).is_ok());
+        gate.consent(&file.grant.grant_id, now).unwrap();
+        gate.authorize(&file.grant.grant_id, "file_to_host", now, t)
+            .unwrap();
+    }
+    #[test]
+    fn resource_peer_refuses_wrong_certificate_other_gate_and_expired_lease() {
+        let (mut gate, clipboard, _, now, t) = resource_gate();
+        let permit = gate
+            .prepare_resource_peer(
+                &clipboard.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        let (mut other, _, _, _, _) = resource_gate();
+        assert!(other.resource_peer_grant(&permit, true, now, t).is_err());
+        assert!(
+            gate.resource_peer_grant(&permit, false, now + 20000, t + Duration::from_secs(20))
+                .is_err()
+        );
+        let (mut gate, clipboard, _, now, t) = resource_gate();
+        let permit = gate
+            .prepare_resource_peer(
+                &clipboard.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        assert!(
+            gate.admit_resource_peer(&permit, "sha-256 INVALID", now, t)
+                .is_err()
+        );
+        assert!(gate.ended());
     }
     fn other(
         g: &SignedStreamGrant,
