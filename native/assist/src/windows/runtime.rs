@@ -570,6 +570,17 @@ impl StreamRuntime {
         owner: RuntimeOwner,
         profile: InputProfile,
     ) -> Result<Self, &'static str> {
+        Self::begin_seeded(enrolled, binding, grants, source, owner, profile, None)
+    }
+    pub(crate) fn begin_seeded(
+        enrolled: EnrolledIdentity<'_>,
+        binding: Binding,
+        grants: &[SignedStreamGrant],
+        source: Option<Source>,
+        owner: RuntimeOwner,
+        profile: InputProfile,
+        initial: Option<lease::InitialLease>,
+    ) -> Result<Self, &'static str> {
         if !cfg!(any(feature = "native-input", feature = "native-resources")) {
             return Err("endpoint-disabled");
         }
@@ -610,6 +621,13 @@ impl StreamRuntime {
         for grant in grants {
             gate.admit(grant, lease::now()?)?;
         }
+        let initial = initial
+            .as_ref()
+            .map(|seed| seed.initialize(&mut gate, &expected_track, lease::now()?, Instant::now()))
+            .transpose()?;
+        if stop.is_stopped() {
+            return Err("revoked");
+        }
         let gate = Arc::new(Mutex::new(gate));
         let files = if cfg!(feature = "native-resources") {
             Some(Arc::new(SessionFiles::publisher(
@@ -633,7 +651,7 @@ impl StreamRuntime {
         ));
         let lease_executor_stops = executor_stops.clone();
         let lost = stop.clone();
-        let poller = LeasePoller::start(
+        let poller = LeasePoller::start_seeded(
             identity.clone(),
             gate.clone(),
             Arc::new(move || {
@@ -646,6 +664,7 @@ impl StreamRuntime {
                     let _ = event.revoke();
                 }
             }),
+            initial,
         );
         let lease_cancel = poller.cancel_flag();
         let worker_binding = InputWorkerBinding {
@@ -697,6 +716,29 @@ impl StreamRuntime {
             }
         }
     }
+    pub(crate) fn resource_grant(
+        &self,
+        id: &str,
+    ) -> Result<crate::stream::StreamGrant, &'static str> {
+        if !self.source_confirmed()? {
+            return Err("source-unconfirmed");
+        }
+        with_live_gate(&self.gate, &self.stop, |gate| {
+            let facts = current_view(
+                &self.poller.as_ref().ok_or("revoked")?.facts_reader(),
+                &self.expected_track,
+            )?;
+            let grant = gate.resource_transport_grant(id, lease::now()?, Instant::now())?;
+            if !facts
+                .current_grants
+                .iter()
+                .any(|g| g.canonical() == grant.canonical())
+            {
+                return Err("not-granted");
+            }
+            Ok(grant)
+        })
+    }
     pub(crate) fn peer_handle(&self) -> Result<PeerRuntime, &'static str> {
         Ok(PeerRuntime {
             generation: self.generation.clone(),
@@ -715,6 +757,14 @@ impl StreamRuntime {
         })
     }
     pub(crate) fn admit(&mut self, signed: &SignedStreamGrant) -> Result<bool, &'static str> {
+        if !cfg!(feature = "native-input")
+            && matches!(
+                signed.grant.capability.as_str(),
+                "control_mouse" | "control_keyboard"
+            )
+        {
+            return Err("native-input-disabled");
+        }
         if matches!(
             signed.grant.capability.as_str(),
             "control_mouse" | "control_keyboard"
@@ -865,6 +915,19 @@ impl StreamRuntime {
         id: &str,
         request: &super::endpoint::GrantRequest,
     ) -> Result<(), &'static str> {
+        if !cfg!(feature = "native-input") {
+            let grant = self
+                .gate
+                .lock()
+                .map_err(|_| "endpoint-failed")?
+                .pending_grant(id, lease::now()?)?;
+            if matches!(
+                grant.capability.as_str(),
+                "control_mouse" | "control_keyboard"
+            ) {
+                return Err("native-input-disabled");
+            }
+        }
         if !self.source_confirmed()? {
             return Err("source-unconfirmed");
         }
@@ -1161,6 +1224,9 @@ impl PeerRuntime {
     }
     pub(crate) fn prepare_peer(&self, grant: &str) -> Result<serde_json::Value, &'static str> {
         self.peer_live()?;
+        if !cfg!(feature = "native-input") {
+            return Err("native-input-disabled");
+        }
         let mut peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
         if peer.is_some() {
             return Err("peer-already-bound");

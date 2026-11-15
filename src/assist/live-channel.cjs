@@ -94,6 +94,8 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'resource-session') return exact(result, ['type', 'document', 'answer']) &&
+      result.type === 'resource-session' && result.document === entry.document && privatePeer.answer(result.answer, 'close');
     if (endpoint && entry.type === 'cancel-native') return exact(result, ['type', 'cancelled']) &&
       result.type === 'cancel-native' && typeof result.cancelled === 'boolean';
     if (endpoint && entry.type === 'extension') {
@@ -223,6 +225,14 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       } catch (error) { return Promise.reject(error); }
     };
     if (endpoint) {
+      api.resourceSession = (session, grantId, document, requestSignal) => {
+        if (!privatePeer.operation({ action: 'prepare', session, grantId }) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
+          return Promise.reject(unavailable());
+        return send({ type: 'resource-session', session, grantId, document }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs, false, requestSignal).then(reply => {
+          if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
+          return reply.answer.result;
+        });
+      };
       api.extension = (request, document) => {
         try {
           const canonical = extension.parseExtRequest(request, request.v);

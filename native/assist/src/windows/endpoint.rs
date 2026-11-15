@@ -199,7 +199,7 @@ impl Safety {
     }
     pub(crate) fn peer(&self, document: u32, operation: crate::peer::Operation) -> Answer {
         let result = (|| {
-            if !cfg!(feature = "native-input") {
+            if !cfg!(any(feature = "native-input", feature = "native-resources")) {
                 return Err(Error::TransportMismatch);
             }
             let (runtime, source_operation) = self
@@ -874,6 +874,131 @@ impl Endpoint {
                 }
                 _ => std::thread::sleep(std::time::Duration::from_millis(10)),
             }
+        }
+    }
+    /// Trusted-main setup only. Resource grants are already service-active and
+    /// must never be routed through input grant.offer or given a synthetic ACK.
+    pub(crate) fn resource_session(
+        &mut self,
+        document: u32,
+        session: &str,
+        grant: &str,
+        request: &GrantRequest,
+    ) -> Answer {
+        let result = (|| {
+            self.live()?;
+            if self.probe
+                || !cfg!(feature = "native-resources")
+                || crate::qualification::namespace().ok().flatten().is_none()
+            {
+                return Err(Error::TransportMismatch);
+            }
+            if self.document != Some(document) || !self.negotiated {
+                return Err(Error::StaleOperation);
+            }
+            request.check(&self.safety, document, session)?;
+            if !crate::grant::token(session, 8, 128) || !crate::grant::token(grant, 8, 128) {
+                return Err(Error::InvalidMessage);
+            }
+            let source = self
+                .capture
+                .as_mut()
+                .ok_or(Error::CaptureUnavailable)?
+                .binding()
+                .map_err(map_capture_error)?;
+            if !source.live() {
+                return Err(Error::CaptureUnavailable);
+            }
+            if let Some(existing) = self.sessions.get(session) {
+                if existing.source.key != source.key || existing.runtime.ended() {
+                    return Err(Error::StaleOperation);
+                }
+                existing
+                    .runtime
+                    .resource_grant(grant)
+                    .map_err(map_runtime_error)?;
+                request.check(&self.safety, document, session)?;
+                return Ok(json!({}));
+            }
+            if self.sessions.len() >= 16 {
+                return Err(Error::Busy);
+            }
+            let enrollment = self.enrollment.as_ref().ok_or(Error::NotEnrolled)?;
+            let issuer = self.issuer.as_ref().ok_or(Error::NotEnrolled)?;
+            let identity = self.identity.as_ref().ok_or(Error::NotEnrolled)?.clone();
+            let response = identity
+                .request_lease(enrollment.endpoint(), session, || {
+                    self.stop.is_stopped()
+                        || request.cancelled.load(Ordering::SeqCst)
+                        || !source.live()
+                })
+                .map_err(map_runtime_error)?;
+            request.check(&self.safety, document, session)?;
+            self.live()?;
+            if !source.live() {
+                return Err(Error::CaptureUnavailable);
+            }
+            let initial = super::lease::InitialLease::parse(response, session, grant)
+                .map_err(map_runtime_error)?;
+            let binding = enrollment
+                .native_binding(
+                    issuer,
+                    &identity,
+                    session,
+                    super::enrollment::PublishedSource {
+                        room: &source.room,
+                        stream: &source.stream,
+                    },
+                    initial.selected(),
+                    super::lease::now().map_err(map_runtime_error)?,
+                )
+                .map_err(map_runtime_error)?;
+            let resources = initial.resources().to_vec();
+            let runtime = super::runtime::StreamRuntime::begin_seeded(
+                super::enrollment::EnrolledIdentity {
+                    issuer,
+                    identity,
+                    enrollment,
+                },
+                binding.clone(),
+                &resources,
+                source.geometry.clone(),
+                super::runtime::RuntimeOwner {
+                    stop: self.stop.clone(),
+                    custody: self.custody.as_ref().ok_or(Error::Stopped)?.clone(),
+                    source: source.clone(),
+                },
+                self.input_profile(),
+                Some(initial),
+            )
+            .map_err(map_runtime_error)?;
+            self.safety
+                .register(document, session, runtime.revoker())
+                .map_err(map_runtime_error)?;
+            self.safety
+                .attach_peer(
+                    document,
+                    session,
+                    runtime.peer_handle().map_err(map_runtime_error)?,
+                    source.key.operation.clone(),
+                )
+                .map_err(map_runtime_error)?;
+            self.sessions.insert(
+                session.into(),
+                Session {
+                    source,
+                    binding,
+                    runtime,
+                    offered: BTreeSet::new(),
+                },
+            );
+            request.check(&self.safety, document, session)?;
+            self.live()?;
+            Ok(json!({}))
+        })();
+        match result {
+            Ok(result) => Answer::ok(result),
+            Err(error) => Answer::error(error),
         }
     }
     /// Private no-authority process fixture. No canonical web operation routes

@@ -759,6 +759,30 @@ impl SessionGate {
         }
         Ok(())
     }
+    /// Service authority for connecting a resource transport only. This cannot
+    /// authorize clipboard/filesystem actions: those retain authorize + native
+    /// local consent and per-operation confirmation in their resource brokers.
+    pub(crate) fn resource_transport_grant(
+        &mut self,
+        id: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<StreamGrant, &'static str> {
+        self.tick(now, instant)?;
+        self.lease_current(now, instant)?;
+        let grant = self.pending_grant(id, now)?;
+        let lease = self.lease.as_ref().ok_or("lease-required")?;
+        if !matches!(
+            grant.capability.as_str(),
+            "clipboard_to_host" | "clipboard_to_guest" | "file_to_host" | "file_to_guest"
+        ) || grant.endpoint.is_some()
+            || !lease.grants.iter().any(|g| g == id)
+            || grant.generation > lease.generation
+        {
+            return Err("not-granted");
+        }
+        Ok(grant)
+    }
     pub(crate) fn input_cohort_decided(
         &mut self,
         current: &[StreamGrant],
@@ -1584,6 +1608,52 @@ mod request_tests {
         SignedStreamGrant {
             signature: URL_SAFE_NO_PAD.encode(key.sign(&grant.canonical()).to_bytes()),
             grant,
+        }
+    }
+    #[test]
+    fn resource_transport_accepts_only_the_four_signed_directions_without_os_consent() {
+        for capability in [
+            "clipboard_to_host",
+            "clipboard_to_guest",
+            "file_to_host",
+            "file_to_guest",
+            "pointer",
+            "annotate",
+        ] {
+            let (mut gate, key, mouse, now, t) = setup();
+            let mut grant = other(&mouse, &key, 10, capability).grant;
+            grant.endpoint = None;
+            let grant = sign(grant, &key);
+            gate.admit(&grant, now).unwrap();
+            let fixture: serde_json::Value = serde_json::from_str(include_str!(
+                "../../../tests/fixtures/assist-control-v2.json"
+            ))
+            .unwrap();
+            let mut lease: StreamLease =
+                serde_json::from_value(fixture["leases"]["valid"][0]["signed"]["lease"].clone())
+                    .unwrap();
+            lease.generation = 10;
+            lease.grants = vec![grant.grant.grant_id.clone()];
+            let lease = SignedStreamLease {
+                signature: URL_SAFE_NO_PAD
+                    .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
+                lease,
+            };
+            gate.refresh(&lease, now, t, t).unwrap();
+            assert_eq!(
+                gate.resource_transport_grant(&grant.grant.grant_id, now, t)
+                    .is_ok(),
+                !matches!(capability, "pointer" | "annotate")
+            );
+            assert!(
+                gate.consented_grant(&grant.grant.grant_id, now)
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                gate.authorize(&grant.grant.grant_id, capability, now, t)
+                    .is_err()
+            );
         }
     }
     fn other(

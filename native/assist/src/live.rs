@@ -57,6 +57,12 @@ pub struct Request {
 #[derive(Deserialize, Serialize)]
 #[serde(tag = "type", deny_unknown_fields, rename_all = "kebab-case")]
 pub enum Command {
+    #[serde(rename_all = "camelCase")]
+    ResourceSession {
+        document: u32,
+        session: String,
+        grant_id: String,
+    },
     CancelNative {
         target: u32,
     },
@@ -165,6 +171,7 @@ impl Ingress {
                 | Command::Peer { .. }
                 | Command::Extension { .. }
                 | Command::CancelNative { .. }
+                | Command::ResourceSession { .. }
                     if self.version != 3 =>
                 {
                     return Err("operation-unavailable");
@@ -215,6 +222,10 @@ impl Ingress {
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "kebab-case")]
 pub enum Reply {
+    ResourceSession {
+        document: u32,
+        answer: crate::endpoint::Answer,
+    },
     CancelNative {
         cancelled: bool,
     },
@@ -296,6 +307,7 @@ mod tests {
             json!({"type":"capture-setup","enabled":true}),
             json!({"type":"capture-source","document":0,"selection":{"operation":"capture_fixture_01","source":"window:123:0","display":null,"bounds":null}}),
             json!({"type":"inspect-local-ice","ports":[12345]}),
+            json!({"type":"resource-session","document":4,"session":"sassist_fixture_0001","grantId":"resource_bootstrap_01"}),
         ] {
             for version in [1, 2] {
                 let signals = Signals::default();
@@ -322,6 +334,7 @@ mod tests {
             )
             .is_err()
         );
+        assert!(serde_json::from_value::<Command>(json!({"type":"resource-session","document":4,"session":"sassist_fixture_0001","grantId":"resource_bootstrap_01","approved":true})).is_err());
     }
     #[test]
     fn endpoint_dispatch_requires_its_own_version_and_private_handshake() {

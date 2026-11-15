@@ -125,12 +125,17 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
     void entry.sealed.catch(() => {});
     try {
       let prepared;
+      let bootstrapped = false;
       const prepareDeadline = performance.now() + 110000;
       const authorityDeadline = performance.now() + 10000;
       for (;;) {
         try { prepared = await native({ action: 'prepare', grantId: request.grantId }); break; }
         catch (error) {
           current();
+          if (error.code === 'binding-mismatch' && !bootstrapped && typeof channel.resourceSession === 'function') {
+            await channel.resourceSession(request.session, request.grantId, scope.generation, scope.signal);
+            bootstrapped = true; current(); continue;
+          }
           if (!['grant-invalid', 'busy'].includes(error.code) || performance.now() >= prepareDeadline ||
               (error.code === 'grant-invalid' && performance.now() >= authorityDeadline)) throw error;
           await pause(25, undefined, { signal: scope.signal });

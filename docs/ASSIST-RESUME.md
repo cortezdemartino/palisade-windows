@@ -28,7 +28,12 @@ The [endpoint-wide lease correction](evidence/2026-11-15-endpoint-lease-order.md
 shares authenticated request ordering across the same launch's session pollers,
 preparing for resource-only bootstrap without service replay collisions.
 
-Next: resource integration. Retained resource lifetimes,
+The [resource-only bootstrap](evidence/2026-11-15-resource-session-bootstrap.md)
+now initializes the same native registry from an independently verified service
+snapshot, retaining source/lease/deadline and request cancellation. It grants no
+OS consent and does not yet connect resource-only DTLS or resource actions.
+
+Next: resource transport and action integration. Retained resource lifetimes,
 resource consent/channels and cleanup events are still unfinished; all related
 flags remain false. Do not describe strict resource refusal as a working transfer.
 Companion main inspected read-only at `24b722c206f86651378aeae447252ea71977823a`;

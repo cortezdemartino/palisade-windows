@@ -69,6 +69,93 @@ struct View {
 struct Response {
     session: View,
 }
+/// A bounded, untrusted service snapshot until initialize has verified the
+/// complete response through the existing SessionGate. It is never a consent.
+pub(crate) struct InitialLease {
+    bytes: Vec<u8>,
+    started: Instant,
+    selected: SignedStreamGrant,
+    resources: Vec<SignedStreamGrant>,
+}
+impl InitialLease {
+    pub(crate) fn parse(
+        response: super::identity::LeaseResponse,
+        session: &str,
+        grant: &str,
+    ) -> Result<Self, &'static str> {
+        if response.bytes.len() > 128 * 1024
+            || !crate::grant::token(session, 8, 128)
+            || !crate::grant::token(grant, 8, 128)
+        {
+            return Err("invalid-service-view");
+        }
+        let parsed: Response =
+            serde_json::from_slice(&response.bytes).map_err(|_| "invalid-service-view")?;
+        let view = parsed.session;
+        view.validate_metadata()?;
+        if view.id != session || view.ended.is_some() || view.grants.len() > 8 {
+            return Err("session-ended");
+        }
+        let record = view
+            .grants
+            .iter()
+            .find(|g| g.grant.grant_id == grant && g.state == "active")
+            .ok_or("not-granted")?;
+        if !matches!(
+            record.grant.capability.as_str(),
+            "clipboard_to_host" | "clipboard_to_guest" | "file_to_host" | "file_to_guest"
+        ) || record.grant.endpoint.is_some()
+        {
+            return Err("not-granted");
+        }
+        let selected = SignedStreamGrant {
+            grant: record.grant.clone(),
+            signature: record.signature.clone(),
+        };
+        let resources = view
+            .grants
+            .into_iter()
+            .filter(|g| g.state != "revoked" && g.grant.endpoint.is_none())
+            .map(|g| SignedStreamGrant {
+                grant: g.grant,
+                signature: g.signature,
+            })
+            .collect();
+        Ok(Self {
+            bytes: response.bytes,
+            started: response.started,
+            selected,
+            resources,
+        })
+    }
+    pub(crate) fn selected(&self) -> &SignedStreamGrant {
+        &self.selected
+    }
+    pub(crate) fn resources(&self) -> &[SignedStreamGrant] {
+        &self.resources
+    }
+    pub(crate) fn initialize(
+        &self,
+        gate: &mut SessionGate,
+        track: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<(ServiceFacts, Instant), &'static str> {
+        let result = (|| {
+            let facts = apply_response(gate, &self.bytes, now, self.started, instant)?;
+            if facts.stream_track_name.as_deref() != Some(track) {
+                gate.stop();
+                return Err("source-unconfirmed");
+            }
+            gate.resource_transport_grant(&self.selected.grant.grant_id, now, instant)?;
+            Ok((facts, self.started))
+        })();
+        if result.is_err() {
+            gate.stop();
+        }
+        result
+    }
+}
 pub fn now() -> Result<u64, &'static str> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -193,14 +280,43 @@ impl LeasePoller {
         gate: Arc<Mutex<SessionGate>>,
         on_loss: Arc<dyn Fn() + Send + Sync>,
     ) -> Self {
+        Self::start_seeded(identity, gate, on_loss, None)
+    }
+    pub(crate) fn start_seeded(
+        identity: Arc<EndpointIdentity>,
+        gate: Arc<Mutex<SessionGate>>,
+        on_loss: Arc<dyn Fn() + Send + Sync>,
+        initial: Option<(ServiceFacts, Instant)>,
+    ) -> Self {
         let cancel = Arc::new(AtomicBool::new(false));
         let flag = cancel.clone();
         let retained_gate = gate.clone();
         let retained_loss = on_loss.clone();
-        let facts = Arc::new(Mutex::new(None));
+        let first_refresh = initial
+            .as_ref()
+            .map(|(_, started)| *started + Duration::from_secs(5));
+        let facts = Arc::new(Mutex::new(initial.map(|(facts, _)| facts)));
         let worker_facts = facts.clone();
         let worker = thread::spawn(move || {
             let _facts_lifetime = FactsLifetime(worker_facts.clone());
+            while first_refresh.is_some_and(|until| Instant::now() < until) {
+                if flag.load(Ordering::SeqCst) {
+                    return Ok(());
+                }
+                let invalid = gate
+                    .lock()
+                    .map(|mut guard| {
+                        now()
+                            .and_then(|time| guard.tick(time, Instant::now()))
+                            .is_err()
+                    })
+                    .unwrap_or(true);
+                if invalid {
+                    on_loss();
+                    return Ok(());
+                }
+                thread::sleep(Duration::from_millis(25));
+            }
             while !flag.load(Ordering::SeqCst) {
                 let started = Instant::now();
                 let result = (|| {
@@ -353,6 +469,201 @@ mod tests {
             "inputRequest":{"id":"sinput_fixture_01","createdAt":1800000300000u64,"capabilities":["control_mouse"]},
             "grants":[],"lease":null
         })
+    }
+    fn bootstrap_fixture() -> (Value, Binding, SigningKey, u64) {
+        let f: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let input: SignedStreamGrant =
+            serde_json::from_value(f["grants"]["valid"][1]["signed"].clone()).unwrap();
+        let key = SigningKey::from_bytes(&[42; 32]);
+        let g = &input.grant;
+        let binding = Binding {
+            session: g.session.clone(),
+            room: g.room.clone(),
+            stream: g.stream.clone(),
+            publisher_account: g.publisher_account.clone(),
+            publisher_device: g.publisher_device.clone(),
+            helper_account: g.helper_account.clone(),
+            helper_device: g.helper_device.clone(),
+            helper_transport: g.helper_transport.clone(),
+            endpoint: g.endpoint.clone().unwrap(),
+        };
+        let mut resource = g.clone();
+        resource.capability = "clipboard_to_host".into();
+        resource.endpoint = None;
+        resource.generation += 1;
+        resource.grant_id = "resource_bootstrap_01".into();
+        resource.nonce = "resource_bootstrap_nonce_01".into();
+        let resource = signed(resource, &key);
+        let mut lease: SignedStreamLease =
+            serde_json::from_value(f["leases"]["valid"][0]["signed"].clone()).unwrap();
+        lease.lease.grants = vec![resource.grant.grant_id.clone()];
+        lease.lease.generation = resource.grant.generation;
+        lease.signature = URL_SAFE_NO_PAD.encode(
+            key.sign(&serde_json::to_vec(&lease.lease).unwrap())
+                .to_bytes(),
+        );
+        let response = serde_json::json!({"session":{"id":g.session,"room":g.room,"stream":g.stream,"publisher":{"userId":g.publisher_account,"deviceId":g.publisher_device},"helper":{"userId":g.helper_account,"deviceId":g.helper_device},"approvedAt":g.approved_at,"deadline":g.session_deadline,"ended":null,"streamTrackName":"palisade-capture:fixture_operation_01","approved":["clipboard_to_host"],"inputRequest":null,"grants":[{"grant":resource.grant,"signature":resource.signature,"state":"active"}],"lease":{"lease":lease.lease,"signature":lease.signature}}});
+        (response, binding, key, f["now"].as_u64().unwrap())
+    }
+    #[test]
+    fn resource_only_bootstrap_verifies_the_first_lease_without_native_input_or_local_consent() {
+        let (wire, binding, key, now) = bootstrap_fixture();
+        let t = Instant::now();
+        let initial = InitialLease::parse(
+            super::super::identity::LeaseResponse {
+                bytes: serde_json::to_vec(&wire).unwrap(),
+                started: t,
+            },
+            &binding.session,
+            "resource_bootstrap_01",
+        )
+        .unwrap();
+        assert_eq!(initial.resources().len(), 1);
+        assert!(initial.selected().grant.endpoint.is_none());
+        let mut gate = SessionGate::new(key.verifying_key().to_bytes(), binding, now, 0, t);
+        for record in initial.resources() {
+            gate.admit(record, now).unwrap();
+        }
+        let (facts, started) = initial
+            .initialize(&mut gate, "palisade-capture:fixture_operation_01", now, t)
+            .unwrap();
+        assert_eq!(started, t);
+        assert_eq!(facts.current_grants.len(), 1);
+        gate.resource_transport_grant("resource_bootstrap_01", now, t)
+            .unwrap();
+        assert!(gate.prepare_peer("resource_bootstrap_01", now, t).is_err());
+        assert!(
+            gate.authorize("resource_bootstrap_01", "clipboard_to_host", now, t)
+                .is_err()
+        );
+        // Even a simulated observed transport does not consent an OS operation.
+        gate.verify_peer(&initial.selected().grant.helper_transport)
+            .unwrap();
+        assert!(
+            gate.authorize("resource_bootstrap_01", "clipboard_to_host", now, t)
+                .is_err()
+        );
+        assert!(
+            gate.resource_transport_grant(
+                "resource_bootstrap_01",
+                now,
+                t + Duration::from_secs(21)
+            )
+            .is_err()
+        );
+    }
+    #[test]
+    fn bootstrap_refuses_malformed_tampered_stale_or_wrong_source_snapshots_before_admission() {
+        let (wire, binding, key, now) = bootstrap_fixture();
+        for target in [
+            "/session/room",
+            "/session/helper/deviceId",
+            "/session/publisher/deviceId",
+            "/session/streamTrackName",
+            "/session/lease/signature",
+        ] {
+            let mut altered = wire.clone();
+            *altered.pointer_mut(target).unwrap() =
+                serde_json::json!(if target.ends_with("signature") {
+                    "A".repeat(86)
+                } else {
+                    "wrong-source-or-device".into()
+                });
+            let t = Instant::now();
+            let initial = InitialLease::parse(
+                super::super::identity::LeaseResponse {
+                    bytes: serde_json::to_vec(&altered).unwrap(),
+                    started: t,
+                },
+                &binding.session,
+                "resource_bootstrap_01",
+            )
+            .unwrap();
+            let mut gate =
+                SessionGate::new(key.verifying_key().to_bytes(), binding.clone(), now, 0, t);
+            for record in initial.resources() {
+                gate.admit(record, now).unwrap();
+            }
+            assert!(
+                initial
+                    .initialize(&mut gate, "palisade-capture:fixture_operation_01", now, t)
+                    .is_err(),
+                "{target}"
+            );
+            assert!(gate.ended());
+        }
+        for target in [
+            "/session/grants/0/signature",
+            "/session/grants/0/grant/helperDevice",
+        ] {
+            let mut altered = wire.clone();
+            *altered.pointer_mut(target).unwrap() =
+                serde_json::json!(if target.ends_with("signature") {
+                    "A".repeat(86)
+                } else {
+                    "OTHER_DEVICE".into()
+                });
+            let t = Instant::now();
+            let initial = InitialLease::parse(
+                super::super::identity::LeaseResponse {
+                    bytes: serde_json::to_vec(&altered).unwrap(),
+                    started: t,
+                },
+                &binding.session,
+                "resource_bootstrap_01",
+            )
+            .unwrap();
+            let mut gate =
+                SessionGate::new(key.verifying_key().to_bytes(), binding.clone(), now, 0, t);
+            assert!(gate.admit(initial.selected(), now).is_err());
+        }
+        let t = Instant::now();
+        let initial = InitialLease::parse(
+            super::super::identity::LeaseResponse {
+                bytes: serde_json::to_vec(&wire).unwrap(),
+                started: t - Duration::from_secs(21),
+            },
+            &binding.session,
+            "resource_bootstrap_01",
+        )
+        .unwrap();
+        let mut gate = SessionGate::new(key.verifying_key().to_bytes(), binding.clone(), now, 0, t);
+        for record in initial.resources() {
+            gate.admit(record, now).unwrap();
+        }
+        assert!(
+            initial
+                .initialize(&mut gate, "palisade-capture:fixture_operation_01", now, t)
+                .is_err()
+        );
+        assert!(gate.ended());
+        let mut issued = wire.clone();
+        issued["session"]["grants"][0]["state"] = serde_json::json!("issued");
+        assert!(
+            InitialLease::parse(
+                super::super::identity::LeaseResponse {
+                    bytes: serde_json::to_vec(&issued).unwrap(),
+                    started: t
+                },
+                &binding.session,
+                "resource_bootstrap_01"
+            )
+            .is_err()
+        );
+        assert!(
+            InitialLease::parse(
+                super::super::identity::LeaseResponse {
+                    bytes: serde_json::to_vec(&wire).unwrap(),
+                    started: t
+                },
+                &binding.session,
+                "missing_resource_01"
+            )
+            .is_err()
+        );
     }
     #[test]
     fn canonical_service_metadata_and_legacy_absence_parse_without_creating_authority() {

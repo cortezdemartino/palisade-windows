@@ -16,6 +16,9 @@ cancellation. Next: native resources,
 including retained transfer lifetimes and truthful cleanup/progress events.
 [Endpoint-wide lease ordering](evidence/2026-11-15-endpoint-lease-order.md) removes
 the per-session request timestamp collision before resource bootstrap.
+[Resource-only bootstrap](evidence/2026-11-15-resource-session-bootstrap.md) now
+adopts a verified first lease into the existing registry. Resource transport,
+protected OS actions, transfer lifetimes and actual acceptance remain unfinished.
 Cooperative delivery remains blocked independently; unrelated engineering must
 continue. Production switches and release approvals are unchanged.
 

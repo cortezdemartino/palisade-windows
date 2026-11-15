@@ -13,6 +13,18 @@ const hello = { type: 'hello', protocol: PROTOCOL, version: 1, challenge: random
 const canonical = (op, fields = {}) => ({ p: 'palisade.assist.native', v: 1, id: randomBytes(12).toString('base64url'), op, ...fields });
 const extension = (op, version, fields = {}) => ({ p: 'palisade.assist.native.ext', v: version, id: randomBytes(12).toString('base64url'), op, ...fields });
 
+test('actual resource session bootstrap refuses a probe before HTTPS or resource authority and keeps the channel usable', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await channel.request(canonical('hello', { versions: [1] }), 4);
+    await assert.rejects(channel.resourceSession('session_fixture_01', 'resource_fixture_01', 4), { code: 'transport-mismatch' });
+    assert.equal((await channel.status()).authority, 'none');
+    assert.equal(channel.signal.aborted, false);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
+
 test('actual private request cancellation stays responsive behind blocked ordinary work without revoking the launch', async () => {
   const lifecycle = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });

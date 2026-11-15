@@ -369,6 +369,14 @@ fn run_inner(
                     }
                     _ => {
                         let scope = match &request.command {
+                            Command::ResourceSession {
+                                document, session, ..
+                            } => Some(
+                                safety
+                                    .as_ref()
+                                    .ok_or("endpoint-unavailable")?
+                                    .register_request(request.sequence, *document, session)?,
+                            ),
                             Command::Native {
                                 document,
                                 operation: crate::endpoint::Operation::GrantOffer { session, .. },
@@ -413,6 +421,27 @@ fn run_inner(
                 continue;
             }
             match request.command {
+                Command::ResourceSession {
+                    document,
+                    session,
+                    grant_id,
+                } => {
+                    let answer = native_endpoint
+                        .as_mut()
+                        .ok_or("endpoint-unavailable")?
+                        .resource_session(
+                            document,
+                            &session,
+                            &grant_id,
+                            scope.as_ref().ok_or("request-scope-required")?,
+                        );
+                    emit(
+                        &output,
+                        request.sequence,
+                        Reply::ResourceSession { document, answer },
+                        &signals,
+                    )?;
+                }
                 Command::Extension {
                     document,
                     version,

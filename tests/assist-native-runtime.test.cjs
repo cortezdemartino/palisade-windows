@@ -6,13 +6,15 @@ const { NativeBridgeError } = require('../src/assist/native-protocol.cjs');
 const turn = () => new Promise(resolve => setImmediate(resolve));
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function setup({ enabled = true } = {}) {
-  const requests = [], selections = [], order = [], peerRequests = [];
+  const requests = [], selections = [], order = [], peerRequests = [], bootstraps = [];
+  let bootstrap = async () => { throw new NativeBridgeError("binding-mismatch"); };
   let peerOptions, peerClosed = 0, nativePeer = async operation => operation.action === 'prepare'
     ? { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' }
     : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } : ['observed', 'check'].includes(operation.action) ? { ready: true } : {};
   let options, closed = 0, disposed = 0, fence = null, onStart = async () => ({ operation: 'capture_fixture_01' });
   const lost = new AbortController();
   const channel = {
+    resourceSession: async (...args) => { bootstraps.push(args); return bootstrap(...args); },
     peer: async (operation, document) => { peerRequests.push({ operation, document }); return nativePeer(operation); },
     configureCapture: async value => { order.push(['configure', value]); return enabled; },
     request: async (request, document) => {
@@ -49,6 +51,7 @@ function setup({ enabled = true } = {}) {
   const runtime = context.module.exports.createNativeRuntime({ lifecycle: {}, captureOptions: { screen } });
   const scope = () => { const abort = new AbortController(); return { abort, signal: abort.signal, generation: 7, emit: () => true }; };
   return { runtime, requests, selections, order, scope, options: () => options, closed: () => closed,
+    bootstrap: value => { bootstrap = value; }, bootstraps,
     peerOptions: () => peerOptions, peerClosed: () => peerClosed, peerRequests, nativePeer: value => { nativePeer = value; },
     lose: () => lost.abort(), disposed: () => disposed,
     fence: value => { fence = value; }, onStart: value => { onStart = value; } };
@@ -300,4 +303,21 @@ test('source cancellation tombstones are bounded and exhaustion closes the runti
   for (let n = 0; n < 128; n++) await h.runtime.dispatch({ op: 'capture.stop', operation: 'capture_fixture_' + n }, h.scope());
   await assert.rejects(h.runtime.dispatch({ op: 'capture.stop', operation: 'capture_overflow' }, h.scope()), { code: 'stopped' });
   await h.runtime.stopAll(); assert.equal(h.closed(), 1);
+});
+
+test('a resource-only session is natively bootstrapped before prepare without fabricating input or an ACK', async () => {
+  const h = setup(); await h.runtime.ready;
+  let attempts = 0;
+  h.nativePeer(async operation => {
+    assert.equal(operation.action, 'prepare');
+    throw new NativeBridgeError(++attempts === 1 ? 'binding-mismatch' : 'transport-mismatch');
+  });
+  h.bootstrap(async () => ({}));
+  const scope = h.scope();
+  await assert.rejects(h.runtime.dispatch(peerOffer, scope), { code: 'transport-mismatch' });
+  assert.equal(h.bootstraps.length, 1);
+  assert.deepEqual(h.bootstraps[0], [peerOffer.session, peerOffer.grantId, scope.generation, scope.signal]);
+  assert.equal(attempts, 2); assert.equal(h.peerOptions(), undefined);
+  assert.equal(h.requests.some(v => v.request.op === 'grant.offer'), false);
+  await h.runtime.stopAll();
 });
