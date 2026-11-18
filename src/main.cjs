@@ -1,12 +1,14 @@
 'use strict';
 
-const { app, desktopCapturer, powerMonitor, screen, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
+const { app, desktopCapturer, globalShortcut, powerMonitor, screen, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
 const path = require('node:path');
 const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
 const { appDetails, ensureAppRegistration } = require('./windows-app-registration.cjs');
 const { createUpdateController } = require('./updates/updater.cjs');
 const { createNativeHelper } = require('./updates/native-helper.cjs');
 const { loadSettings, saveSettings } = require('./settings.cjs');
+const { openMediaSettings, ACTIONS, defaults: mediaDefaults, userError: mediaUserError } = require('./media-settings.cjs');
+const { createMediaShortcuts } = require('./media-shortcuts.cjs');
 const { installSessionPolicy } = require('./session-policy.cjs');
 const { installAssistBridge } = require('./assist/bridge.cjs');
 const { createCaptureController } = require('./assist/capture.cjs');
@@ -42,6 +44,7 @@ const activeNotifications = new Set();
 let tray = null;
 let keepRunningInTray = false;
 let desktopSettings;
+let mediaSettings, mediaShortcuts;
 let quitting = false;
 let exitWaiting = false;
 let lastExternalPromptAt = 0;
@@ -137,6 +140,7 @@ if (!app.requestSingleInstanceLock()) {
     });
     if (quitting) return;
     desktopSettings = loadSettings(app.getPath('userData'));
+    mediaSettings = openMediaSettings(app.getPath('userData'));
     keepRunningInTray = desktopSettings.keepRunningInTray;
     const profile = session.fromPartition(PARTITION, { cache: true });
     createMainWindow(profile, Boolean(native) || !app.isPackaged || Boolean(qualification));
@@ -170,7 +174,21 @@ function createMainWindow(profile, startupVerified) {
       architecture: process.arch, electronVersion: process.versions.electron,
       managerAvailable: app.isPackaged && !qualification,
       buildKind: qualification ? 'qualification' : app.isPackaged ? 'installed' : 'development', deviceFeedback, deviceFeedbackError,
+      media: mediaSettings?.snapshot(), mediaError: mediaSettings?.error() || '', mediaShortcutFailures: mediaShortcuts?.failures() || [],
       ...updaterController?.notesState?.() }),
+    onMediaSettings: (request) => {
+      try {
+        if (!request || Array.isArray(request) || !Number.isSafeInteger(request.revision)) throw Error('Invalid media setting.');
+        const previous = mediaSettings.snapshot(); let patch;
+        if (request.op === 'background' && Object.keys(request).sort().join(',') === 'enabled,op,revision' && typeof request.enabled === 'boolean') patch = { backgroundShortcuts: request.enabled };
+        else if (request.op === 'reset' && Object.keys(request).sort().join(',') === 'op,revision') patch = { keybinds: mediaDefaults().keybinds, backgroundShortcuts: false };
+        else if (request.op === 'binding' && Object.keys(request).sort().join(',') === 'accelerator,action,enabled,op,revision' && ACTIONS.includes(request.action))
+          patch = { keybinds: { ...previous.keybinds, [request.action]: { accelerator: request.accelerator, enabled: request.enabled } } };
+        else throw Error('Unsupported media setting.');
+        const next = mediaSettings.update(patch, request.revision); mediaShortcuts?.configure(next);
+        deviceFeedback = 'Shortcut settings saved on this PC.'; deviceFeedbackError = false;
+      } catch (error) { deviceFeedback = mediaUserError(error); deviceFeedbackError = true; }
+    },
     onDeviceAction: (action) => {
       deviceFeedback = ''; deviceFeedbackError = false;
       try {
@@ -223,6 +241,22 @@ function createMainWindow(profile, startupVerified) {
   const identity = appDetails({ packaged: app.isPackaged && !qualification });
   if (identity) window.setAppDetails(identity);
   const contents = mainContents = desktop.contents;
+  mediaShortcuts = createMediaShortcuts({ globalShortcut,
+    available: action => action === 'device-settings', focused: () => window?.isFocused?.() === true,
+    dispatch: () => { openWindow(); showDeviceSettings?.('permissions'); },
+    onStatus: () => refreshDeviceSettings?.(),
+  });
+  mediaShortcuts.configure(mediaSettings.snapshot());
+  contents.on('before-input-event', mediaShortcuts.input);
+  contents.on('blur', mediaShortcuts.blur);
+  contents.on('focus', mediaShortcuts.focus);
+  window.on('blur', mediaShortcuts.blur);
+  window.on('focus', mediaShortcuts.focus);
+  app.on('will-quit', mediaShortcuts.stop);
+  contents.on('render-process-gone', mediaShortcuts.blur);
+  window.once('closed', mediaShortcuts.stop);
+  window.once('closed', () => { showDeviceSettings = null; });
+  contents.on('destroyed', mediaShortcuts.stop);
   assistCapture = createCaptureController({ enabled: captureEnabled && startupVerified, getContents: () => contents, getWindow: () => window,
     enumerate: options => desktopCapturer.getSources(options), choose: chooseSource, onState: () => updateTrayMenu(),
     revoke: () => { if (!contents.isDestroyed()) { contents.forcefullyCrashRenderer(); contents.reload(); } } });

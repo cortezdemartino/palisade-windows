@@ -85,10 +85,11 @@
   <section id="device-settings" role="dialog" aria-labelledby="settings-title" hidden>
     <header class="settings-header"><div><h1 id="settings-title">Settings</h1><p class="subtitle">Windows preferences for this PC</p></div><button id="dismiss-settings" title="Close settings (Esc)" aria-label="Close settings">×</button></header>
     <div class="settings-layout">
-      <label class="compact-navigation" for="settings-category">Category<select id="settings-category" aria-controls="settings-content"><option value="general">General</option><option value="permissions">Notifications &amp; permissions</option><option value="updates">Updates</option><option value="whats-new">What's new</option><option value="about">About &amp; support</option><option value="account">Account &amp; workspaces</option></select></label>
+      <label class="compact-navigation" for="settings-category">Category<select id="settings-category" aria-controls="settings-content"><option value="general">General</option><option value="permissions">Notifications &amp; permissions</option><option value="keybinds">Keybinds</option><option value="updates">Updates</option><option value="whats-new">What's new</option><option value="about">About &amp; support</option><option value="account">Account &amp; workspaces</option></select></label>
       <nav class="settings-tabs" role="tablist" aria-label="Settings categories" aria-orientation="vertical">
         <button id="tab-general" class="tab selected" role="tab" data-section="general" aria-selected="true" aria-controls="section-general" tabindex="0">General</button>
         <button id="tab-permissions" class="tab" role="tab" data-section="permissions" aria-selected="false" aria-controls="section-permissions" tabindex="-1">Notifications &amp; permissions</button>
+        <button id="tab-keybinds" class="tab" role="tab" data-section="keybinds" aria-selected="false" aria-controls="section-keybinds" tabindex="-1">Keybinds</button>
         <button id="tab-updates" class="tab" role="tab" data-section="updates" aria-selected="false" aria-controls="section-updates" tabindex="-1">Updates</button>
         <button id="tab-whats-new" class="tab" role="tab" data-section="whats-new" aria-selected="false" aria-controls="section-whats-new" tabindex="-1">What's new</button>
         <button id="tab-about" class="tab" role="tab" data-section="about" aria-selected="false" aria-controls="section-about" tabindex="-1">About &amp; support</button>
@@ -108,6 +109,15 @@
           <div class="setting"><div>Windows notifications<small>Banners and sounds may be silenced by Do Not Disturb. Review Palisade in Windows notification settings.</small></div><button class="action" id="notification-settings" aria-label="Open Windows notification settings">Open Windows settings</button></div>
           <div class="setting"><div>Microphone access<small>Allow microphone access in Windows, then respond to Palisade's permission request when using voice.</small></div><button class="action" id="microphone-settings">Open microphone settings</button></div>
           <aside class="notice"><h3>Conversation preferences</h3><p>For muted conversations and account notification preferences, use Account settings in Palisade. These Windows controls do not change them.</p><p>This panel cannot grant device access. Camera and general screen-capture requests remain blocked in the standard Windows client.</p></aside>
+        </section>
+        <section id="section-keybinds" class="settings-section" role="tabpanel" aria-labelledby="tab-keybinds" tabindex="0" hidden>
+          <h2>Keybinds</h2><p class="section-intro">Keyboard shortcuts saved on this PC.</p>
+          <div class="setting"><label for="device-shortcut-enabled">Open device permissions<small>Opens Palisade's notification and microphone settings. Works while the Palisade page is focused.</small></label><input id="device-shortcut-enabled" type="checkbox" role="switch"></div>
+          <label for="device-shortcut">Shortcut</label><div class="update-actions"><input id="device-shortcut" type="text" readonly aria-describedby="shortcut-help" placeholder="Not assigned"><button class="action" id="record-shortcut">Record shortcut</button><button class="action" id="clear-shortcut">Clear</button></div>
+          <p class="hint" id="shortcut-help">Choose Control or Alt with a key. Press Escape to cancel recording. Windows, Assist and existing app shortcuts are reserved.</p>
+          <div class="setting"><label for="background-media-shortcuts">Allow shortcuts while Palisade is in the background<small>Off by default. Registers supported shortcuts with Windows. Other apps may already use your shortcut.</small></label><input id="background-media-shortcuts" type="checkbox" role="switch"></div>
+          <p id="media-shortcut-status" class="hint" role="status" aria-live="polite"></p><button class="action" id="reset-shortcuts">Reset shortcuts</button>
+          <aside class="notice"><h3>Voice and camera shortcuts</h3><p>Mute, deafen, webcam, call volume and push-to-talk shortcuts need the matching Palisade media integration. They are unavailable here. This client keeps webcam access blocked and does not register global hold-to-talk.</p><p>Use the current call's controls for supported voice settings. Screen sharing keeps its separate Assist authorization.</p></aside>
         </section>
         <section id="section-updates" class="settings-section" role="tabpanel" aria-labelledby="tab-updates" tabindex="0" hidden>
           <h2>Updates</h2><p class="section-intro">Keep Palisade up to date on this PC.</p>

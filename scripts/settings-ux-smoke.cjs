@@ -1,7 +1,7 @@
 'use strict';
 // Real isolated Electron settings UI. All device/update actions use a recorder;
 // no OS preferences, installed client, service, input endpoint or installer runs.
-const { app } = require('electron');
+const { app, globalShortcut } = require('electron');
 app.disableHardwareAcceleration();
 app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 const assert = require('node:assert/strict'), fs = require('node:fs/promises'), path = require('node:path');
@@ -15,6 +15,8 @@ let owner;
 const deadline = setTimeout(() => { console.error('Settings UI fixture timed out'); app.exit(1); }, 60000);
 app.whenReady().then(async () => {
   const actions = [], cases = [], images = [];
+  const mediaPrefs = require('../src/media-settings.cjs');
+  let media = mediaPrefs.defaults();
   let state = { version: '0.3.4', architecture: 'x64', electronVersion: process.versions.electron, buildKind: 'installed',
     keepRunningInTray: true, launchOnLogin: false, loginAvailable: true, updaterAvailable: true, managerAvailable: true,
     updatePhase: 'idle', updateStatus: 'Updates: up to date.', latestVersion: '0.3.4', autoCheck: true, autoDownload: true, installOnQuit: false,
@@ -22,7 +24,14 @@ app.whenReady().then(async () => {
     notesStatus: 'Verified notes saved on this PC. Display fixture.', notificationStatus: 'No desktop notifications sent yet.',
     releaseHistory: ['0.3.5','0.3.4'].map(version => ({ version, publishedAt: '2026-11-13T18:00:00.000Z', locale: 'en',
       title: 'Palisade ' + version, summary: 'Desktop improvements and reliability updates.', sections: [{ title: 'Improvements', items: ['A clearer home for Windows preferences.'] }, { title: 'Fixed', items: ['Text only: <img src=x onerror=alert(1)>'] }], compatibility: ['Windows 10 and 11, x64.'] })) };
-  const desktop = createDesktopWindow({ partition: 'settings-ux-fixture', onSettings: () => state,
+  const desktop = createDesktopWindow({ partition: 'settings-ux-fixture', onSettings: () => ({ ...state, media }),
+    onMediaSettings: request => {
+      actions.push(request);
+      assert.equal(request.revision, media.revision);
+      if (request.op === 'reset') media = { ...mediaPrefs.defaults(), revision: media.revision + 1 };
+      if (request.op === 'background') media = { ...media, revision: media.revision + 1, backgroundShortcuts: request.enabled };
+      if (request.op === 'binding') media = mediaPrefs.validate({ ...media, revision: media.revision + 1, keybinds: { ...media.keybinds, [request.action]: { accelerator: request.accelerator, enabled: request.enabled } } });
+    },
     onDeviceAction: action => {
       actions.push(action);
       if (action === 'tray-off') state = { ...state, keepRunningInTray: false };
@@ -53,11 +62,54 @@ app.whenReady().then(async () => {
     assert.equal(report.overflow, false, JSON.stringify(report)); assert(report.close && report.footer && report.nav);
     assert(report.contentHeight >= 50, JSON.stringify(report)); assert.equal(report.selected, 1); assert.equal(report.panels, 1);
   };
-  for (const category of ['general','permissions','updates','whats-new','about','account']) {
+  for (const category of ['general','permissions','keybinds','updates','whats-new','about','account']) {
     await select(category); await layout(); await screenshot(category);
     assert.equal(await js(`document.getElementById('section-${category}').hidden`), false);
   }
-  cases.push('six rendered categories and persistent navigation');
+  cases.push('seven rendered categories and persistent navigation');
+  await select('keybinds');
+  assert.equal(await js("document.getElementById('device-shortcut').value"), 'Control+Shift+D');
+  await js("document.getElementById('clear-shortcut').click()"); await pause(25);
+  assert.equal(media.keybinds['device-settings'].enabled, false);
+  await js("document.getElementById('record-shortcut').click()");
+  await js("document.getElementById('device-shortcut').dispatchEvent(new KeyboardEvent('keydown', { key:'k', code:'KeyK', ctrlKey:true, shiftKey:true, bubbles:true }))"); await pause(25);
+  assert.equal(media.keybinds['device-settings'].accelerator, 'Control+Shift+K');
+  await js("document.getElementById('background-media-shortcuts').click()"); await pause(25); assert.equal(media.backgroundShortcuts, true);
+  await js("document.getElementById('reset-shortcuts').click()"); await pause(25); assert.equal(media.backgroundShortcuts, false);
+  cases.push('shortcut recorder, clear, reset and revisioned background preference');
+  const shortcuts = require('../src/media-shortcuts.cjs').createMediaShortcuts({
+    globalShortcut: { register() { throw Error('No real global registration in the UI fixture'); }, unregister() {} },
+    focused: () => true, available: action => action === 'device-settings',
+    dispatch: () => desktop.showSettings('permissions'),
+  });
+  shortcuts.configure(mediaPrefs.defaults());
+  remote.on('before-input-event', shortcuts.input);
+  remote.on('blur', shortcuts.blur);
+  await select('general'); remote.focus();
+  remote.sendInputEvent({ type: 'keyDown', keyCode: 'D', modifiers: ['control', 'shift'] });
+  remote.sendInputEvent({ type: 'keyUp', keyCode: 'D', modifiers: ['control', 'shift'] });
+  await pause(75);
+  assert.equal(await js("document.getElementById('section-permissions').hidden"), false);
+  shortcuts.stop(); remote.removeListener('before-input-event', shortcuts.input); remote.removeListener('blur', shortcuts.blur);
+  cases.push('focused WebContents shortcut opens the actual device-permissions section');
+  const registration = mediaPrefs.defaults(); registration.backgroundShortcuts = true;
+  registration.keybinds['device-settings'].accelerator = 'Control+Alt+Shift+F9';
+  let focused = false;
+  const nativeShortcuts = require('../src/media-shortcuts.cjs').createMediaShortcuts({
+    globalShortcut, focused: () => focused, available: action => action === 'device-settings', dispatch: () => {},
+  });
+  let nativeRegistration = false;
+  try {
+    nativeShortcuts.configure(registration);
+    nativeRegistration = nativeShortcuts.failures().length === 0;
+    if (nativeRegistration) {
+      assert.equal(globalShortcut.isRegistered('Control+Alt+Shift+F9'), true);
+      focused = true; nativeShortcuts.focus(); assert.equal(globalShortcut.isRegistered('Control+Alt+Shift+F9'), false);
+      focused = false; nativeShortcuts.blur(); assert.equal(globalShortcut.isRegistered('Control+Alt+Shift+F9'), true);
+    }
+  } finally { nativeShortcuts.stop(); }
+  assert.equal(globalShortcut.isRegistered('Control+Alt+Shift+F9'), false);
+  cases.push(nativeRegistration ? 'real native global registration, focus suspension and cleanup; no OS key injection' : 'native registration Not Verified: fixture shortcut occupied');
   assert.equal(await remote.executeJavaScript('typeof window.desktopControls'), 'undefined');
   cases.push('hosted renderer has no settings bridge');
   await select('whats-new');

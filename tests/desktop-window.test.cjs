@@ -41,8 +41,8 @@ test('Tabler controls reserve a separate strip and reject untrusted window comma
   }
   const context = { module: { exports: {} }, URL, Response, __dirname: path.join(__dirname, '../src'), require: (name) => name === 'electron' ? { BrowserWindow: Owner, WebContentsView: View, ipcMain, protocol: { registerSchemesAsPrivileged() {} } } : name === './security-policy.cjs' ? require('../src/security-policy.cjs') : require(name) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/desktop-window.cjs'), 'utf8'), context);
-  const deviceActions = [];
-  const result = context.module.exports.createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.3' }), onDeviceAction: action => deviceActions.push(action), partition: 'persist:palisade-desktop', icon: {} });
+  const deviceActions = [], mediaActions = [];
+  const result = context.module.exports.createDesktopWindow({ onSettings: () => ({ keepRunningInTray: true, version: '0.2.3' }), onMediaSettings: value => mediaActions.push(value), onDeviceAction: action => deviceActions.push(action), partition: 'persist:palisade-desktop', icon: {} });
   const [view, controls] = views;
   assert.equal(owner.options.frame, false); assert.equal(owner.options.titleBarOverlay, undefined);
   assert.equal(owner.options.webPreferences.javascript, false);
@@ -76,6 +76,11 @@ test('Tabler controls reserve a separate strip and reject untrusted window comma
   emit(view.webContents, view.webContents.mainFrame, 'close'); assert.equal(owner.closeRequested, undefined);
   emit(controls.webContents, {}, 'close'); assert.equal(owner.closeRequested, undefined);
   const frame = controls.webContents.mainFrame, url = frame.url;
+  const media = { op: 'reset', revision: 0 };
+  for (const [sender, senderFrame] of [[view.webContents, view.webContents.mainFrame], [controls.webContents, {}]]) ipcMain.emit('palisade:media-settings', { sender, senderFrame }, media);
+  assert.equal(mediaActions.length, 0);
+  ipcMain.emit('palisade:media-settings', { sender: controls.webContents, senderFrame: frame }, media);
+  assert.equal(mediaActions.length, 1);
   frame.url = 'https://evil.test/'; emit(controls.webContents, frame, 'close'); assert.equal(owner.closeRequested, undefined); frame.url = url;
   emit(controls.webContents, frame, 'execute'); assert.equal(owner.closeRequested, undefined);
   emit(controls.webContents, frame, 'https://evil.test'); assert.equal(deviceActions.length, 0);
@@ -108,7 +113,7 @@ test('local preload exposes only fixed controls and strips Electron events from 
   ipcRenderer.send = (...args) => sent.push(args);
   const context = { require: () => ({ ipcRenderer, contextBridge: { exposeInMainWorld: (name, value) => { assert.equal(name, 'desktopControls'); bridge = value; } } }) };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/window-controls-preload.cjs'), 'utf8'), context);
-  assert.equal(Object.keys(bridge).sort().join(','), 'backToPalisade,cancelUpdate,checkForUpdates,close,copyDiagnostics,downloadUpdate,helpGuide,helpIssues,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,restartForUpdate,setLogin,setTray,setUpdatePreference,setUpdatesPaused,settings,testNotification');
+  assert.equal(Object.keys(bridge).sort().join(','), 'backToPalisade,cancelUpdate,checkForUpdates,close,copyDiagnostics,downloadUpdate,helpGuide,helpIssues,maximize,microphoneSettings,minimize,notificationSettings,onState,openUpdates,reloadClient,restartForUpdate,setLogin,setMediaSettings,setTray,setUpdatePreference,setUpdatesPaused,settings,testNotification');
   bridge.minimize(); bridge.maximize(); bridge.close();
   assert.equal(sent.map((args) => args[1]).join(','), 'minimize,maximize,close');
   const received = []; const unsubscribe = bridge.onState((...args) => received.push(args));
@@ -172,6 +177,8 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './assist/native-runtime.cjs') return { createNativeRuntime() { throw Error('Production runtime must remain disabled'); } };
     if (name === './assist/guardian.cjs') return require('../src/assist/guardian.cjs');
     if (name === './assist/lifecycle.cjs') return require('../src/assist/lifecycle.cjs');
+    if (name === './media-settings.cjs') return require('../src/media-settings.cjs');
+    if (name === './media-shortcuts.cjs') return require('../src/media-shortcuts.cjs');
     if (name === './settings.cjs') return { loadSettings: () => ({ keepRunningInTray: true }), saveSettings() { if (failSave) throw Error('simulated write failure'); } };
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check(manual) { if (manual) manualChecks++; }, onQuit() {} }) };
     if (name === './updates/native-helper.cjs') return { createNativeHelper: () => ({ status: async () => ({ state: 'idle' }) }) };

@@ -6,6 +6,33 @@ track this scope. No release, signing, installation or production changes.
 
 ## Current implementation
 
+The Windows Keybinds page now records, clears, enables and resets the device-
+permissions shortcut. Control+Shift+D is the default; background registration is
+off by default. The native handler opens the actual permissions settings, refuses
+reserved/duplicate/AltGr/plain-typing combinations, fences stale callbacks, clears
+held state on view/window focus loss, suspends globals while foreground/recording,
+reports conflicts and unregisters only owned shortcuts on close/quit. Global PTT
+is not implemented. Mute/deafen/camera/volume actions remain unavailable until the
+companion's real media adapter exists; no fake call-state controls were added.
+
+New media-device-policy.json contains version/revision, device-global privacy and
+background-shortcut policy plus bounded keybinds. Atomic writes preserve older
+desktop settings and corrupt media files. Stale revisions/external changes refuse
+Save. No accounts, devices, raw samples, held keys or permission grants are stored.
+The camera field cannot be changed through this preference IPC; current native
+camera/display denial remains authoritative. No hosted-page API was invented.
+
+Tests: 295 app tests pass; isolated Electron UI verifies recorder, reset, clear,
+background opt-in and real focused WebContents shortcut dispatch. A real native
+registration/focus-suspension/cleanup fixture passes without OS key injection.
+Seven settings categories and twelve screenshots were rendered; the Keybinds
+screenshot was inspected. Hardware shortcut activation and actual call/camera/
+microphone/RNNoise acceptance remain Not Verified. See [media controls](MEDIA-CONTROLS.md).
+
+The prior Assist CI failure was reproduced as a temporary-directory alias in test
+fixtures. ff9586b normalizes fixture roots only, preserving all production guards.
+37 focused file tests and strict Clippy pass. Exact Windows CI is tracked in #1.
+
 The first shared persistence correction prevents a preference change from
 overwriting corrupt, oversized or non-object desktop settings with startup
 defaults. Startup can still load safe defaults. Save reports an error and preserves
@@ -13,7 +40,7 @@ the original bytes for recovery. Valid older update/tray preferences continue to
 normalize and persist using the existing atomic replacement. No session, updater
 trust, account data or Assist material moves or resets.
 
-Verification: 291 application tests passed, including corrupt-storage preservation,
+The original persistence checkpoint passed 291 application tests, including corrupt-storage preservation,
 older settings, failed atomic replacement and the existing settings error flow.
 This is a persistence fix, not completion of the media feature.
 

@@ -7,6 +7,27 @@ if (controls) {
   document.getElementById('close').addEventListener('click', () => controls.close());
   document.getElementById('dismiss-settings').addEventListener('click', () => controls.settings());
   const panel = document.getElementById('device-settings');
+  let media = null, recording = false;
+  const shortcut = document.getElementById('device-shortcut');
+  const saveMedia = value => { if (media) controls.setMediaSettings({ ...value, revision: media.revision }); };
+  const saveBinding = (accelerator, enabled) => saveMedia({ op: 'binding', action: 'device-settings', accelerator, enabled });
+  document.getElementById('device-shortcut-enabled').addEventListener('change', event => saveBinding(media?.binding.accelerator || '', event.target.checked));
+  document.getElementById('background-media-shortcuts').addEventListener('change', event => saveMedia({ op: 'background', enabled: event.target.checked }));
+  const stopRecording = () => { recording = false; shortcut.value = media?.binding.accelerator || ''; document.getElementById('record-shortcut').textContent = 'Record shortcut'; };
+  document.getElementById('record-shortcut').addEventListener('click', () => { recording = true; shortcut.value = 'Press your shortcut…'; shortcut.focus(); document.getElementById('record-shortcut').textContent = 'Recording…'; });
+  shortcut.addEventListener('blur', stopRecording);
+  shortcut.addEventListener('keydown', event => {
+    if (!recording) return;
+    if (event.key === 'Tab') { stopRecording(); return; }
+    event.preventDefault(); event.stopPropagation();
+    if (event.key === 'Escape') { shortcut.value = media?.binding.accelerator || ''; stopRecording(); return; }
+    if (event.repeat || event.isComposing || ['Control', 'Alt', 'Shift', 'Meta'].includes(event.key)) return;
+    if (event.metaKey || event.getModifierState('AltGraph')) { document.getElementById('media-shortcut-status').textContent = 'Windows and AltGr typing combinations cannot be assigned.'; return; }
+    const key = ({ ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right', ' ': 'Space' }[event.key] || (event.key.length === 1 ? event.key.toUpperCase() : event.key));
+    stopRecording(); saveBinding([event.ctrlKey && 'Control', event.altKey && 'Alt', event.shiftKey && 'Shift', key].filter(Boolean).join('+'), true);
+  });
+  document.getElementById('clear-shortcut').addEventListener('click', () => { stopRecording(); saveBinding('', false); });
+  document.getElementById('reset-shortcuts').addEventListener('click', () => { stopRecording(); saveMedia({ op: 'reset' }); });
   document.addEventListener('keydown', (event) => {
     if (panel.hidden) return;
     if (event.key === 'Escape') { event.preventDefault(); controls.settings(); }
@@ -104,6 +125,13 @@ if (controls) {
   }
   let historyKey, wasOpen = false, lastFeedback;
   const unsubscribe = controls.onState((state) => {
+    media = state.media || null;
+    if (!state.settingsOpen) stopRecording();
+    if (!recording) shortcut.value = media?.binding.accelerator || '';
+    document.getElementById('device-shortcut-enabled').checked = media?.binding.enabled === true;
+    document.getElementById('background-media-shortcuts').checked = media?.backgroundShortcuts === true;
+    for (const id of ['device-shortcut-enabled', 'background-media-shortcuts', 'record-shortcut', 'clear-shortcut', 'reset-shortcuts']) document.getElementById(id).disabled = !media || Boolean(state.mediaError);
+    document.getElementById('media-shortcut-status').textContent = state.mediaError || (state.mediaShortcutFailures?.length ? 'Windows could not register your shortcut. It may be used by another app. Change the shortcut or turn off background shortcuts.' : 'Changes save immediately on this PC.');
     const { maximized } = state;
     document.getElementById('device-settings').hidden = !state.settingsOpen;
     if (state.settingsOpenTo) selectSection(document.querySelector(`[data-section="${state.settingsOpenTo}"]`), true);

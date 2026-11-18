@@ -1,5 +1,13 @@
 'use strict';
 const { contextBridge, ipcRenderer } = require('electron');
+function boundedMedia(value) {
+  if (!value || value.version !== 1 || !Number.isSafeInteger(value.revision) || value.revision < 0 ||
+      typeof value.backgroundShortcuts !== 'boolean' || !value.keybinds) return null;
+  const binding = value.keybinds['device-settings'];
+  if (!binding || typeof binding.accelerator !== 'string' || binding.accelerator.length > 64 || typeof binding.enabled !== 'boolean') return null;
+  return { revision: value.revision, backgroundShortcuts: value.backgroundShortcuts,
+    binding: { accelerator: binding.accelerator, enabled: binding.enabled } };
+}
 function boundedNotes(value) {
   if (!Array.isArray(value) || value.length > 12) return [];
   const string = (s, max) => typeof s === 'string' && s.length <= max;
@@ -15,6 +23,10 @@ function boundedNotes(value) {
       compatibility: [...note.compatibility] }));
 }
 contextBridge.exposeInMainWorld('desktopControls', {
+  setMediaSettings: request => {
+    if (request && ['background', 'binding', 'reset'].includes(request.op) && Number.isSafeInteger(request.revision))
+      ipcRenderer.send('palisade:media-settings', request);
+  },
   settings: () => ipcRenderer.send('palisade:window-control', 'settings'),
   setTray: (enabled) => { if (typeof enabled === 'boolean') ipcRenderer.send('palisade:window-control', enabled ? 'tray-on' : 'tray-off'); },
   setLogin: (enabled) => { if (typeof enabled === 'boolean') ipcRenderer.send('palisade:window-control', enabled ? 'login-on' : 'login-off'); },
@@ -43,6 +55,8 @@ contextBridge.exposeInMainWorld('desktopControls', {
     if (typeof callback !== 'function') return () => {};
     const listener = (_event, state) => {
       if (typeof state?.maximized === 'boolean') callback({ maximized: state.maximized, settingsOpen: state.settingsOpen === true,
+        media: boundedMedia(state.media), mediaError: typeof state.mediaError === 'string' ? state.mediaError.slice(0, 200) : '',
+        mediaShortcutFailures: Array.isArray(state.mediaShortcutFailures) ? state.mediaShortcutFailures.filter(v => v === 'device-settings') : [],
         returnToApp: state.returnToApp === true,
         keepRunningInTray: state.keepRunningInTray === true, launchOnLogin: state.launchOnLogin === true,
         loginAvailable: state.loginAvailable === true, version: typeof state.version === 'string' ? state.version.slice(0, 64) : '',
@@ -51,7 +65,7 @@ contextBridge.exposeInMainWorld('desktopControls', {
         updateStatus: typeof state.updateStatus === 'string' ? state.updateStatus.slice(0, 160) : '',
         latestVersion: typeof state.latestVersion === 'string' ? state.latestVersion.slice(0, 64) : '',
         notesStatus: typeof state.notesStatus === 'string' ? state.notesStatus.slice(0, 200) : '',
-        releaseHistory: boundedNotes(state.releaseHistory), settingsOpenTo: ['general', 'permissions', 'updates', 'whats-new', 'about', 'account'].includes(state.settingsOpenTo) ? state.settingsOpenTo : '',
+        releaseHistory: boundedNotes(state.releaseHistory), settingsOpenTo: ['general', 'permissions', 'keybinds', 'updates', 'whats-new', 'about', 'account'].includes(state.settingsOpenTo) ? state.settingsOpenTo : '',
         architecture: ['x64', 'arm64', 'ia32'].includes(state.architecture) ? state.architecture : '',
         buildKind: ['installed', 'development', 'qualification'].includes(state.buildKind) ? state.buildKind : '',
         electronVersion: typeof state.electronVersion === 'string' ? state.electronVersion.slice(0, 64) : '',

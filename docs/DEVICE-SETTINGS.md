@@ -11,6 +11,7 @@ application is running. Close it with its close button, the gear or Escape.
 | --- | --- |
 | General | Open when Windows starts; keep running in the tray; Close versus Quit explanation |
 | Notifications & permissions | Notification test; Windows notification and microphone settings; conversation-preference explanation |
+| Keybinds | Record, clear, enable and reset the device-permissions shortcut; optional background registration; unavailable call-action explanation |
 | Updates | Installed/latest versions; check, download, cancel and restart; pause; automatic preferences; installation history; optional Manager repair |
 | What's new | Authenticated release summaries, dates, details and saved release history, including offline/unavailable states |
 | About & support | Version/build/runtime; truthful Assist status; reload; copy troubleshooting information; fixed guide/support links |

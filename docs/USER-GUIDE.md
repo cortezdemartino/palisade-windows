@@ -1,5 +1,15 @@
 # Windows client guide
 
+## Keyboard shortcuts
+
+Open **Settings > Keybinds** to change the device-permissions shortcut. The
+default is **Ctrl+Shift+D** while Palisade's page is focused. Record a combination,
+or use Clear to remove it. Changes save immediately on this PC. Background
+shortcuts are optional and off by default; a Windows registration conflict is
+shown when you return to Settings. Reset restores the default and turns background
+shortcuts off. This currently opens device permissions; native call-control
+shortcuts and global push-to-talk remain unavailable. See [media controls](MEDIA-CONTROLS.md).
+
 ## Assist availability
 
 Full Assist is still under development and is not enabled by the ordinary Windows

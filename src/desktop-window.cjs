@@ -44,7 +44,7 @@ function lockLocalContents(contents) {
   contents.session.setDevicePermissionHandler(() => false);
 }
 
-function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings = () => ({}), onDeviceAction = () => {} }) {
+function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings = () => ({}), onDeviceAction = () => {}, onMediaSettings = () => {} }) {
   const window = new BrowserWindow({
     title: 'Palisade', width: 1240, height: 780, minWidth: 640, minHeight: 440,
     backgroundColor: '#0d0f14', icon, show: false, autoHideMenuBar: true,
@@ -79,7 +79,7 @@ function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings
   };
   const publishState = (openTo, returnToApp = false) => {
     if (!controls.webContents.isDestroyed()) controls.webContents.send(STATE_CHANNEL, { ...onSettings(window),
-      maximized: window.isMaximized(), settingsOpen, returnToApp, settingsOpenTo: ['general', 'permissions', 'updates', 'whats-new', 'about', 'account'].includes(openTo) ? openTo : '' });
+      maximized: window.isMaximized(), settingsOpen, returnToApp, settingsOpenTo: ['general', 'permissions', 'keybinds', 'updates', 'whats-new', 'about', 'account'].includes(openTo) ? openTo : '' });
   };
   const onControl = (event, action) => {
     // No commands are accepted from the remote page, subframes, or a navigated local view.
@@ -100,6 +100,12 @@ function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings
     } else if (action === 'close') window.close();
   };
   ipcMain.on(CONTROL_CHANNEL, onControl);
+  const mediaControl = (event, value) => {
+    if (window.isDestroyed() || event.sender !== controls.webContents || event.senderFrame !== controls.webContents.mainFrame ||
+        event.senderFrame?.url !== controlsUrl || controls.webContents.getURL() !== controlsUrl) return;
+    onMediaSettings(value); publishState();
+  };
+  ipcMain.on('palisade:media-settings', mediaControl);
   controls.webContents.on('did-finish-load', publishState);
   window.on('maximize', publishState);
   window.on('unmaximize', publishState);
@@ -109,6 +115,7 @@ function createDesktopWindow({ partition, icon, nativeAssist = false, onSettings
   window.on('leave-full-screen', layout);
   window.on('closed', () => {
     ipcMain.removeListener(CONTROL_CHANNEL, onControl);
+    ipcMain.removeListener('palisade:media-settings', mediaControl);
     for (const child of [view, controls]) if (!child.webContents.isDestroyed()) child.webContents.close();
   });
   lockLocalContents(window.webContents);
