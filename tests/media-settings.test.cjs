@@ -25,7 +25,7 @@ test('media preferences persist with revision checks, independent stores and cor
 test('shortcut validation rejects reserved, duplicate, AltGr and plain typing combinations', () => {
   assert.equal(accelerator('Shift+Control+D'), 'Control+Shift+D');
   assert.doesNotMatch(userError(Error('EACCES C:\\private\\profile.json')), /private|EACCES/);
-  for (const key of ['D', 'Shift+A', 'Meta+D', 'Alt+F4', 'Alt+Tab', 'Control+Alt+A', 'Control+R', 'Control+Shift+F12', 'Control+Alt+Shift+F10', 'Control+Control+D']) assert.throws(() => accelerator(key), key);
+  for (const key of ['D', 'Shift+A', 'Meta+D', 'Alt+F4', 'Alt+Tab', 'Control+Alt+A', 'Control+R', 'Control+Shift+F12', 'Control+Alt+Shift+F10', 'Control+Control+D', 'Control+C', 'Control+Shift+V', 'Control+B', 'Control+Left', 'Alt+Space']) assert.throws(() => accelerator(key), key);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'palisade-media-'));
   try {
     const s = openMediaSettings(dir), keys = defaults().keybinds;

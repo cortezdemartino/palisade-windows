@@ -23,6 +23,11 @@ function accelerator(value) {
       parts.some(part => !MODIFIERS.includes(part)) || new Set(parts).size !== parts.length ||
       !parts.some(part => part === 'Control' || part === 'Alt')) throw Error('Use Control or Alt with a supported key.');
   const normalized = [...MODIFIERS.filter(part => parts.includes(part)), key].join('+');
+  if (['Space', 'Up', 'Down', 'Left', 'Right'].includes(key) ||
+      (parts.includes('Control') && !parts.includes('Alt') &&
+        ('ACVXYZ'.includes(key) || (!parts.includes('Shift') && 'BIUKFSOLNTP'.includes(key))))) {
+    throw Error('That shortcut is reserved by Windows or Palisade.');
+  }
   if (parts.includes('Control') && parts.includes('Alt') && /^[A-Z0-9]$/.test(key)) throw Error('Choose a shortcut that does not conflict with AltGr typing.');
   if (RESERVED.has(normalized)) throw Error('That shortcut is reserved by Windows or Palisade.');
   return normalized;
