@@ -6,6 +6,16 @@ provider/picker and native source verification. This has not been qualified for
 real Windows-to-web encrypted screen sharing.
 [Current implementation and evidence](evidence/2026-11-13-rc3-source-session.md).
 
+The latest native path treats the Electron picker as provisional. Before media
+starts, a fresh app-owned native confirmation shows the verified screen geometry
+or bounded window title and retains the same input exclusion. Unknown/injected
+approval messages, canceled sources and stale decisions cannot activate it.
+The picker allows 30 seconds, native confirmation 60 seconds and combined workflow
+110 seconds inside the canonical request budget. This path has not been exercised
+with actual native confirmation on a test device. Same-process HWND reuse still
+needs a destruction-generation witness or equivalent capture-item lifetime proof;
+process/handle checks alone are not immutable window-instance identity.
+
 The hosted session continues to deny generic display capture. The internal capture coordinator reuses the existing local source picker, requires a visible trusted main window, rechecks the selected source, and creates a separate sandboxed provider in an ephemeral partition. No source is selected automatically. The provider receives only the exact selected source, with audio disabled.
 
 An app-owned peer in the provider sends a single video track to an app-owned isolated preload in the hosted window. The internal local hop exposes no SDP, ICE credentials, certificate or filesystem path to the page. The selected incoming stream is available through an owned video element's `srcObject`. The inactive native v1 adapter now labels it with the canonical data-palisade-assist-capture operation attribute for the companion's existing MatrixRTC/LiveKit publication adapter. This local DTLS hop does not establish or replace cross-client media encryption.

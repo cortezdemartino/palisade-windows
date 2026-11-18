@@ -74,7 +74,9 @@ fn run() -> Result<(), &'static str> {
             "origin":palisade_assist_guardian::qualification::ORIGIN,
             "namespace":palisade_assist_guardian::qualification::namespace()?,
             "issuerFingerprint":palisade_assist_guardian::qualification::issuer_pin()?,
-            "nativeInput":false,"localYield":false});
+            "nativeInput":false,"localYield":false,
+            "compiledNativeInput":cfg!(feature="native-input"),
+            "compiledNativeResources":cfg!(feature="native-resources")});
         return writeln!(std::io::stdout().lock(), "{value}").map_err(|_| "build-info-output");
     }
     if args.len() == 4 && ["--tree-endpoint", "--tree-endpoint-probe"].contains(&args[0].as_str()) {

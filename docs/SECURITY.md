@@ -1,5 +1,17 @@
 # Security model
 
+The native resource continuation binds clipboard text to the original observed
+peer, signed direction, lease, request cancellation and local confirmation. It
+adds no hosted clipboard/filesystem primitive. Shared Rust Allow prompts require
+a fresh press/release with accepted Windows input provenance; button commands and
+ordinary injected messages do not authorize them. Windows classifies trusted
+UIAccess software as hardware, so this is not protection against a compromised
+local desktop. Context/window/input-owner lifetime is retained if window cleanup
+cannot be proven. File selection requires a separate guarded confirmation before
+reading a selected source or creating a final destination. Capture picker
+provenance and all real-device resource acceptance remain separate qualification
+work. Ordinary packages still compile native input/resources out.
+
 The [RC-3 source/session continuation](evidence/2026-11-13-rc3-source-session.md)
 binds qualified capture to root-owned source cancellation and retained native
 session authority. Native consent/pickers exclude Palisade input and cleanup

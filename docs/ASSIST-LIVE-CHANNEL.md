@@ -1,5 +1,15 @@
 # Private native Assist channel
 
+The resource continuation adds a closed private-v3 `resource-text` operation on
+ordinary capacity, with Send/Receive/VerifySend actions. It is not a new hosted
+API. The native gate validates the frozen clipboard-text envelope, exact observed
+peer, current directional grant, local consent, lease and replay sequence. Send
+returns a packet only to trusted main; its exact hash, original request and peer
+must pass a one-shot native verification before the owned DTLS gateway admits it.
+Public extension results/status carry only transfer metadata, never clipboard
+contents. Cancel and Stop retain their reserved independent paths. Actual OS
+clipboard and cross-client acceptance remain Not Verified.
+
 The [native ICE continuation](evidence/2026-11-15-endpoint-ice.md) adds a closed
 private-v3 PeerIce request on ordinary capacity, separate from peer health and
 safety lanes. Its ingress cancellation scope and original attempt/source checks

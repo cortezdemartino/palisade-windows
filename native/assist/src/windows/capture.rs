@@ -41,6 +41,33 @@ enum NativeSource {
     },
 }
 impl NativeSource {
+    fn description(&self) -> Result<String, &'static str> {
+        match self {
+            Self::Screen(source) => Ok(format!(
+                "Screen: {} × {} pixels at ({}, {}).",
+                source.width, source.height, source.x, source.y
+            )),
+            Self::Window { hwnd, .. } => {
+                let mut title = [0u16; 512];
+                let count = unsafe {
+                    GetWindowTextW(*hwnd as HWND, title.as_mut_ptr(), title.len() as i32)
+                };
+                let title = String::from_utf16(&title[..count.max(0) as usize])
+                    .map_err(|_| "source-unavailable")?;
+                if !super::consent::safe_identity(&title) {
+                    return Err("unsafe-source-name");
+                }
+                Ok(format!(
+                    "Window: {}",
+                    if title.is_empty() {
+                        "Untitled window"
+                    } else {
+                        &title
+                    }
+                ))
+            }
+        }
+    }
     fn verify(selection: &Selection) -> Result<Self, &'static str> {
         super::input::ordinary_desktop()?;
         match selection.validate()? {
@@ -114,6 +141,15 @@ impl NativeSource {
                 }
             }
         }
+    }
+}
+struct SelectionApproval {
+    source: Arc<NativeSource>,
+    witness: Arc<SourceWitness>,
+}
+impl crate::cancellation::StopWitness for SelectionApproval {
+    fn stopped(&self) -> bool {
+        !self.witness.live() || !self.source.live()
     }
 }
 struct Published {
@@ -228,6 +264,26 @@ impl Capture {
         if self.stop.is_stopped() || !pending.witness.live() || !source.live() {
             return Err("source-ended");
         }
+        let approval = self.stop.scoped(Arc::new(SelectionApproval {
+            source: source.clone(),
+            witness: pending.witness.clone(),
+        }));
+        // The app-owned picker is provisional. Its browser gesture alone cannot
+        // approve capture after a queued remote event. Keep the SAME native input
+        // exclusion through a fresh, source-bound OS-origin confirmation.
+        let confirmed = super::consent::confirm_capture(
+            &source.description()?,
+            &pending._approval,
+            approval.clone(),
+        );
+        if !matches!(confirmed, Ok(true)) {
+            self.pending = None;
+            return Err(confirmed.err().unwrap_or("consent-denied"));
+        }
+        if approval.is_stopped() {
+            self.pending = None;
+            return Err("source-ended");
+        }
         let pending = self.pending.take().ok_or("stale-source")?;
         self.active = Some(Published {
             key: pending.key.clone(),
@@ -236,8 +292,8 @@ impl Capture {
             source,
             stream: None,
         });
-        // The picker has closed; no queued cleanup-generated gesture can approve
-        // it later. Subsequent native permissions remain separately consented.
+        // The picker and guarded native confirmation have closed. Subsequent
+        // permissions still require their own current authority and consent.
         drop(pending);
         Ok(())
     }

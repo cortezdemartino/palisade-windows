@@ -9,7 +9,7 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 const normal = value => JSON.parse(JSON.stringify(value));
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return { promise, resolve }; }
 function harness({ ownedTree = false, endpoint = false, verify = async () => ownedTree ? { size: 1234, sha256: 'a'.repeat(64) } : undefined, reply, pressure = false, launchError } = {}) {
-  const life = createAssistLifecycle(), child = new EventEmitter(), requests = [];
+  const life = createAssistLifecycle(), child = new EventEmitter(), requests = [], timeouts = [];
   let spawns = 0, kills = 0, rawWrite;
   child.pid = 4242; child.stdout = new PassThrough(); child.stderr = new PassThrough();
   child.kill = () => { kills++; throw Error('live channels must never kill cleanup holders'); };
@@ -31,7 +31,7 @@ function harness({ ownedTree = false, endpoint = false, verify = async () => own
   child.stdin.write = bytes => { const ok = rawWrite(bytes); return pressure && requests.at(-1)?.command.type !== 'hello' ? false : ok; };
   const module = { exports: {} };
   vm.runInNewContext(source, { module, Buffer, AbortController, process,
-    setTimeout, clearTimeout, setInterval, clearInterval,
+    setTimeout: (callback, delay) => { timeouts.push(delay); return setTimeout(callback, delay); }, clearTimeout, setInterval, clearInterval,
     require(name) {
       if (name === 'node:child_process') return { spawn(_binary, args, options) {
         spawns++; assert.equal(args[0], endpoint ? '--tree-endpoint-probe' : ownedTree ? '--tree-live-probe' : '--live-probe'); assert.equal(options.shell, false); assert.equal(options.windowsHide, true);
@@ -65,8 +65,17 @@ function harness({ ownedTree = false, endpoint = false, verify = async () => own
     send(r.sequence, { type: 'cleanup-complete', challenge: requests[0].command.challenge, scope: endpoint ? 'endpoint-and-process-exit' : ownedTree ? 'channel-and-process-exit' : 'channel-only' });
     child.emit('close', 0, null);
   };
-  return { life, child, requests, open, send, sendBytes, finish, spawns: () => spawns, kills: () => kills };
+  return { life, child, requests, timeouts, open, send, sendBytes, finish, spawns: () => spawns, kills: () => kills };
 }
+test('native source confirmation has a human decision budget while source Stop remains independent', async () => {
+  const h = harness({ endpoint: true, ownedTree: true, reply: (request, { send }) => {
+    if (request.command.type === 'capture-source') send(request.sequence, { type: 'capture-source', accepted: true });
+  } });
+  const channel = await h.open();
+  await channel.selectCapture({ operation: 'capture_fixture_01', source: 'screen:1:0', display: '1', bounds: { x: 0, y: 0, width: 100, height: 100, generation: 1 } }, 7);
+  assert.equal(h.timeouts.at(-1), 65000);
+  const ending = channel.close(); h.finish(); await ending;
+});
 
 test('owned process channel negotiates its distinct version/scope and rejects substituted channel-only proof', async () => {
   for (const wrongScope of [false, true]) {
@@ -98,6 +107,21 @@ test('endpoint ICE uses the bounded private ordinary lane with exact native resp
   await assert.rejects(channel.peerIce('session_fixture_01', 'bad-attempt', 4));
   const ending = channel.close(); h.finish(); await ending;
   assert.equal(h.kills(), 0);
+});
+
+test('text private dispatch has closed operations and never adds a clipboard primitive to the hosted bridge', async () => {
+  const h = harness({ ownedTree: true, endpoint: true, reply(request, { send }) {
+    if (request.command.type === 'resource-text') send(request.sequence, { type: 'resource-text', document: request.command.document,
+      answer: { outcome: 'ok', result: request.command.operation.action === 'verify-send' ? {} :
+        { transfer: 'transfer_text_0001', bytes: 10, packet: request.command.operation.action === 'send' ? 'synthetic packet' : null } } });
+  } });
+  const channel = await h.open();
+  assert.equal((await channel.resourceText('session_fixture_01', 'A'.repeat(43), { action: 'send', version: 3, grantId: 'grant_fixture_01' }, 4)).transfer, 'transfer_text_0001');
+  assert.equal((await channel.resourceText('session_fixture_01', 'A'.repeat(43), { action: 'receive', text: '{}' }, 4)).packet, null);
+  assert.deepEqual(normal(await channel.resourceText('session_fixture_01', 'A'.repeat(43), { action: 'verify-send', text: '{}' }, 4)), {});
+  for (const operation of [{ action: 'write', text: 'arbitrary' }, { action: 'send', version: 3, grantId: 'grant_fixture_01', approved: true },
+    { action: 'receive', text: '{}', path: 'C:/private' }]) await assert.rejects(channel.resourceText('session_fixture_01', 'A'.repeat(43), operation, 4));
+  const ending = channel.close(); h.finish(); await ending; assert.equal(h.kills(), 0);
 });
 
 test('global shutdown during verification forbids spawn and retains ownership until no-child proof', async () => {

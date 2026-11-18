@@ -1,5 +1,6 @@
 pub mod activity;
 pub(crate) mod capture;
+pub(crate) mod clipboard;
 pub mod consent;
 pub mod custody_probe;
 pub mod endpoint;

@@ -15,14 +15,15 @@ const EVENT = 'palisade:owned-input-event', COMMAND = 'palisade:owned-input-comm
 const exact = (value, fields) => value && typeof value === 'object' && !Array.isArray(value) &&
   Object.keys(value).sort().join(',') === [...fields].sort().join(',');
 async function createOwnedInputPeer({ enabled = false, session, helperTransport, signal,
-  inputProfile = 'legacy', iceConfiguration = { iceServers: [], iceTransportPolicy: 'all' }, resourceChannels = [], onResource, onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
+  inputProfile = 'legacy', iceConfiguration = { iceServers: [], iceTransportPolicy: 'all' }, resourceChannels = [], onResource,
+  onResourceSend = async () => { throw Error('Resource send not authorized'); }, onObserved, onPacket, onCandidate, onClosed, onCheck = async () => {} } = {}) {
   if (enabled !== true) throw Error('Owned input peer disabled');
   if (typeof session !== 'string' || typeof helperTransport !== 'string' ||
       !TOKEN.test(session) || !FP.test(helperTransport) || signal?.aborted ||
       !['legacy', 'input2', 'resources'].includes(inputProfile) || !Array.isArray(resourceChannels) || resourceChannels.length > 2 ||
       new Set(resourceChannels).size !== resourceChannels.length || resourceChannels.some(value => !['clipboard', 'file'].includes(value)) ||
       (inputProfile === 'resources' && !resourceChannels.length) || (resourceChannels.length > 0 && typeof onResource !== 'function') ||
-      [onObserved, onPacket, onCandidate, onClosed, onCheck].some(fn => typeof fn !== 'function'))
+      [onObserved, onPacket, onCandidate, onClosed, onCheck, onResourceSend].some(fn => typeof fn !== 'function'))
     throw Error('Native input coordinator required');
   resourceChannels = Object.freeze([...resourceChannels]);
   iceConfiguration = validateIce(iceConfiguration);
@@ -208,6 +209,23 @@ async function createOwnedInputPeer({ enabled = false, session, helperTransport,
       });
     },
     close,
+    async sendResource(lane, text, { signal: requestSignal } = {}) {
+      const live = () => {
+        if (ended || requestSignal?.aborted || !observed || liveness.expired('peer') || !resourceChannels.includes(lane) ||
+            typeof text !== 'string' || !text || text.length > 16384 || Buffer.byteLength(text) > 65536)
+          throw Error('Resource send unavailable');
+      };
+      live();
+      await onResourceSend(lane, text, abort.signal, requestSignal); // Native exact-payload, one-shot authorization.
+      live();
+      if (pending.size >= 8 || requestId >= 0xffffffff) throw Error('Resource send queue full');
+      const id = ++requestId;
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => { void close('resource-send-timeout'); }, 2500);
+        timer.unref?.(); pending.set(id, { resolve, reject, timer });
+        send({ type: 'send-resource', id, lane, text });
+      });
+    },
     fenceInput() { inputEnded = true; send({ type: 'fence-input' }); },
     finished,
     verified: () => observed && !ended && !liveness.expired('peer'),

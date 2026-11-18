@@ -1,5 +1,15 @@
 # Validation
 
+## November 15 native text and file staging
+
+The [resource continuation](evidence/2026-11-15-native-text-and-staging.md)
+records 290 passing app tests, 304 native tests per configuration and 20 synthetic
+DTLS fixtures. Four actual temporary-NTFS tests reproduced and closed an in-place
+junction race; guarded native decisions and operation-deadline regressions pass
+without OS input, clipboard access or sensitive UI. Process/package/CI outcomes
+are recorded in that evidence after execution. No real Assist/device acceptance
+or full-product release is implied.
+
 ## November 14 updater installation-name repair
 
 The actual v0.3.4 installation used NSIS's versioned DisplayName, which the helper

@@ -142,6 +142,43 @@ struct OwnedPeer {
     ice_requested: bool,
     deadline: Instant,
 }
+impl OwnedPeer {
+    fn can_retire(&self, next_input: bool) -> bool {
+        // Dropping a transport witness is never input cleanup proof. An old
+        // input attempt can only be replaced by the joined fresh-grant path;
+        // independent resources may reconnect while that cleanup is retained.
+        self.cancelled.load(Ordering::SeqCst) && (!next_input || self.permit.is_none())
+    }
+}
+struct ResourceApproval {
+    gate: Arc<Mutex<SessionGate>>,
+    grant: crate::stream::StreamGrant,
+    cancel: Arc<AtomicBool>,
+    peer_cancel: Arc<AtomicBool>,
+    #[cfg(test)]
+    clock: Option<Arc<std::sync::atomic::AtomicU64>>,
+}
+impl crate::cancellation::StopWitness for ResourceApproval {
+    fn stopped(&self) -> bool {
+        if self.cancel.load(Ordering::SeqCst) || self.peer_cancel.load(Ordering::SeqCst) {
+            return true;
+        }
+        // A busy/poisoned gate cannot leave an approval button enabled on stale
+        // authority. The UI never waits behind the ordinary input worker.
+        let Ok(mut gate) = self.gate.try_lock() else {
+            return true;
+        };
+        #[cfg(test)]
+        let now = self.clock.as_ref().map_or_else(
+            || lease::now().unwrap_or(0),
+            |clock| clock.load(Ordering::SeqCst),
+        );
+        #[cfg(not(test))]
+        let now = lease::now().unwrap_or(0);
+        gate.resource_transport_grant(&self.grant.grant_id, now, Instant::now())
+            .map_or(true, |grant| grant.canonical() != self.grant.canonical())
+    }
+}
 /// The exact connection and original input generation. Closing an old attempt
 /// cannot revoke a successor or unrelated session/resource grants.
 #[derive(Clone)]
@@ -1076,6 +1113,148 @@ impl StreamRuntime {
         }
         self.files.clone().ok_or("native-resources-disabled")
     }
+    pub(crate) fn clipboard_text(
+        &mut self,
+        attempt: &str,
+        operation: crate::resource::TextOperation,
+        cancel: Arc<AtomicBool>,
+    ) -> Result<serde_json::Value, &'static str> {
+        if !cfg!(feature = "native-resources") {
+            return Err("native-resources-disabled");
+        }
+        let peer = self.peer_handle()?;
+        if let crate::resource::TextOperation::VerifySend { text } = &operation {
+            if cancel.load(Ordering::SeqCst) {
+                return Err("revoked");
+            }
+            let message = crate::resource::TextMessage::parse(text)?;
+            peer.resource_authority(attempt, &message.grant, "clipboard_to_guest", true)?;
+            with_live_gate(&self.gate, &self.stop, |gate| {
+                gate.verify_outgoing_text(text, lease::now()?, Instant::now())
+            })?;
+            return Ok(serde_json::json!({}));
+        }
+        let incoming = match &operation {
+            crate::resource::TextOperation::Receive { text } => {
+                Some(crate::resource::TextMessage::parse(text)?)
+            }
+            _ => None,
+        };
+        let id = match &operation {
+            crate::resource::TextOperation::Send { grant_id, .. } => grant_id.as_str(),
+            crate::resource::TextOperation::Receive { .. } => {
+                incoming.as_ref().ok_or("invalid-message")?.grant.as_str()
+            }
+            crate::resource::TextOperation::VerifySend { .. } => return Err("invalid-message"),
+        };
+        let capability = if incoming.is_some() {
+            "clipboard_to_host"
+        } else {
+            "clipboard_to_guest"
+        };
+        let (original, peer_cancel) = peer.resource_authority(attempt, id, capability, false)?;
+        if let Some(message) = &incoming {
+            with_live_gate(&self.gate, &self.stop, |gate| {
+                if message.session != gate.binding().session {
+                    return Err("binding-mismatch");
+                }
+                gate.receive_text_sequence(
+                    id,
+                    message.generation,
+                    message.seq,
+                    lease::now()?,
+                    Instant::now(),
+                )
+            })?;
+        }
+        let approval = Arc::new(ResourceApproval {
+            gate: self.gate.clone(),
+            grant: original.clone(),
+            cancel: cancel.clone(),
+            peer_cancel: peer_cancel.clone(),
+            #[cfg(test)]
+            clock: None,
+        });
+        let scope = self.stop.scoped(approval);
+        if scope.is_stopped() {
+            return Err("revoked");
+        }
+        // Sensitive native UI is a terminal input transition. Retain and join
+        // the actual old executor/mirror before any approval can be shown.
+        self.suspend_input();
+        if self.worker.join().is_err() {
+            self.cleanup_failed = true;
+            self.revoker().revoke();
+            return Err("input-cleanup-unproven");
+        }
+        if scope.is_stopped() || !self.source_confirmed()? {
+            return Err("revoked");
+        }
+        if !super::consent::confirm_clipboard(
+            &original,
+            incoming.as_ref().map(|m| m.text.as_str()),
+            cancel.clone(),
+            scope.clone(),
+        )? {
+            return Err("consent-denied");
+        }
+        if scope.is_stopped() {
+            return Err("revoked");
+        }
+        peer.resource_authority(attempt, id, capability, false)?;
+        with_live_gate(&self.gate, &self.stop, |gate| {
+            gate.consent(id, lease::now()?)
+        })?;
+        let authorize = || {
+            if scope.is_stopped() {
+                return Err("revoked");
+            }
+            let (current, _) = peer.resource_authority(attempt, id, capability, true)?;
+            if current.canonical() != original.canonical() {
+                return Err("binding-mismatch");
+            }
+            Ok(())
+        };
+        let transfer = super::identity::peer_token()?;
+        let operation_result = (|| {
+            let result = if let Some(incoming) = &incoming {
+                super::clipboard::write_text(&incoming.text, authorize)?;
+                serde_json::json!({"transfer":transfer,"bytes":incoming.text.len(),"packet":null})
+            } else {
+                let text = super::clipboard::read_text(authorize)?;
+                authorize()?;
+                let sequence = with_live_gate(&self.gate, &self.stop, |gate| {
+                    gate.next_text_sequence(id, lease::now()?, Instant::now())
+                })?;
+                let packet = crate::resource::TextMessage::outgoing(
+                    &original.session,
+                    id,
+                    original.generation,
+                    sequence,
+                    text.to_string(),
+                )?;
+                with_live_gate(&self.gate, &self.stop, |gate| {
+                    gate.record_outgoing_text(&packet, cancel.clone(), peer_cancel.clone())
+                })?;
+                serde_json::json!({"transfer":transfer,"bytes":text.len(),"packet":packet})
+            };
+            authorize()?;
+            Ok(result)
+        })();
+        match operation_result {
+            Err(
+                error @ ("clipboard-unlock-failed"
+                | "clipboard-close-failed"
+                | "clipboard-owner-cleanup-failed"
+                | "clipboard-memory-cleanup-failed"),
+            ) => {
+                self.cleanup_failed = true;
+                self.revoker().revoke();
+                Err(error)
+            }
+            result => result,
+        }
+    }
     pub fn input_ready(&self) -> bool {
         !self.ended()
             && !self.input_stop.load(Ordering::SeqCst)
@@ -1164,6 +1343,43 @@ impl StreamRuntime {
     }
 }
 impl PeerRuntime {
+    fn resource_authority(
+        &self,
+        attempt: &str,
+        id: &str,
+        capability: &str,
+        consent: bool,
+    ) -> Result<(crate::stream::StreamGrant, Arc<AtomicBool>), &'static str> {
+        self.peer_live()?;
+        let peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
+        let peer = peer
+            .as_ref()
+            .filter(|peer| peer.attempt == attempt && peer.observed && peer.resources.is_some())
+            .ok_or("peer-unverified")?;
+        let grant = with_live_gate(&self.gate, &self.stop, |gate| {
+            let (_, resources) = self.check_connection(gate, peer)?;
+            if !resources {
+                return Err("not-granted");
+            }
+            let grant = gate.resource_transport_grant(id, lease::now()?, Instant::now())?;
+            if grant.capability != capability {
+                return Err("not-granted");
+            }
+            let facts = current_view(&self.facts, &self.expected_track)?;
+            if !facts
+                .current_grants
+                .iter()
+                .any(|record| record.canonical() == grant.canonical())
+            {
+                return Err("not-granted");
+            }
+            if consent {
+                gate.authorize(id, capability, lease::now()?, Instant::now())?;
+            }
+            Ok(grant)
+        })?;
+        Ok((grant, peer.cancelled.clone()))
+    }
     pub(crate) fn inspect_grant(&self, encoded: &str) -> Result<serde_json::Value, &'static str> {
         if self.stop.is_stopped()
             || self.lease_cancel.load(Ordering::SeqCst)
@@ -1255,8 +1471,22 @@ impl PeerRuntime {
     pub(crate) fn prepare_peer(&self, grant: &str) -> Result<serde_json::Value, &'static str> {
         self.peer_live()?;
         let mut peer = self.peer.lock().map_err(|_| "endpoint-failed")?;
-        if peer.is_some() {
-            return Err("peer-already-bound");
+        if let Some(previous) = peer.as_ref() {
+            let next_input = with_live_gate(&self.gate, &self.stop, |gate| {
+                let selected = gate.pending_grant(grant, lease::now()?)?;
+                let input = matches!(
+                    selected.capability.as_str(),
+                    "control_mouse" | "control_keyboard"
+                );
+                if !input {
+                    gate.resource_transport_grant(grant, lease::now()?, Instant::now())?;
+                }
+                Ok(input)
+            })?;
+            if !previous.can_retire(next_input) {
+                return Err("peer-already-bound");
+            }
+            *peer = None;
         }
         let (permit, resources, cancelled, channels) =
             with_live_gate(&self.gate, &self.stop, |gate| {
@@ -1573,6 +1803,140 @@ mod tests {
             0,
             Instant::now(),
         )
+    }
+    fn approval_fixture() -> ResourceApproval {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/assist-control-v2.json"
+        ))
+        .unwrap();
+        let now = fixture["now"].as_u64().unwrap();
+        let mut binding = fixture["expect"].clone();
+        binding.as_object_mut().unwrap().remove("sessionDeadline");
+        binding.as_object_mut().unwrap().remove("now");
+        binding["endpoint"] = fixture["grants"]["valid"][1]["signed"]["grant"]["endpoint"].clone();
+        let issuer =
+            crate::grant::decode::<32>(fixture["issuerPublicKey"].as_str().unwrap()).unwrap();
+        let mut gate = SessionGate::new(
+            issuer,
+            serde_json::from_value(binding).unwrap(),
+            now,
+            0,
+            Instant::now(),
+        );
+        for index in [0, 1] {
+            gate.admit(
+                &serde_json::from_value(fixture["grants"]["valid"][index]["signed"].clone())
+                    .unwrap(),
+                now,
+            )
+            .unwrap();
+        }
+        let signed: crate::stream::SignedStreamGrant =
+            serde_json::from_value(fixture["grants"]["valid"][0]["signed"].clone()).unwrap();
+        let t = Instant::now();
+        gate.refresh(
+            &serde_json::from_value(fixture["leases"]["valid"][0]["signed"].clone()).unwrap(),
+            now,
+            t,
+            t,
+        )
+        .unwrap();
+        ResourceApproval {
+            gate: Arc::new(Mutex::new(gate)),
+            grant: signed.grant,
+            cancel: Arc::new(AtomicBool::new(false)),
+            peer_cancel: Arc::new(AtomicBool::new(false)),
+            clock: Some(Arc::new(std::sync::atomic::AtomicU64::new(now))),
+        }
+    }
+    #[test]
+    fn canceled_resource_transport_can_reconnect_without_reusing_old_input_authority() {
+        for old_input in [false, true] {
+            let fixture = approval_fixture();
+            let now = fixture.clock.as_ref().unwrap().load(Ordering::SeqCst);
+            let mut gate = fixture.gate.lock().unwrap();
+            let resource = gate
+                .prepare_resource_peer(
+                    &fixture.grant.grant_id,
+                    now,
+                    Instant::now(),
+                    Arc::new(AtomicBool::new(false)),
+                )
+                .unwrap();
+            let input = if old_input {
+                let f: serde_json::Value = serde_json::from_str(include_str!(
+                    "../../../../tests/fixtures/assist-control-v2.json"
+                ))
+                .unwrap();
+                let id = f["grants"]["valid"][1]["signed"]["grant"]["grantId"]
+                    .as_str()
+                    .unwrap();
+                gate.consent(id, now).unwrap();
+                Some(gate.prepare_peer(id, now, Instant::now()).unwrap())
+            } else {
+                None
+            };
+            let cancelled = resource.cancellation();
+            let peer = OwnedPeer {
+                attempt: "A".repeat(43),
+                permit: input,
+                resources: Some(resource),
+                cancelled: cancelled.clone(),
+                sealed: true,
+                observed: true,
+                ice_requested: true,
+                deadline: Instant::now() + Duration::from_secs(15),
+            };
+            assert!(!peer.can_retire(false));
+            assert!(!peer.can_retire(true));
+            cancelled.store(true, Ordering::SeqCst);
+            assert!(peer.can_retire(false));
+            assert_eq!(peer.can_retire(true), !old_input);
+        }
+    }
+    #[test]
+    fn resource_approval_keeps_input_stop_independent_but_revocation_cancel_and_peer_loss_end_it() {
+        use crate::cancellation::StopWitness;
+        for kind in ["request", "peer", "revoked", "expired"] {
+            let approval = approval_fixture();
+            assert!(!approval.stopped());
+            approval.gate.lock().unwrap().suspend_input();
+            assert!(!approval.stopped());
+            match kind {
+                "request" => approval.cancel.store(true, Ordering::SeqCst),
+                "peer" => approval.peer_cancel.store(true, Ordering::SeqCst),
+                "revoked" => approval
+                    .gate
+                    .lock()
+                    .unwrap()
+                    .revoke(&approval.grant.grant_id),
+                "expired" => {
+                    approval
+                        .clock
+                        .as_ref()
+                        .unwrap()
+                        .fetch_add(20000, Ordering::SeqCst);
+                }
+                _ => unreachable!(),
+            }
+            assert!(approval.stopped());
+        }
+    }
+    #[test]
+    fn resource_approval_cannot_reappear_after_gate_uncertainty_or_original_request_cancellation() {
+        let approval = Arc::new(approval_fixture());
+        let scope = crate::cancellation::SessionStop::from(Arc::new(AtomicBool::new(false)))
+            .scoped(approval.clone());
+        assert!(!scope.is_stopped());
+        let gate = approval.gate.lock().unwrap();
+        assert!(scope.is_stopped());
+        drop(gate);
+        assert!(scope.is_stopped());
+        let approval = Arc::new(approval_fixture());
+        let scope = crate::cancellation::SessionStop::from(Arc::new(AtomicBool::new(false)))
+            .scoped(approval.clone());
+        approval.cancel.store(true, Ordering::SeqCst);
+        assert!(scope.is_stopped());
     }
     #[test]
     fn launch_stop_while_authorization_holds_gate_rejects_success() {

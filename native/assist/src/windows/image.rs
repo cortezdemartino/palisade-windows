@@ -44,6 +44,7 @@ impl VerifiedImage {
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
             .open(&path)
             .map_err(|_| "helper-image")?;
+        parents.verify_file(&file, path.file_name().ok_or("helper-image")?)?;
         let stat = file.metadata().map_err(|_| "helper-image")?;
         if !stat.is_file()
             || stat.len() != manifest.size

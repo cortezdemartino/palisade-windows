@@ -46,8 +46,15 @@ Coordinate actual fixture availability through #5 instead of fabricating authori
    The normal builder deliberately compiles native input/resources out. Do not
    assume a successful ordinary build can execute the full acceptance inventory,
    and do not bypass this check by swapping a different helper into a package.
-   Sensitive qualification packaging remains a separate verified engineering step
-   after the corresponding live feature and cleanup paths are complete.
+   The wrapper now accepts explicit `--native-input` and `--clipboard-text`
+   selections on a clean committed source. Example for an approved isolated public
+   profile: `node scripts/build-assist-qualification.cjs C:\test-fixture\public-profile.json --native-input --clipboard-text`.
+   It builds a separate unsigned directory, verifies actual compiled flags and
+   packaged hashes, then writes qualification-build.json only after temporary
+   profile cleanup and unchanged-source checks. It never starts the endpoint.
+   Default is capture-only; localYield/images/files/sync/drop/resume remain
+   undeclared. No approved profile was supplied here, so this wrapper's actual
+   sensitive packaging and every resulting device action remain Not Verified.
 5. Obtain explicit disposable-device installation approval and verify the approved
    artifact hash before an operator installs it. Existing source authorization
    does not itself approve installation or personal-desktop input testing.

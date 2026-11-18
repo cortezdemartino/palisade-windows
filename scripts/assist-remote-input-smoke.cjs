@@ -20,7 +20,7 @@ const script = value => JSON.stringify(value);
 let phase = 'startup', number = 0;
 const cases = [], blocked = [];
 const deadline = setTimeout(() => { console.error('Remote peer fixture timeout:', phase); app.exit(1); }, 110000);
-async function fixture({ label = 'control', nativeWait = false, cleanupWait = false, stallPacket = false, fingerprintOverride, corruptOffer = false, inputProfile = 'legacy', resourceChannels = [] } = {}) {
+async function fixture({ label = 'control', nativeWait = false, cleanupWait = false, stallPacket = false, fingerprintOverride, corruptOffer = false, inputProfile = 'legacy', resourceChannels = [], sendWait = false } = {}) {
   const helper = new BrowserWindow({ show: false, webPreferences: { partition: 'assist-remote-helper-' + (++number),
     sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true, devTools: false,
     backgroundThrottling: false } });
@@ -39,8 +39,9 @@ async function fixture({ label = 'control', nativeWait = false, cleanupWait = fa
     const certificate=await RTCPeerConnection.generateCertificate({name:'ECDSA',namedCurve:'P-256'});
     const pc=new RTCPeerConnection({iceServers:[],certificates:[certificate]});
     const channel=pc.createDataChannel(${script(label)},{ordered:true});
-    const f=window.fixture={pc,channel,candidates:[],pending:[],open:false};
+    const f=window.fixture={pc,channel,candidates:[],pending:[],open:false,incoming:[]};
     channel.onopen=()=>f.open=true;
+    channel.onmessage=e=>f.incoming.push(e.data);
     pc.onicecandidate=e=>f.candidates.push({candidate:e.candidate?.candidate??'',mid:e.candidate?.sdpMid??null});
     f.add=async c=>{if(!pc.remoteDescription){f.pending.push(c);return;}await pc.addIceCandidate(c.candidate===''?null:{candidate:c.candidate,sdpMid:c.mid});};
     f.answer=async sdp=>{await pc.setRemoteDescription({type:'answer',sdp});for(const c of f.pending)await f.add(c);f.pending=[];};
@@ -54,9 +55,11 @@ async function fixture({ label = 'control', nativeWait = false, cleanupWait = fa
   const cleanup = new Promise(resolve => { cleanupResolve = resolve; });
   const packetWork = new Promise(resolve => { packetResolve = resolve; });
   const resourceReceived = [];
+  let sendResolve,sendEntered=false;const sendDecision=new Promise(resolve=>{sendResolve=resolve;});
   const peer = await createOwnedInputPeer({ enabled: true, session: 'session_fixture_0001',
     signal: cancellation.signal, inputProfile, resourceChannels,
     onResource: async (lane, data) => { resourceReceived.push({ lane, data }); },
+    onResourceSend: async () => { sendEntered=true;if(sendWait)await sendDecision; },
     helperTransport: fingerprintOverride ?? own.fingerprint,
     onObserved: async (fingerprint, signal) => { observations.push(fingerprint); if (nativeWait) await nativeDecision; return !signal.aborted; },
     onPacket: async (text, signal) => { packetSignal = signal; received.push(text); if (stallPacket) await packetWork; assert.equal(typeof signal.aborted, 'boolean'); },
@@ -75,7 +78,7 @@ async function fixture({ label = 'control', nativeWait = false, cleanupWait = fa
     finally { pumping = false; }
   }, 25);
   const dispose = async () => {
-    clearInterval(pump); nativeResolve(); cleanupResolve(); packetResolve();
+    clearInterval(pump); nativeResolve(); cleanupResolve(); packetResolve(); sendResolve();
     await peer.close(); if (!helper.isDestroyed()) helper.destroy();
   };
   try {
@@ -83,7 +86,7 @@ async function fixture({ label = 'control', nativeWait = false, cleanupWait = fa
     const answer = await peer.offer(offer);
     await run(`fixture.answer(${script(answer.sdp)})`);
     return { peer, helper, ownedWindow, run, received, resourceReceived, observations, dispose, nativeResolve, cleanupResolve, packetResolve,
-      cancellation, packetSignal: () => packetSignal, closed: () => closed, reason: () => reason };
+      sendResolve,sendEntered:()=>sendEntered,cancellation, packetSignal: () => packetSignal, closed: () => closed, reason: () => reason };
   } catch (error) { await dispose(); throw error; }
 }
 app.whenReady().then(async () => {
@@ -221,6 +224,25 @@ app.whenReady().then(async () => {
     await f.run(`fixture.pc.createDataChannel('file')`);
     await poll(f.closed); cases.push(phase);
   } finally { await f.dispose(); }
+
+  phase = 'native-authorized-outgoing-text-after-input-fence';
+  f=await fixture({label:'clipboard',inputProfile:'resources',resourceChannels:['clipboard']});
+  try {
+    await poll(()=>f.peer.verified());await pause(50);f.peer.fenceInput();
+    await f.peer.sendResource('clipboard','synthetic approved outgoing text');
+    await poll(async()=>await f.run('fixture.incoming.length')===1);
+    assert.deepEqual(await f.run('fixture.incoming'),['synthetic approved outgoing text']);
+    assert(f.sendEntered());assert.equal(f.closed(),false);cases.push(phase);
+  } finally {await f.dispose();}
+
+  phase = 'outgoing-text-cancel-during-native-verification';
+  f=await fixture({label:'clipboard',inputProfile:'resources',resourceChannels:['clipboard'],sendWait:true});
+  try {
+    await poll(()=>f.peer.verified());await pause(50);const request=new AbortController();
+    const work=f.peer.sendResource('clipboard','must never be sent',{signal:request.signal});void work.catch(()=>{});
+    await poll(f.sendEntered);request.abort();f.sendResolve();await assert.rejects(work);
+    assert.deepEqual(await f.run('fixture.incoming'),[]);assert.equal(f.peer.verified(),true);cases.push(phase);
+  } finally {await f.dispose();}
 
   assert.deepEqual(blocked, []);
   fs.writeFileSync(path.resolve('out/assist-remote-input-result.json'), JSON.stringify({ passed: true, electron: process.versions.electron,

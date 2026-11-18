@@ -18,6 +18,7 @@ use std::{
         atomic::{AtomicBool, AtomicU64, Ordering},
     },
 };
+use unicode_normalization::UnicodeNormalization;
 use windows_sys::Win32::System::WindowsProgramming::DRIVE_FIXED;
 use windows_sys::{
     Win32::{
@@ -29,6 +30,7 @@ use windows_sys::{
     core::w,
 };
 mod bound;
+mod receive;
 pub use bound::{FileRequest, FileRevoker, FileSelection, SessionFiles};
 const FILE_LIMIT: u64 = 1024 * 1024 * 1024;
 const SESSION_LIMIT: u64 = 4 * FILE_LIMIT;
@@ -45,6 +47,7 @@ impl Metadata {
         if name.is_empty()
             || name.encode_utf16().count() > 180
             || name.trim() != name
+            || !name.nfc().eq(name.chars())
             || name.ends_with(['.', ' '])
             || name.chars().any(|c| {
                 c.is_control()
@@ -152,6 +155,34 @@ impl ParentGuard {
     fn destination(&self, name: &std::ffi::OsStr) -> Result<PathBuf, &'static str> {
         Ok(handle_path(self._directories.last().ok_or("destination-unavailable")?.0)?.join(name))
     }
+    pub(crate) fn verify_file(
+        &self,
+        file: &File,
+        name: &std::ffi::OsStr,
+    ) -> Result<(), &'static str> {
+        // Denying directory rename does not prevent an empty directory from
+        // gaining a junction in place. Bind the actual opened file, not another
+        // pathname attribute check, before the first content read or write.
+        let stat = file.metadata().map_err(|_| "destination-unavailable")?;
+        if !stat.is_file() || stat.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return Err("reparse-refused");
+        }
+        if handle_path(file.as_raw_handle())? != self.destination(name)? {
+            return Err("path-binding-mismatch");
+        }
+        for directory in &self._directories {
+            let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { zeroed() };
+            if unsafe { GetFileInformationByHandle(directory.0, &mut info) } == 0
+                || info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT != 0
+                || info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY == 0
+            {
+                return Err("reparse-refused");
+            }
+        }
+        // The held file cannot be unlinked, and every held ancestor has a held
+        // child. NTFS refuses setting a reparse point on a nonempty directory.
+        Ok(())
+    }
     pub(crate) fn open(path: &Path) -> Result<Self, &'static str> {
         let mut components = path.components();
         if !matches!(components.next(),Some(Component::Prefix(p)) if matches!(p.kind(),Prefix::Disk(_)))
@@ -219,6 +250,9 @@ impl ParentGuard {
             {
                 return Err("reparse-refused");
             }
+            if !directories.is_empty() && handle_path(handle.0)? != resolved {
+                return Err("path-binding-mismatch");
+            }
             directories.push(handle);
         }
         Ok(Self {
@@ -233,7 +267,7 @@ enum Transfer {
         metadata: Metadata,
         offset: u64,
     },
-    Receive(Receive),
+    Receive(Box<Receive>),
 }
 struct Receive {
     temporary: PathBuf,
@@ -243,6 +277,8 @@ struct Receive {
     name: std::ffi::OsString,
     hash: Sha256,
     written: u64,
+    verified: bool,
+    destination: Option<PathBuf>,
     committed: bool,
 }
 impl Drop for Receive {
@@ -317,6 +353,17 @@ impl FileStore {
         let path = dialog(false, None, &cancellation)?.ok_or("transfer-cancelled")?;
         self.live()?;
         check()?;
+        // A common-dialog FileOK can be queued or synthetic. A separate,
+        // app-owned fresh physical decision must precede any selected file read.
+        if !super::consent::confirm_selected_file(
+            &path,
+            false,
+            cancellation.operation.clone(),
+            cancellation.authority.clone(),
+        )? {
+            return Err("file-selection-denied");
+        }
+        check()?;
         self.open_send(&path, &mut check)
     }
     pub fn select_receive(
@@ -342,12 +389,55 @@ impl FileStore {
             authorize()
         };
         check()?;
-        let path =
-            dialog(true, Some(&metadata.name), &cancellation)?.ok_or("transfer-cancelled")?;
-        self.live()?;
-        check()?;
-        self.open_receive(&path, metadata, &mut check)
+        // Unit tests use explicit disposable roots, never the user's AppData.
+        if cfg!(test) {
+            return Err("file-test-ui-disabled");
+        }
+        let root = super::identity::storage()?;
+        self.open_staged_receive(&root, metadata, &mut check)
     }
+    fn open_staged_receive(
+        &mut self,
+        root: &Path,
+        metadata: Metadata,
+        authorize: &mut impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<String, &'static str> {
+        self.live()?;
+        authorize()?;
+        metadata.validate()?;
+        if self
+            .transfers
+            .values()
+            .any(|v| matches!(v, Transfer::Receive(_)))
+        {
+            return Err("transfer-busy");
+        }
+        self.charge(metadata.size)?;
+        let token = identifier()?;
+        let path = root.join(format!(".palisade-receive-{token}.partial"));
+        let parent = ParentGuard::open(&path)?;
+        let temporary = parent.destination(path.file_name().ok_or("invalid-file")?)?;
+        authorize()?;
+        self.live()?;
+        let file = private_file(&temporary, &parent)?;
+        self.transfers.insert(
+            token.clone(),
+            Transfer::Receive(Box::new(Receive {
+                temporary,
+                file,
+                parent,
+                name: metadata.name.clone().into(),
+                metadata,
+                hash: Sha256::new(),
+                written: 0,
+                verified: false,
+                destination: None,
+                committed: false,
+            })),
+        );
+        Ok(token)
+    }
+
     fn open_send(
         &mut self,
         path: &Path,
@@ -363,12 +453,15 @@ impl FileStore {
             return Err("transfer-busy");
         }
         let parent = ParentGuard::open(path)?;
+        self.live()?;
+        authorize()?;
         let mut file = OpenOptions::new()
             .read(true)
             .share_mode(FILE_SHARE_READ)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
             .open(parent.destination(path.file_name().ok_or("invalid-file")?)?)
             .map_err(|_| "source-unavailable")?;
+        parent.verify_file(&file, path.file_name().ok_or("invalid-file")?)?;
         let stat = file.metadata().map_err(|_| "source-unavailable")?;
         if !stat.is_file()
             || stat.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
@@ -412,6 +505,7 @@ impl FileStore {
         );
         Ok((token, metadata))
     }
+    #[cfg(test)]
     fn open_receive(
         &mut self,
         path: &Path,
@@ -443,10 +537,10 @@ impl FileStore {
         let token = identifier()?;
         let temp =
             parent.destination(std::ffi::OsStr::new(&format!(".palisade-{token}.partial")))?;
-        let file = private_file(&temp)?;
+        let file = private_file(&temp, &parent)?;
         self.transfers.insert(
             token.clone(),
-            Transfer::Receive(Receive {
+            Transfer::Receive(Box::new(Receive {
                 temporary: temp,
                 file,
                 parent,
@@ -454,8 +548,10 @@ impl FileStore {
                 name: destination.into(),
                 hash: Sha256::new(),
                 written: 0,
+                verified: false,
+                destination: Some(path.into()),
                 committed: false,
-            }),
+            })),
         );
         Ok(token)
     }
@@ -527,7 +623,8 @@ impl FileStore {
         let Some(Transfer::Receive(receiver)) = self.transfers.get_mut(token) else {
             return Err("transfer-not-found");
         };
-        if bytes.is_empty()
+        if receiver.verified
+            || bytes.is_empty()
             || bytes.len() > 65536
             || receiver.written != offset
             || receiver.written.saturating_add(bytes.len() as u64) > receiver.metadata.size
@@ -545,9 +642,78 @@ impl FileStore {
         self.live()?;
         Ok(total)
     }
-    pub fn commit(
+    fn verify_receive(
         &mut self,
         token: &str,
+        mut authorize: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Metadata, &'static str> {
+        let result = (|| {
+            self.live()?;
+            authorize()?;
+            let Some(Transfer::Receive(receiver)) = self.transfers.get_mut(token) else {
+                return Err("transfer-not-found");
+            };
+            receiver.verify(&mut authorize)?;
+            Ok(receiver.metadata.clone())
+        })();
+        if result.is_err() {
+            self.cancel(token);
+        }
+        result
+    }
+    fn select_commit(
+        &mut self,
+        token: &str,
+        operation: Arc<AtomicBool>,
+        authority: crate::cancellation::SessionStop,
+        mut authorize: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Metadata, &'static str> {
+        let cancellation = Cancellation {
+            session: self.cancel.clone(),
+            operation,
+            authority,
+        };
+        let mut check = || {
+            cancellation.live()?;
+            authorize()
+        };
+        let result = (|| {
+            let metadata = self.verify_receive(token, &mut check)?;
+            let Some(Transfer::Receive(receiver)) = self.transfers.get(token) else {
+                return Err("transfer-not-found");
+            };
+            let path = match &receiver.destination {
+                Some(path) => path.clone(),
+                None => {
+                    let path = dialog(true, Some(&metadata.name), &cancellation)?
+                        .ok_or("transfer-cancelled")?;
+                    check()?;
+                    // The earlier Receive approval authorizes private staging,
+                    // never a later destination chosen by a common dialog.
+                    if !super::consent::confirm_selected_file(
+                        &path,
+                        true,
+                        cancellation.operation.clone(),
+                        cancellation.authority.clone(),
+                    )? {
+                        return Err("file-selection-denied");
+                    }
+                    check()?;
+                    path
+                }
+            };
+            check()?;
+            self.commit_to(token, &path, &mut check)
+        })();
+        if result.is_err() {
+            self.cancel(token);
+        }
+        result
+    }
+    fn commit_to(
+        &mut self,
+        token: &str,
+        path: &Path,
         mut authorize: impl FnMut() -> Result<(), &'static str>,
     ) -> Result<Metadata, &'static str> {
         let Some(Transfer::Receive(mut receiver)) = self.transfers.remove(token) else {
@@ -555,57 +721,24 @@ impl FileStore {
         };
         self.live()?;
         authorize()?;
-        if receiver.written != receiver.metadata.size
-            || hex(&receiver.hash.clone().finalize()) != receiver.metadata.sha256
-        {
-            return Err("integrity-failure");
-        }
-        receiver.file.sync_all().map_err(|_| "destination-write")?;
-        let mut ads = receiver.temporary.as_os_str().to_owned();
-        ads.push(":Zone.Identifier");
-        let mut zone = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
-            .open(PathBuf::from(ads))
-            .map_err(|_| "download-mark-failed")?;
-        zone.write_all(b"[ZoneTransfer]\r\nZoneId=3\r\n")
-            .and_then(|_| zone.sync_all())
-            .map_err(|_| "download-mark-failed")?;
-        drop(zone);
-        authorize()?;
-        self.live()?;
-        // Win32's rename wrapper requires an absolute destination. Every ancestor
-        // remains held without FILE_SHARE_DELETE, so this resolution cannot be
-        // redirected by renaming or replacing a directory. The source is the
-        // already-open private handle and replacement is explicitly forbidden.
-        let name: Vec<u16> = receiver
-            .parent
-            .destination(&receiver.name)?
-            .as_os_str()
-            .encode_wide()
-            .collect();
-        let size = size_of::<FILE_RENAME_INFO>() + name.len() * 2;
-        let mut words = vec![0usize; size.div_ceil(size_of::<usize>())];
-        unsafe {
-            let info = words.as_mut_ptr().cast::<FILE_RENAME_INFO>();
-            (*info).Anonymous.ReplaceIfExists = false;
-            (*info).RootDirectory = ptr::null_mut();
-            (*info).FileNameLength = (name.len() * 2) as u32;
-            ptr::copy_nonoverlapping(name.as_ptr(), (*info).FileName.as_mut_ptr(), name.len());
-            if SetFileInformationByHandle(
-                receiver.file.as_raw_handle(),
-                FileRenameInfo,
-                info.cast(),
-                size as u32,
-            ) == 0
-            {
-                return Err("destination-exists-or-unavailable");
+        receiver.save_to(path, &mut || {
+            self.live()?;
+            authorize()
+        })
+    }
+    #[cfg(test)]
+    fn commit(
+        &mut self,
+        token: &str,
+        authorize: impl FnMut() -> Result<(), &'static str>,
+    ) -> Result<Metadata, &'static str> {
+        let path = match self.transfers.get(token) {
+            Some(Transfer::Receive(receiver)) => {
+                receiver.destination.clone().ok_or("destination-required")?
             }
-        }
-        clear_delete_on_close(&receiver.file)?;
-        receiver.committed = true;
-        Ok(receiver.metadata.clone())
+            _ => return Err("transfer-not-found"),
+        };
+        self.commit_to(token, &path, authorize)
     }
     pub fn cancel(&mut self, token: &str) {
         self.transfers.remove(token);
@@ -616,7 +749,7 @@ impl Drop for FileStore {
         self.transfers.clear();
     }
 }
-fn private_file(path: &Path) -> Result<File, &'static str> {
+fn private_file(path: &Path, parent: &ParentGuard) -> Result<File, &'static str> {
     unsafe {
         let mut token = ptr::null_mut();
         if windows_sys::Win32::System::Threading::OpenProcessToken(
@@ -688,7 +821,11 @@ fn private_file(path: &Path) -> Result<File, &'static str> {
         if handle == INVALID_HANDLE_VALUE {
             return Err("destination-create");
         };
-        Ok(File::from_raw_handle(handle))
+        let file = File::from_raw_handle(handle);
+        // Even a redirected CREATE_NEW contains no application data yet and
+        // remains delete-on-close when this actual-handle binding is refused.
+        parent.verify_file(&file, path.file_name().ok_or("invalid-file")?)?;
+        Ok(file)
     }
 }
 struct Cancellation {
@@ -737,6 +874,9 @@ fn dialog(
     cancel: &Cancellation,
 ) -> Result<Option<PathBuf>, &'static str> {
     cancel.live()?;
+    if cfg!(test) {
+        return Err("file-test-ui-disabled");
+    }
     super::input::ordinary_desktop()?;
     let _input_exclusion = super::input_owner::InputOwner::acquire()?;
     unsafe {
@@ -793,6 +933,7 @@ fn dialog(
 #[cfg(test)]
 mod tests {
     use super::*;
+    mod junction;
     #[test]
     fn file_dialog_cancellation_observes_launch_without_operation_watcher() {
         let launch = Arc::new(AtomicBool::new(false));
@@ -860,8 +1001,8 @@ mod tests {
             );
             let mut store = FileStore::new(Arc::new(AtomicBool::new(false)));
             let token = store
-                .open_receive(
-                    &source.join("never-completed.txt"),
+                .open_staged_receive(
+                    &source,
                     metadata("never-completed.txt", b"fixture data"),
                     &mut || Ok(()),
                 )
@@ -921,6 +1062,190 @@ mod tests {
                 .is_err()
         );
         assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 1);
+    }
+    #[test]
+    fn private_receive_verifies_before_final_save_and_keeps_guest_name_out_of_staging() {
+        let fixture = Fixture::new();
+        let destination = fixture.0.join("chosen-by-recipient.txt");
+        let mut store = fixture.store();
+        let meta = metadata("offered-by-helper.txt", b"private fixture bytes");
+        let token = store
+            .open_staged_receive(&fixture.0, meta.clone(), &mut || Ok(()))
+            .unwrap();
+        assert!(!destination.exists());
+        assert!(!fixture.0.join(&meta.name).exists());
+        let staging: Vec<_> = std::fs::read_dir(&fixture.0)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(staging.len(), 1);
+        assert!(
+            staging[0]
+                .to_string_lossy()
+                .starts_with(".palisade-receive-")
+        );
+        store
+            .write(&token, 0, b"private fixture bytes", || Ok(()))
+            .unwrap();
+        assert!(store.verify_receive(&token, || Ok(())).unwrap() == meta);
+        assert!(!destination.exists());
+        assert!(
+            OpenOptions::new()
+                .read(true)
+                .open(fixture.0.join(&staging[0]))
+                .is_err()
+        );
+        store.commit_to(&token, &destination, || Ok(())).unwrap();
+        assert_eq!(
+            std::fs::read(&destination).unwrap(),
+            b"private fixture bytes"
+        );
+        assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 1);
+        assert!(
+            std::fs::read_to_string(format!("{}:Zone.Identifier", destination.display()))
+                .unwrap()
+                .contains("ZoneId=3")
+        );
+    }
+    #[test]
+    fn whole_held_file_hash_rejects_tamper_even_when_network_hash_was_correct() {
+        let fixture = Fixture::new();
+        let mut store = fixture.store();
+        let token = store
+            .open_staged_receive(&fixture.0, metadata("offered.txt", b"correct"), &mut || {
+                Ok(())
+            })
+            .unwrap();
+        store.write(&token, 0, b"correct", || Ok(())).unwrap();
+        let Some(Transfer::Receive(receiver)) = store.transfers.get_mut(&token) else {
+            panic!("fixture receive missing")
+        };
+        assert_eq!(
+            hex(&receiver.hash.clone().finalize()),
+            receiver.metadata.sha256
+        );
+        receiver.file.seek(SeekFrom::Start(0)).unwrap();
+        receiver.file.write_all(b"changed").unwrap();
+        assert!(matches!(
+            store.verify_receive(&token, || Ok(())),
+            Err("integrity-failure")
+        ));
+        assert!(store.transfers.is_empty());
+        assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 0);
+    }
+    #[test]
+    fn private_stage_cancel_or_expired_authority_never_creates_final_destination() {
+        let fixture = Fixture::new();
+        let destination = fixture.0.join("not-saved.txt");
+        let mut store = fixture.store();
+        for cancel in [false, true] {
+            let token =
+                store
+                    .open_staged_receive(&fixture.0, metadata("offered.txt", b"bytes"), &mut || {
+                        Ok(())
+                    })
+                    .unwrap();
+            store.write(&token, 0, b"bytes", || Ok(())).unwrap();
+            store.verify_receive(&token, || Ok(())).unwrap();
+            if cancel {
+                store.cancel(&token);
+            }
+            assert!(
+                store
+                    .commit_to(&token, &destination, || Err("revoked"))
+                    .is_err()
+            );
+            assert!(!destination.exists());
+            assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 0);
+        }
+    }
+    #[test]
+    fn final_save_race_preserves_existing_file_and_discards_owned_temporaries() {
+        let fixture = Fixture::new();
+        let destination = fixture.0.join("existing.txt");
+        let mut store = fixture.store();
+        let token = store
+            .open_staged_receive(
+                &fixture.0,
+                metadata("offered.txt", b"bytes"),
+                &mut || Ok(()),
+            )
+            .unwrap();
+        store.write(&token, 0, b"bytes", || Ok(())).unwrap();
+        store.verify_receive(&token, || Ok(())).unwrap();
+        // Arrive after the early existence check, before the atomic publication.
+        let mut collision_created = false;
+        let result = store.commit_to(&token, &destination, || {
+            if !collision_created
+                && std::fs::read_dir(&fixture.0).unwrap().any(|entry| {
+                    entry
+                        .unwrap()
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with(".palisade-save-")
+                })
+            {
+                std::fs::write(&destination, b"existing").unwrap();
+                collision_created = true;
+            }
+            Ok(())
+        });
+        assert!(
+            result.is_err(),
+            "late destination collision must refuse replacement"
+        );
+        assert!(collision_created);
+        assert_eq!(std::fs::read(&destination).unwrap(), b"existing");
+        assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 1);
+    }
+    #[test]
+    fn final_save_revocation_during_copy_discards_both_private_handles() {
+        let fixture = Fixture::new();
+        let destination = fixture.0.join("never-saved.txt");
+        let mut store = fixture.store();
+        let bytes = vec![7; 65537];
+        let token = store
+            .open_staged_receive(&fixture.0, metadata("offered.txt", &bytes), &mut || Ok(()))
+            .unwrap();
+        store.write(&token, 0, &bytes[..65536], || Ok(())).unwrap();
+        store
+            .write(&token, 65536, &bytes[65536..], || Ok(()))
+            .unwrap();
+        let mut copy_started = false;
+        assert!(
+            store
+                .commit_to(&token, &destination, || {
+                    copy_started = std::fs::read_dir(&fixture.0).unwrap().any(|entry| {
+                        entry
+                            .unwrap()
+                            .file_name()
+                            .to_string_lossy()
+                            .starts_with(".palisade-save-")
+                    });
+                    if copy_started { Err("revoked") } else { Ok(()) }
+                })
+                .is_err()
+        );
+        assert!(copy_started);
+        assert!(!destination.exists());
+        assert!(store.transfers.is_empty());
+        assert_eq!(std::fs::read_dir(&fixture.0).unwrap().count(), 0);
+    }
+    #[test]
+    fn unit_file_dialog_never_opens_user_interface() {
+        let cancellation = Cancellation {
+            session: Arc::new(AtomicBool::new(false)),
+            operation: Arc::new(AtomicBool::new(false)),
+            authority: Arc::new(AtomicBool::new(false)).into(),
+        };
+        assert_eq!(
+            dialog(true, Some("fixture.txt"), &cancellation),
+            Err("file-test-ui-disabled")
+        );
+        assert_eq!(
+            dialog(false, None, &cancellation),
+            Err("file-test-ui-disabled")
+        );
     }
     #[test]
     fn collision_tamper_and_cancel_remove_only_the_owned_staging_file() {
@@ -994,6 +1319,7 @@ mod tests {
             "space ",
             "bad:stream",
             "..",
+            "e\u{301}.txt",
         ] {
             assert!(metadata(name, b"x").validate().is_err(), "{name}");
         }

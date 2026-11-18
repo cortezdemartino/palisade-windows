@@ -2,6 +2,18 @@
 
 ## Current Assist completion work
 
+Plain-text clipboard integration now reaches the native direction/peer/lease
+gate, protected local confirmation, Windows adapter and exact outbound packet
+verification. It is not device acceptance: tests use synthetic payloads without
+accessing the clipboard. Qualification packaging can explicitly select sensitive
+compiled features and attests actual binary flags; ordinary packages keep them
+off. Native file staging is being completed independently of live file dispatch.
+Images, synchronization, drop, resume and full real-service acceptance remain.
+
+Companion `84b379f` includes the inspected `af21c9f` stale-loss and scoped-Stop
+corrections. Do not repeat the old request as an unresolved defect. Qualify the
+combined candidates and finish the remaining late-channel reconciliation.
+
 Authenticated native [relay configuration](evidence/2026-11-15-endpoint-ice.md)
 is now wired into peer construction without caller-provided URLs or credentials.
 It is not relay qualification; use the [isolated setup procedure](ASSIST-QUALIFICATION-SETUP.md)

@@ -130,6 +130,14 @@
     } else if (message.type === 'admit') {
       if (!exact(message, []) || !verified || admitted) { stop(); return; }
       admitted = true;
+    } else if (message.type === 'send-resource') {
+      if (!exact(message, ['id', 'lane', 'text']) || !Number.isInteger(message.id) || message.id < 1 ||
+          message.id > 0xffffffff || !admitted || !verified || !resourceChannels.includes(message.lane) ||
+          typeof message.text !== 'string' || !message.text || message.text.length > 16384 || encoder.encode(message.text).byteLength > 65536 ||
+          peer?.connectionState !== 'connected' || peer.sctp?.transport?.state !== 'connected') { stop(); return; }
+      const destination = channels.get(message.lane);
+      if (destination?.readyState !== 'open' || destination.bufferedAmount + encoder.encode(message.text).byteLength > 1024 * 1024) { stop(); return; }
+      try { destination.send(message.text); send({ type: 'ack', id: message.id }); } catch { stop(); }
     } else if (message.type === 'fence-input') {
       if (!exact(message, [])) { stop(); return; }
       input = false; // Leave the association and independent resource channels alive.

@@ -9,12 +9,15 @@ function setup({ enabled = true } = {}) {
   const requests = [], selections = [], order = [], peerRequests = [], bootstraps = [];
   let bootstrap = async () => { throw new NativeBridgeError("binding-mismatch"); };
   let ice = async () => ({ iceServers: [], iceTransportPolicy: 'all' });
+  const textCalls=[], outbound=[], statuses=[];
+  let text = async () => { throw new NativeBridgeError('grant-invalid'); };
   let peerOptions, peerClosed = 0, nativePeer = async operation => operation.action === 'prepare'
     ? { attempt: 'A'.repeat(43), helperTransport: 'sha-256 ' + Array(32).fill('AB').join(':'), profile: 'legacy', resources: false, resourceChannels: [], generation: 'G'.repeat(43), sourceOperation: 'capture_fixture_01' }
     : operation.action === 'seal' ? { transportSignature: 'B'.repeat(86) } : ['observed', 'check'].includes(operation.action) ? { ready: true, inputReady: true, inputAllowed: true } : {};
   let options, closed = 0, disposed = 0, fence = null, onStart = async () => ({ operation: 'capture_fixture_01' });
   const lost = new AbortController();
   const channel = {
+    resourceText: async (...args) => { textCalls.push(args); return text(...args); },
     peerIce: (...args) => ice(...args),
     resourceSession: async (...args) => { bootstraps.push(args); return bootstrap(...args); },
     peer: async (operation, document) => { peerRequests.push({ operation, document }); return nativePeer(operation); },
@@ -33,12 +36,19 @@ function setup({ enabled = true } = {}) {
     require(name) {
       if (name === './live-channel.cjs') return { openLiveChannel: async () => channel };
       if (name === './native-protocol.cjs') return { NativeBridgeError };
+      if (name === './native-extension.cjs') return require('../src/assist/native-extension.cjs');
       if (name === './remote-input-peer.cjs') return { createOwnedInputPeer: async value => {
         peerOptions = value;
         let closed = false;
         return { offer: async () => ({ sdp: 'owned-answer', fingerprint: 'sha-256 ' + Array(32).fill('CD').join(':') }),
           candidate: async () => { order.push('owned-candidate'); },
           fenceInput() { order.push('fence-owned-input'); },
+          sendResource: async (lane, packet, {signal}={}) => {
+            if(signal?.aborted) throw new NativeBridgeError('cancelled');
+            await value.onResourceSend(lane,packet,value.signal,signal);
+            if(signal?.aborted) throw new NativeBridgeError('cancelled');
+            outbound.push({lane,packet});
+          },
           close: async () => { if (!closed) { closed = true; peerClosed++; await value.onClosed('stopped'); } } };
       } };
       if (name === './capture-publication.cjs') return { createCapturePublication: value => {
@@ -51,16 +61,50 @@ function setup({ enabled = true } = {}) {
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/assist/native-runtime.cjs'), 'utf8'), context);
   const screen = { getAllDisplays: () => [{ id: 9, bounds: { x: -1000, y: 0, width: 1000, height: 800 } }],
     dipToScreenRect: (_window, bounds) => ({ x: bounds.x * 2, y: 0, width: 2000, height: 1600 }) };
-  const runtime = context.module.exports.createNativeRuntime({ lifecycle: {}, captureOptions: { screen } });
+  const runtime = context.module.exports.createNativeRuntime({ lifecycle: {}, captureOptions: { screen }, onStatus:value=>statuses.push(value) });
   const scope = () => { const abort = new AbortController(); return { abort, signal: abort.signal, generation: 7, emit: () => true }; };
   return { runtime, requests, selections, order, scope, options: () => options, closed: () => closed,
     bootstrap: value => { bootstrap = value; }, bootstraps,
     ice: value => { ice = value; },
+    text: value => { text=value; }, textCalls, outbound, statuses,
     peerOptions: () => peerOptions, peerClosed: () => peerClosed, peerRequests, nativePeer: value => { nativePeer = value; },
     lose: () => lost.abort(), disposed: () => disposed,
     fence: value => { fence = value; }, onStart: value => { onStart = value; } };
 }
 const peerOffer = { op: 'peer.offer', session: 'session_fixture_0001', grantId: 'grant_fixture_0001', sdp: 'helper-offer' };
+
+async function textRuntime() {
+  const h=setup();await h.runtime.ready;
+  h.nativePeer(async op=>op.action==='prepare'?{attempt:'T'.repeat(43),helperTransport:'sha-256 '+Array(32).fill('AB').join(':'),
+    profile:'resources',resources:true,resourceChannels:['clipboard'],generation:'G'.repeat(43),sourceOperation:'capture_fixture_01'}:
+    op.action==='seal'?{transportSignature:'B'.repeat(86)}:['check','observed'].includes(op.action)?{ready:true,inputReady:false,inputAllowed:false}:{});
+  await h.runtime.dispatch(peerOffer,h.scope());await h.peerOptions().onObserved(h.peerOptions().helperTransport);return h;
+}
+const textRequest={p:'palisade.assist.native.ext',v:3,op:'resource.send-text',session:peerOffer.session,grantId:peerOffer.grantId};
+test('native text flows forward only through exact peer and public results/status never contain clipboard content',async()=>{
+  const h=await textRuntime();const payload='synthetic native-only clipboard packet';
+  h.text(async(_session,_attempt,operation)=>operation.action==='send'?{transfer:'transfer_fixture_01',bytes:10,packet:payload}:{});
+  const scope=h.scope(),events=[];scope.emit=value=>{events.push(value);return true;};
+  const result=await h.runtime.dispatch(textRequest,scope);
+  assert.deepEqual(Object.keys(result),['transfer']);assert.equal(result.transfer,'transfer_fixture_01');
+  assert.equal(h.outbound.length,1);assert.equal(h.outbound[0].packet,payload);
+  assert.equal(h.textCalls[1][2].action,'verify-send');assert.equal(h.textCalls[1][4],scope.signal);
+  assert.equal(events[0].state,'complete');assert.equal(JSON.stringify(events).includes(payload),false);
+  assert.equal(JSON.stringify(result).includes('packet'),false);
+  h.text(async()=>{throw new NativeBridgeError('consent-denied');});
+  await h.peerOptions().onResource('clipboard','untrusted text');assert.equal(h.peerClosed(),0);
+  h.text(async()=>{throw new NativeBridgeError('cancelled');});
+  await h.peerOptions().onResource('clipboard','untrusted text');assert(h.statuses.includes('Clipboard operation could not be confirmed'));
+  assert.equal(h.peerClosed(),0);await h.runtime.stopAll();
+});
+test('canceling a text request while native send verification waits cannot transmit on the retained resource connection',async()=>{
+  const h=await textRuntime();const entered=deferred(),release=deferred();
+  h.text(async(_s,_a,op)=>{if(op.action==='send')return{transfer:'transfer_fixture_01',bytes:10,packet:'synthetic native-only packet'};
+    entered.resolve();await release.promise;return{};});
+  const scope=h.scope();const sending=h.runtime.dispatch(textRequest,scope);void sending.catch(()=>{});
+  await entered.promise;scope.abort.abort();release.resolve();await assert.rejects(sending,{code:'cancelled'});
+  assert.equal(h.outbound.length,0);assert.equal(h.peerClosed(),0);await h.runtime.stopAll();
+});
 
 test('peer construction uses only native ICE and a failed or source-stale lookup cannot fall back to direct transport', async () => {
   const h = setup(); await h.runtime.ready;
@@ -181,6 +225,23 @@ test('a same-generation permission ACK and a refused replacement leave the worki
     grant: JSON.stringify({ grant: { grantId: 'untrusted_grant_01', capability: 'control_mouse' } }) }, h.scope()), { code: 'transport-mismatch' });
   assert.equal(h.peerClosed(), 0);
   await active.onPacket('still current', null, '456');
+  await h.runtime.stopAll();
+});
+
+test('first input on a resource-only peer waits for native grant acknowledgement before retiring its exact transport', async () => {
+  const h = await textRuntime();
+  const old = h.peerOptions(), entered = deferred(), acknowledged = deferred();
+  h.nativePeer(async operation => {
+    if (operation.action === 'inspect') return { disposition: 'additional', generation: 'G'.repeat(43) };
+    if (operation.action === 'grant-state') { entered.resolve(); await acknowledged.promise; return { generation: 'G'.repeat(43) }; }
+    return {};
+  });
+  const request = h.runtime.dispatch({ op: 'grant.offer', session: peerOffer.session,
+    grant: JSON.stringify({ grant: { grantId: 'first_input_grant_01', capability: 'control_mouse' } }) }, h.scope());
+  await entered.promise; assert.equal(h.peerClosed(), 0);
+  acknowledged.resolve(); await request; assert.equal(h.peerClosed(), 1);
+  assert(h.peerRequests.some(({ operation }) => operation.action === 'close' && operation.attempt === 'T'.repeat(43)));
+  await assert.rejects(old.onResource('clipboard', 'stale packet'), { code: 'stopped' });
   await h.runtime.stopAll();
 });
 test('a new Host Stop during fresh ACK verification cannot be cleared by the older request', async () => {

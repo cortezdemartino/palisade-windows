@@ -6,8 +6,11 @@
 [FINAL-6 inventory](ASSIST-COMPLETION-MATRIX.md) is authoritative. The
 [resource connection continuation](evidence/2026-11-15-resource-peer.md) adds
 resource-only/shared DTLS setup without input readiness or OS-resource consent.
-It preserves resource connection ownership through input Stop. Payload actions
-remain refused; real clipboard/files and their UI/status integration are unfinished.
+It preserves resource connection ownership through input Stop. The subsequent
+[native text and staging continuation](evidence/2026-11-15-native-text-and-staging.md)
+connects manual text transfer, protected native decisions and Windows clipboard
+operations for explicitly qualified builds. Private receive staging and verified
+final Save are implemented primitives; live file dispatch is still unfinished.
 [Authenticated peers](evidence/2026-11-14-authenticated-peer.md),
 [extension/Profile 2 routing](evidence/2026-11-14-native-extension.md) and
 [fresh control recovery](evidence/2026-11-15-fresh-control.md) now connect to the
@@ -21,15 +24,17 @@ The original source, session and deadline persist.
 | Private launch/source/session/custody and authenticated input routing | Implemented; unit and no-authority Windows process verification; real native acceptance Not Verified |
 | Extension v1/v2/v3 and Profile 2 | Implemented; immutable qualification-only input2 selection; public/default/Probe input remains unavailable |
 | Fresh input acquisition after Stop | Implemented; signed fixtures, simulated executor cleanup and cancellation/cohort regressions; real WIN-L02 Not Verified |
-| Native clipboard/images/files/drop/resume/sync and resource liveness | Unfinished Windows integration; capability flags remain false |
+| Native clipboard text and resource liveness | Integrated qualification-only; synthetic tests pass, actual clipboard/cross-client acceptance Not Verified |
+| Images/files/drop/resume/sync | Unfinished Windows integration; capability flags remain false |
 | Cooperative host priority | Core simulated; physical delivery arbitration Blocked; localYield remains false |
 | Actual enrolled device and matching web acceptance | All 30 real cases Not Verified; existing device/issuer/relay/review gates apply |
 
-Companion `24b722c206f86651378aeae447252ea71977823a` was inspected read-only.
+Companion `84b379f730d13490dad2417b30065442152f0035` was inspected read-only.
 Six frozen source blobs, nine fixture families and the 30-case manifest remain
-unchanged. An old web peer's loss callback can revoke replacement grants; the
-[exact Claude handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md) records that separate
-correction. Windows resource engineering must continue independently. Production
+unchanged. Its af21c9f correction addresses stale-loss conditional revocation and
+scoped input Stop. The [current handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md) requests
+late resource-channel reconciliation and joint qualification. Windows resource
+engineering must continue independently. Production
 activation, installation and release remain separately gated.
 
 ## Historical integration status, November 9

@@ -81,7 +81,10 @@ function createIsolatedCapture({
       !abort.signal.aborted;
     operation.timer = setTimeout(() => {
       if (pending === operation && generation === epoch) stop();
-    }, 30000);
+    // Source selection remains bounded to 30 seconds by selectCaptureSource.
+    // Its native final confirmation has a separate 60-second human decision,
+    // followed by media setup, all inside the bridge's 120-second deadline.
+    }, 110000);
     operation.timer.unref?.();
     let cancel;
     const cancelled = new Promise((_resolve, reject) => {

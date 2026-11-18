@@ -1,136 +1,74 @@
-# Companion Assist qualification handoff
+# Companion Assist integration handoff
 
-FINAL-6 inspection at `74e8fa8525677f7f0cba8d3106f00a7e65f3c042` confirms the
-two required corrections below are still present. Frozen sources, nine fixture
-families and all 30 cases remain byte-identical. Windows remains the sole writable
-repository in this chat; the companion assignment owns web/backend changes.
+Windows is the sole writable repository for this assignment. Companion main was
+fetched and inspected read-only at `84b379f730d13490dad2417b30065442152f0035`.
+Do not change frozen native/control/extension sources or fixtures to solve these
+integration issues. No production activation, deployment or release is requested.
 
-Also reconcile channel capabilities after a new resource direction is approved.
-`syncNative` currently retains an existing peer, but `NativeInputPeer` fixes its
-resource channel list at construction. An initial clipboard-only peer cannot
-silently gain a file channel. Add a safely validated channel or retire/replace
-the peer while preserving valid transfer authorization and interrupted staging.
-Never pre-open channels without current signed permission. Test clipboard-first,
-file-first, late direction approval, revocation, replacement and in-progress data.
+## Corrections received
 
-The new immediate cooperative handoff requirement must not change frozen v3's
-2,000-ms rule. Keep existing versions/fixtures and classify immediate handoff as
-Blocked until native delivery safety is proven. A negotiated successor needs
-reviewed semantics and additional fixtures; no speculative wire format is
-declared integrated by this handoff. No deployment or production activation.
+Companion commit `af21c9f` implements the earlier stale-loss and scoped-Stop
+requests. Source inspection confirms intentional peer retirement without an
+unscoped bye, callbacks bound to the grants the old peer carried, exact grant ID
+and generation checked synchronously at service mutation, and input-only
+`peer.close {session}` instead of global native Stop. A helper control-channel
+close preserves independently open resource channels. Ambiguous old byes and
+lifecycle reports refresh rather than revoke a successor.
 
-Continue in `cortezdemartino/project-palisade` on main. The Windows repository is
-read-only in that assignment. Start from current main, retaining candidate
-`5fd1958358e2a56d965a4952c35eb6281d461b3e` and evidence
-`ea9f927e90389677fd7a41a86fffc808027d1ce3` as inspected checkpoints.
-Windows implementation checkpoint:
-`2f8f258edc7b3f03b863e6af9984eb4def8f9ef2`. Companion readiness/evidence updates
-through `3a75ffed2fb38a49578717a590a4fae1c7ae3735` retain the same frozen wire.
+Companion docs/54 section 13 records its own automated and browser evidence.
+Those runs were not executed here and do not qualify the real Windows endpoint.
+Do not request these same corrections again. Regress their behavior when testing
+the combined exact candidates, including old callbacks and delayed revoke requests
+before and after successor activation.
 
-The cooperative contract is already frozen. Do not recreate it, change the nine
-fixture families, weaken the 30 acceptance cases or advertise unsupported native
-features. Windows still owns native source binding, normal executor cleanup
-receipts, SessionGate/LeasePoller attachment, consent qualification and real input.
-This is not a request to bypass those Windows implementation requirements.
+## Remaining companion engineering
 
-## Required correction: stale input loss must not revoke a successor
+Reconcile transport capabilities when a newly approved resource direction needs
+a channel absent from the current connection. `syncNative` retains an existing
+open peer while `NativeInputPeer` fixes its resource list at construction. A
+clipboard-only peer cannot gain a file channel by updating a grant object.
+Use a validated channel addition or deliberate replacement. Preserve exact peer
+incarnations, independent input/resource authority, current signed permissions,
+transfer cancellation and explicitly retained interrupted staging. Never pre-open
+an unauthorized channel or silently restart ended input.
 
-Inspected companion `24b722c206f86651378aeae447252ea71977823a` read-only.
-The three affected sources are unchanged from `060a8afa`. Keep Windows read-only
-in the companion assignment. Do not change frozen native/control/extension wire
-formats, fixtures or acceptance cases to solve this race.
+Test clipboard-first, file-first, late direction approval, revocation and active
+transfer replacement. Also test first input after a resource-only connection:
+Windows retires that exact resource transport only after verified native input
+acknowledgement; the helper must construct the matching fresh input connection.
+No change to the frozen page/control wire is needed for channel reconciliation.
 
-Reproducer: an active mouse grant G is replaced by an issued grant G+1. A poll can
-skip the intermediate revoked view. `streamAssistController.ts::syncNative`
-computes `wanted = false` while G+1 awaits native acknowledgement. That branch
-closes the old peer without first retiring its callback incarnation. Its closed
-callback calls `inputLost`, which reads the *current mutable* session grants and
-revokes control_mouse, including issued G+1. A delayed capability-only revoke HTTP
-request can also arrive after G+1 has become active. Windows cannot repair this
-service mutation from its native endpoint.
+## Windows continuation and joint qualification
 
-Required work in `project-palisade`:
+Windows now connects resource-only/shared authenticated DTLS, native-only ICE,
+private text requests, per-direction native consent and an exact one-shot outbound
+packet check. Plain-text clipboard is qualification-only; images, file dispatch,
+synchronization, drag/drop and resume remain separate Windows engineering work.
+Private file staging and verification do not constitute an end-to-end transfer.
 
-1. Retire/detach the old callback incarnation before every intentional close,
-   including `!wanted`, session replacement and teardown. Capture the original
-   session, endpoint, exact grant IDs and generations for peer-loss callbacks;
-   never derive their revoke targets from a later mutable session view.
-2. Add a local intentional-retirement path that does not send the existing
-   unscoped `native-bye`. `NativeInputPeer.close()` currently always sends it.
-   A queued old bye/lifecycle cannot identify a successor's generation under
-   frozen v1. Treat ambiguous notifications conservatively and refresh current
-   native/service state instead of revoking unrelated fresh authority. Native
-   enforcement remains authoritative; do not infer that silence grants input.
-3. Add an additive, conditional service revoke request with expected grant ID and
-   generation checked atomically at mutation time. A mismatch must leave the
-   successor intact. Frontend identity checks alone leave an HTTP race. Retain
-   authorization checks and existing deliberate current-session Stop behavior.
-4. Regression-test G-active -> G+1-issued without a revoked intermediate poll;
-   old closed/lifecycle/bye before and after G+1 activation; a delayed old revoke
-   HTTP request; genuine current-peer failure; same-generation late mouse or
-   keyboard acknowledgement; and independent clipboard/file grants.
+Use docs/52 and docs/54 with an approved disposable Windows device, test accounts,
+isolated services and independently supplied public issuer fingerprint. The current
+Windows qualification builder defaults to capture-only. Explicit `--native-input`
+and `--clipboard-text` options are for independently approved device qualification;
+its report attests compiled features and hashes, never successful acceptance.
+Do not install/start a candidate on a personal desktop or fabricate native consent.
+A dedicated enrollment stage must remain separate from decoded-viewing WIN-P01.
 
-Inspect `apps/web/src/features/assist/streamAssistController.ts` (`syncNative`,
-`inputLost`, `onNativeLifecycle`, native-bye handling),
-`apps/web/src/assist/control/nativePeer.ts::close`, and
-`services/admin/src/streamAssist.ts` plus the HTTP revoke route. Run the existing
-risk-based tests and real-service browser regressions, update Windows #4 with
-exact commit/test evidence, and keep production Assist gates unchanged. No
-production deployment or activation is requested.
+The original 30 acceptance cases, all nine fixture families and six frozen source
+blobs remain unchanged. Manifest SHA-256:
+`f9ac9d835333e341907ae63f2d2a497ef4944607ea60fc344e81ad64115606b0`.
+No actual Windows cross-client case has passed in this campaign. Production
+issuer/pin #47, TURN #48, Firefox #49, device acceptance Windows #5, integrated
+review #33 and exact-candidate release approval remain independent gates.
 
-The old-close callback issue was reproduced by the independent reviewer using
-the actual controller with an in-memory peer fixture. It was not a browser or
-real Windows acceptance run. All 30 native acceptance cases remain unqualified.
+## Seamless cooperative control
 
-## Required correction: input Stop must not stop all native work
+The new immediate handoff requirement cannot be implemented by changing frozen
+v3's 2,000-ms rule. Native delivery arbitration remains Blocked: observation does
+not prove a helper UP cannot affect a concurrent host hold. Keep localYield false.
+A reviewed safe mechanism and separately negotiated successor with new fixtures
+are required before implementing immediate handoff. Do not invent a temporary
+wire protocol, install a driver or count fake input as physical acceptance.
 
-At the same inspected companion revision, `streamAssistController.ts::stopControl`
-promises that resources and screen sharing continue, but calls native `stop`
-without a session. Frozen docs/49 defines that operation as ending all native
-Assist work. Windows correctly treats it as global launch/source/resource Stop.
-
-Change this input-only publisher action to the existing session-scoped
-`peer.close {session}` safety operation, followed by conditional input revocation.
-Keep deliberate global/emergency Stop separate. Confirm both actions retain their
-actual documented scope. No frozen message fields need to change.
-
-The helper's `nativePeer.ts` also closes its entire peer and every resource channel
-when the control channel closes. Coordinating input-only Stop must therefore
-retain the authenticated shared association while input is fenced, or correct
-that handler so independently authorized resources stay alive. Windows still has
-matching resource transport/lifecycle engineering to implement; a retained grant
-or Boolean alone is not proof of a live authenticated resource channel.
-
-Regression: active input plus an accepted file/clipboard operation, publisher
-Stop Control, immediate refusal of further input, ongoing authorized resource and
-screen activity, then a true End Assist/global Stop that ends all of them. Do not
-count a mock-only result as real Windows acceptance.
-
-## Historical requested qualification harness addition
-
-The current native WIN-P01 test calls `publisher.share()` and waits for decoded
-capture before inspecting enrollment. Windows' first connected endpoint supports
-native enrollment while capture, input and resources remain unavailable. Add a
-separately named, explicitly staged native enrollment check using the existing
-canonical native-v1 methods and authenticated service enrollment/proof routes.
-Do not count this stage as passing WIN-P01, WIN-C01 or full Assist acceptance.
-
-Inspect `apps/web/src/features/assist/streamAssistController.ts::enrollEndpoint`,
-`apps/web/e2e/assistAcceptance.spec.ts` and docs/49 and docs/54. Reuse their existing
-account/device/service authorization. If a current publisher stream is required,
-state that prerequisite accurately and use only the approved disposable fixture;
-do not fabricate a production stream or loosen device binding to remove it.
-
-The stage should verify the real Windows bridge/helper, the artifact's exact
-revision/hash/profile, native operational public key, independent issuer pin,
-local confirmation, canonical signature and the service's proven endpoint. Accept
-truthful false feature declarations. Test denied/canceled enrollment, device or
-endpoint substitution, restart/replacement and stale proof rejection. Never inject
-OS input, use MOCK/native approval booleans, extend authority or disable TLS.
-
-Document the required independent test issuer fingerprint, approved disposable
-Windows device and test account coordination in the existing qualification guide
-and interventions. Keep credentials/private keys out of issues and profiles.
-Record actual outcomes separately from source/unit/mock evidence. Return the exact
-commit and test commands to Windows #4. No wire changes, deployment, installation,
-production activation or release publication are authorized by this handoff.
+Return exact commits, test commands, evidence classifications and any required
+contract adjustment to Windows #4. Keep every unexecuted device case Not Verified.

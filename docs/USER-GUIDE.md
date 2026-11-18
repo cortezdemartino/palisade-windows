@@ -1,5 +1,16 @@
 # Windows client guide
 
+## Assist availability
+
+Full Assist is still under development and is not enabled by the ordinary Windows
+release. The current native clipboard and file changes are preparation for testing
+on an approved disposable device. They do not give anyone background access to
+your clipboard or files. During qualified testing, sending clipboard text requires
+local approval; receiving text asks before replacing your clipboard. File Save is
+offered only after the received file is verified, with a separate confirmation of
+the destination. Images, file transfer, synchronization, drop and resume are not
+ready for normal use. See [the current feature inventory](ASSIST-COMPLETION-MATRIX.md).
+
 ## Updates and release notes
 
 Open **Settings > Updates**. **Check now** checks the official stable release.

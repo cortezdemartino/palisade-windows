@@ -2,6 +2,17 @@
 
 ## Connected launch endpoint
 
+The [text/staging continuation](evidence/2026-11-15-native-text-and-staging.md)
+adds native directional text operations, guarded fresh-origin decisions and
+whole-held-file verification before final Save. Canceled resource transports and
+first input acquisition retain exact ownership. Ordinary packages still compile
+input/resources out. Explicit isolated qualification features are attested from
+the actual packaged helper; they do not prove device acceptance or authorize
+installation. Cooperative declaration remains false. Shared native prompt HWNDs
+and their referenced context/input owner survive failed cleanup until positive
+destruction. Native file handles are bound to held parents before content I/O;
+an in-place junction race was reproduced and corrected in disposable NTFS tests.
+
 [RC-3 executor custody](evidence/2026-11-13-rc3-executor-custody.md) now connects
 the normal process-input factory to monitor-owned creation, sealed ARM, dedicated
 child terminal and positive mirror settlement. Partial/unacknowledged handoffs
@@ -28,11 +39,11 @@ HTTPS origin, independent issuer pin and storage namespace at build time.
 This does not complete native session execution. The existing StreamRuntime,
 source and lease components are connected at source level, but their positive
 service/consent/peer workflow remains unverified. The explicit qualification
-profile can declare capture after native setup; input/resource/cooperative
-declarations remain false and public startup
-remains disabled. Existing consent dialogs are not qualified against synthetic
-Win32 button commands from a same-integrity local process; native and physical
-acceptance remain separate from the passing no-authority process tests.
+profile declares capture after native setup; explicit native-input/clipboard-text
+qualification features may declare only their connected paths. Production startup
+and cooperative input remain disabled. Shared native Allow now refuses bare Win32
+button commands and ordinary injected messages; real native/physical acceptance
+remains separate from passing source/unit/no-authority process checks.
 
 ## Session isolation
 

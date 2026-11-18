@@ -43,8 +43,8 @@ function fixture(enumerate, start, onSelect) {
   const context = {
     module: { exports: {} },
     AbortController,
-    setTimeout: (callback) => {
-      const timer = { callback, cleared: false, unref() {} };
+    setTimeout: (callback, delay) => {
+      const timer = { callback, delay, cleared: false, unref() {} };
       timers.push(timer);
       return timer;
     },
@@ -83,6 +83,7 @@ test('native selection must finish before any media starts and a late approval c
   await turn();
   assert.equal(selected, 1);
   assert.equal(h.starts(), 0);
+  assert.equal(h.timers[0].delay, 110000, 'outer budget includes picker, native consent and media setup');
   h.capture.stop();
   approval.resolve();
   await result;

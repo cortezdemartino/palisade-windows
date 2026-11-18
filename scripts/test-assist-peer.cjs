@@ -16,7 +16,7 @@ async function main() {
       cwd: root, env, windowsHide: true, stdio: 'inherit', timeout: 120000, shell: false });
     if (run.error || run.status !== 0) throw Error(`Owned remote peer fixtures failed (exit ${run.status}, signal ${run.signal ?? 'none'})`);
     const evidence = JSON.parse(await fs.readFile(output, 'utf8'));
-    if (evidence.passed !== true || evidence.electron !== '44.7.2' || evidence.inputInjected !== false || evidence.cases.length !== 18)
+    if (evidence.passed !== true || evidence.electron !== '44.7.2' || evidence.inputInjected !== false || evidence.cases.length !== 20)
       throw Error('Missing exact-runtime peer evidence');
   } finally { await unlocked(() => flipFuses(binary, { version: FuseVersion.V1, [fuse]: original[fuse] === 49 }), binary); }
 }

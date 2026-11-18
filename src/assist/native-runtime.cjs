@@ -3,6 +3,7 @@
 // no renderer action can replace its signer or restore its authority.
 const { openLiveChannel } = require('./live-channel.cjs');
 const { NativeBridgeError } = require('./native-protocol.cjs');
+const { ExtBridgeError, EXT_ERRORS } = require('./native-extension.cjs');
 const { randomBytes } = require('node:crypto');
 const { performance } = require('node:perf_hooks');
 const { setTimeout: pause } = require('node:timers/promises');
@@ -154,6 +155,8 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       }
       entry.attempt = prepared.attempt; entry.sourceOperation = prepared.sourceOperation; entry.generation = prepared.generation; current();
       entry.resources = prepared.resources === true;
+      entry.profile = prepared.profile;
+      entry.resourceChannels = prepared.resourceChannels ?? [];
       if (entry.resources) scope.retainResources?.();
       entry.inputClosed = prepared.profile === 'resources' || inputFences.has(request.session);
       if (entry.inputClosed && prepared.profile !== 'resources') throw new NativeBridgeError('stale-operation');
@@ -170,11 +173,26 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
         helperTransport: prepared.helperTransport, inputProfile: prepared.profile, signal: scope.signal,
         iceConfiguration,
         resourceChannels: prepared.resourceChannels ?? [],
-        onResource: async () => {
-          // The connected transport does not authorize resource OS actions.
-          // Resource adapters remain unavailable and enrollment flags stay false.
-          await native({ action: 'check' }); current();
-          throw new NativeBridgeError('transport-mismatch');
+        onResource: async (lane, text) => {
+          current();
+          if (lane !== 'clipboard' || typeof text !== 'string') throw new NativeBridgeError('transport-mismatch');
+          try {
+            const result = await channel.resourceText(request.session, entry.attempt, { action: 'receive', text }, scope.generation, scope.signal);
+            current(); report('Clipboard text copied');
+            scope.emitResource?.({ event: 'resource.status', session: request.session, transfer: result.transfer,
+              kind: 'text', direction: 'to-host', state: 'complete', bytes: result.bytes, total: result.bytes, reason: null });
+          } catch (error) {
+            if (['consent-denied', 'grant-invalid', 'busy', 'cancelled'].includes(error.code)) {
+              report(error.code === 'consent-denied' ? 'Clipboard text was discarded' : 'Clipboard operation could not be confirmed'); return;
+            }
+            throw error;
+          }
+        },
+        onResourceSend: async (lane, text, _connectionSignal, requestSignal) => {
+          current();
+          if (lane !== 'clipboard') throw new NativeBridgeError('transport-mismatch');
+          await channel.resourceText(request.session, entry.attempt, { action: 'verify-send', text }, scope.generation, requestSignal ?? scope.signal);
+          current();
         },
         onObserved: async fingerprint => {
           await entry.sealed; current();
@@ -278,6 +296,21 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
       const channel = await opening;
       await configured;
       if (ended || failed || scope.signal.aborted) throw new NativeBridgeError('stopped');
+      if (extensionRequest && request.op === 'resource.send-text') {
+        const entry = peers.get(request.session);
+        if (!entry?.peer || entry.closed || !entry.resourceChannels?.includes('clipboard')) throw new ExtBridgeError('not-active');
+        try {
+          const result = await channel.resourceText(request.session, entry.attempt,
+            { action: 'send', version: request.v, grantId: request.grantId }, scope.generation, scope.signal);
+          if (ended || failed || scope.signal.aborted || entry.closed || peers.get(request.session) !== entry) throw new ExtBridgeError('cancelled');
+          await entry.peer.sendResource('clipboard', result.packet, { signal: scope.signal });
+          if (scope.signal.aborted || ended || entry.closed) throw new ExtBridgeError('cancelled');
+          scope.emit({ event: 'resource.status', session: request.session, transfer: result.transfer,
+            kind: 'text', direction: 'to-guest', state: 'complete', bytes: result.bytes, total: result.bytes, reason: null,
+            ...(request.v >= 2 ? { resumable: false } : {}) });
+          report('Clipboard text sent'); return { transfer: result.transfer };
+        } catch (error) { throw new ExtBridgeError(EXT_ERRORS.includes(error.code) ? error.code : 'internal'); }
+      }
       if (extensionRequest) return await channel.extension(request, scope.generation);
       if (request.op === 'grant.offer') {
         let offered;
@@ -346,9 +379,10 @@ function createNativeRuntime({ lifecycle, binary, manifestFile, probe = false, c
           const state = await channel.peer({ action: 'grant-state', session: request.session, grantId: grant.grantId }, scope.generation);
           if (ended || scope.signal.aborted || inputFences.get(request.session) !== priorFence) throw new NativeBridgeError('stopped');
           const old = peers.get(request.session);
-          if (old && old.generation !== state.generation) {
+          if (old && (old.generation !== state.generation || old.profile === 'resources')) {
             old.replacing = true; old.closed = true; old.retire?.();
             void old.peer?.close('replaced').catch(() => {});
+            await fenceOwnedPeer(request.session, old);
           }
           if (priorFence) inputFences.delete(request.session);
         }

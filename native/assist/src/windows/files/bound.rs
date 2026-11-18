@@ -2,9 +2,10 @@
 //! from an IPC caller. The companion contract must establish helper-side native
 //! authority separately before that role is exposed.
 use super::{FileStore, Metadata};
+use crate::windows::consent;
 use crate::{
     stream::{SessionGate, StreamGrant},
-    windows::{consent, input::ordinary_desktop, lease},
+    windows::{input::ordinary_desktop, lease},
 };
 use serde::Serialize;
 use std::{
@@ -20,6 +21,8 @@ const PENDING: u8 = 0;
 const SELECTING: u8 = 1;
 const ACTIVE: u8 = 2;
 const ENDED: u8 = 3;
+const VERIFIED: u8 = 4;
+const SAVING: u8 = 5;
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Direction {
     Send,
@@ -379,7 +382,7 @@ impl SessionFiles {
             return Err("transfer-not-found");
         }
         if let Some(token) = token {
-            if op.phase.load(Ordering::SeqCst) != ACTIVE
+            if !matches!(op.phase.load(Ordering::SeqCst), ACTIVE | VERIFIED)
                 || op.token.lock().map_err(|_| "resource-failed")?.as_deref() != Some(token)
             {
                 return Err("binding-mismatch");
@@ -406,6 +409,7 @@ impl SessionFiles {
                 .map_err(|_| "resource-failed")?
                 .clone()
                 .ok_or("invalid-file-offer")?;
+            metadata.validate()?;
             #[cfg(not(test))]
             let confirmed = consent::confirm_file(
                 &op.grant,
@@ -515,12 +519,17 @@ impl SessionFiles {
         bytes: &[u8],
     ) -> Result<u64, &'static str> {
         let op = self.owned(request, Direction::Receive, Some(token))?;
-        let result = self
+        let mut store = self
             .state
             .store(Direction::Receive)
             .lock()
-            .map_err(|_| "resource-failed")?
-            .write(token, offset, bytes, || self.state.check(op));
+            .map_err(|_| "resource-failed")?;
+        // Recheck after taking the store: verification may have completed while
+        // this caller waited. Rejected late data must not cancel a verified file.
+        if op.phase.load(Ordering::SeqCst) != ACTIVE {
+            return Err("transfer-not-active");
+        }
+        let result = store.write(token, offset, bytes, || self.state.check(op));
         if result.is_err() {
             self.failed(op);
         } else {
@@ -529,17 +538,61 @@ impl SessionFiles {
         }
         result
     }
-    pub fn commit(&self, request: &FileRequest, token: &str) -> Result<Metadata, &'static str> {
+    /// Verifies the actual held file before exposing a Save action. The opaque
+    /// request and current source/grant/lease remain required after verification.
+    pub fn verify_receive(
+        &self,
+        request: &FileRequest,
+        token: &str,
+    ) -> Result<Metadata, &'static str> {
         let op = self.owned(request, Direction::Receive, Some(token))?;
-        let result = self
+        let mut store = self
             .state
             .store(Direction::Receive)
             .lock()
-            .map_err(|_| "resource-failed")?
-            .commit(token, || self.state.check(op));
+            .map_err(|_| "resource-failed")?;
+        if !matches!(op.phase.load(Ordering::SeqCst), ACTIVE | VERIFIED) {
+            return Err("transfer-busy");
+        }
+        let result = store.verify_receive(token, || self.state.check(op));
+        if result.is_err() {
+            self.failed(op);
+        } else {
+            op.phase.store(VERIFIED, Ordering::SeqCst);
+            *op.until.lock().map_err(|_| "resource-failed")? =
+                Instant::now() + Duration::from_secs(60);
+        }
+        result
+    }
+    pub fn commit(&self, request: &FileRequest, token: &str) -> Result<Metadata, &'static str> {
+        let op = self.owned(request, Direction::Receive, Some(token))?;
+        let mut store = self
+            .state
+            .store(Direction::Receive)
+            .lock()
+            .map_err(|_| "resource-failed")?;
+        self.begin_save(op)?;
+        let result = store.select_commit(
+            token,
+            op.cancel.clone(),
+            self.state.authority.stop.clone(),
+            || self.state.check(op),
+        );
         self.failed(op);
         self.state.retire(op);
         result
+    }
+    fn begin_save(&self, op: &Operation) -> Result<(), &'static str> {
+        // owned() can precede a blocked store lock. Never replace its original
+        // timeout with a new Save deadline before checking the old authority.
+        self.state.check(op)?;
+        op.phase
+            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |phase| {
+                matches!(phase, ACTIVE | VERIFIED).then_some(SAVING)
+            })
+            .map_err(|_| "transfer-busy")?;
+        *op.until.lock().map_err(|_| "resource-failed")? = Instant::now() + Duration::from_secs(60);
+        Ok(())
     }
     pub fn close(&self) {
         self.revoker().revoke();

@@ -36,6 +36,20 @@ test('actual endpoint ICE refuses a probe before signer use or network and retai
   assert.equal(lifecycle.status().holders, 0);
 });
 
+test('actual text resource dispatch refuses a Probe before clipboard or approval UI with every operation', async () => {
+  const lifecycle = createAssistLifecycle();
+  const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });
+  try {
+    await channel.request(canonical('hello', { versions: [1] }), 4);
+    for (const operation of [{ action: 'send', version: 3, grantId: 'grant_fixture_01' },
+      { action: 'receive', text: '{}' }, { action: 'verify-send', text: '{}' }]) {
+      await assert.rejects(channel.resourceText('session_fixture_01', 'A'.repeat(43), operation, 4), { code: 'transport-mismatch' });
+    }
+    assert.equal((await channel.status()).authority, 'none'); assert.equal(channel.signal.aborted, false);
+  } finally { await channel.close(); }
+  assert.equal(lifecycle.status().holders, 0);
+});
+
 test('actual private request cancellation stays responsive behind blocked ordinary work without revoking the launch', async () => {
   const lifecycle = createAssistLifecycle();
   const channel = await openLiveChannel({ binary, manifestFile, lifecycle, probe: true, ownedTree: true, endpoint: true });

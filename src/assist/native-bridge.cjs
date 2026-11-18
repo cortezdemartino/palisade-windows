@@ -180,7 +180,7 @@ function installNativeBridge(
       isPalisadeUrl(contents.getURL())
     );
   }
-  function emit(entry, payload) {
+  function emit(entry, payload, resourceVersion = null) {
     const key = lifetimeKey(entry.request);
     if (entry.done && !key) return false;
     if (key && owners.get(key) !== entry) return false;
@@ -196,13 +196,11 @@ function installNativeBridge(
       entry.request.op === "grant.offer" &&
       payload?.event === "lifecycle" &&
       payload.session === entry.request.session;
-    const resource = isExtension(entry.request.op) && entry.request.session && payload?.session === entry.request.session &&
+    const resource = (isExtension(entry.request.op) || (resourceVersion && entry.request.op === 'peer.offer')) && entry.request.session && payload?.session === entry.request.session &&
       ['resource.status', 'sync.status'].includes(payload?.event);
     if (entry.request.op !== "stop" && !capture && !peer && !consent && !resource)
       return false;
-    const terminal = (entry.request.op === 'peer.offer' && !entry.resourceConnection && payload?.event === 'lifecycle' && payload.state === 'suspended') || ["stopped", "cancelled", "failed"].includes(
-      payload?.state,
-    );
+    const terminal = !resourceVersion && ((entry.request.op === 'peer.offer' && !entry.resourceConnection && payload?.event === 'lifecycle' && payload.state === 'suspended') || ["stopped", "cancelled", "failed"].includes(payload?.state));
     if (
       !entry.document ||
       entry.generation !== generation ||
@@ -216,14 +214,16 @@ function installNativeBridge(
     )
       return false;
     try {
-      const ext = isExtension(entry.request.op);
+      const ext = isExtension(entry.request.op) || resourceVersion !== null;
+      const eventVersion = resourceVersion ?? (ext ? entry.request.v : 1);
+      if (resourceVersion && payload.event === 'resource.status' && resourceVersion >= 2) payload = { ...payload, resumable: false };
       const message = JSON.stringify({
         ...payload,
         p: ext ? extension.EXT_PROTOCOL : protocol.NATIVE_PROTOCOL,
-        v: ext ? entry.request.v : 1,
+        v: eventVersion,
         seq: ext ? ++extensionSequence : ++sequence,
       });
-      if (ext) extension.parseExtEvent(message, entry.request.v);
+      if (ext) extension.parseExtEvent(message, eventVersion);
       else protocol.parseEvent(message);
       contents.send(CHANNELS.event, {
         document: entry.document,
@@ -421,6 +421,10 @@ function installNativeBridge(
         signal: entry.abort.signal,
         generation: entry.generation,
         emit: (payload) => emit(entry, payload),
+        emitResource: (payload) => {
+          if (!extensionVersion || entry.request.op !== 'peer.offer' || !['resource.status', 'sync.status'].includes(payload?.event)) return false;
+          return emit(entry, payload, extensionVersion);
+        },
         retainResources: () => {
           // Trusted runtime only, after verified native transport setup. This
           // changes cancellation ownership, never any resource authorization.

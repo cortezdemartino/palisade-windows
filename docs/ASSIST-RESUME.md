@@ -2,6 +2,25 @@
 
 ## Active work: Assist completion
 
+The current resource continuation connects plain-text clipboard envelopes through
+the real native request path, direction-specific authority, local confirmation,
+bounded Windows clipboard adapter and exact one-shot outbound verification. Only
+an explicitly isolated resources qualification build may declare clipboard text;
+normal/Probe builds remain disabled. Tests use synthetic content and never touch
+the personal clipboard. Shared Rust Allow prompts now require a fresh OS-origin
+press/release and retain their window/input owner through positive destruction;
+this does not qualify file pickers or capture consent. See the current resource
+evidence before attempting device tests. Images, file dispatch, synchronization,
+drop and resume still need integration.
+
+Companion main was refreshed read-only at
+`84b379f730d13490dad2417b30065442152f0035`. Its `af21c9f` correction now names
+exact grants for conditional service revocation, retires old peers without bye,
+and uses session-scoped Stop Control while preserving resources. These corrections
+were inspected in source here, not executed against real Windows. Late resource
+channel additions still need the [handoff](ASSIST-COMPANION-HANDOFF-PROMPT.md).
+Frozen protocol sources, fixtures and all 30 cases remain unchanged.
+
 The [authenticated endpoint ICE continuation](evidence/2026-11-15-endpoint-ice.md)
 now fetches native-only STUN/TURN configuration through a purpose-limited signer,
 ordinary private request lane and exact prepared peer/source cancellation binding.
@@ -13,13 +32,13 @@ installation, service activation or native OS-resource/input test is authorized.
 FINAL-6 now has a single [master completion matrix](ASSIST-COMPLETION-MATRIX.md).
 The [resource-peer continuation](evidence/2026-11-15-resource-peer.md) connects
 resource-only/shared connection purposes and scoped input Stop without granting
-OS-resource consent or input READY. Resource data actions remain refused and all
-related flags stay false. Continue exact-peer-bound resource dispatch, protected
-UI, clipboard/files/sync/resume/drop and status lifetimes; do not call transport
+OS-resource consent or input READY. Resource actions beyond manual text remain
+refused and their flags stay false. Continue exact-peer-bound image/file/sync/
+resume/drop dispatch and status lifetimes; do not call transport
 plumbing a working transfer. The [seamless-control decision](evidence/2026-11-15-seamless-control-decision.md)
 records the current delivery blocker and the incompatibility of an immediate
 handoff with frozen 2,000-ms v3. Preserve all frozen bytes and 30 real acceptance
-cases. Companion `74e8fa8` remains read-only and still needs its documented fixes.
+cases. Companion `84b379f` remains read-only; open work is in the current handoff.
 
 Continue from the [authenticated peer integration](evidence/2026-11-14-authenticated-peer.md),
 starting at `974b61a7575fc93e1de36257cac79ff5cf392333`. Canonical peer offers now

@@ -76,7 +76,7 @@ test('bridge peer.close during a pending grant fences only that session through 
   };
   const context = { module: { exports: {} },
     require: name => name === './live-channel.cjs' ? { openLiveChannel: async () => native }
-      : name === './native-protocol.cjs' ? contract : require(name) };
+      : name === './native-protocol.cjs' ? contract : name === './native-extension.cjs' ? require('../src/assist/native-extension.cjs') : require(name) };
   vm.runInNewContext(fs.readFileSync(require.resolve('../src/assist/native-runtime.cjs'), 'utf8'), context);
   const runtime = context.module.exports.createNativeRuntime({ lifecycle: {} });
   await runtime.ready;
@@ -620,4 +620,23 @@ test('native-verified shared connection retains its lifetime through input-only 
   assert.equal(peerScope.emit({ event: 'lifecycle', session: fields.session, state: 'suspended', reason: 'error' }), true);
   assert.equal(peerScope.emit({ event: 'peer.candidate', session: fields.session, candidate: '', mid: null }), true);
   t.bridge.dispose(); assert.equal(peerScope.signal.aborted, true); assert(t.stops() > 0);
+});
+
+test('trusted peer resource status uses negotiated extension sequence and cannot retire the shared peer or expose text', async () => {
+  const t=setup(); await t.connect(DOC); await t.request('hello',{versions:[1]});
+  let peerScope;
+  t.dispatch(async(request,scope)=>request.op==='ext.hello'?{version:3,features:features(3)}:
+    request.op==='peer.offer'?(peerScope=scope,{sdp:'answer',transportSignature:'A'.repeat(86)}):{});
+  await t.request('ext.hello',{p:extProtocol,versions:[3,2,1]});
+  const fields={session:'session_resource_01',grantId:'grant_resource_01',sdp:'offer'};
+  await t.request('peer.offer',fields);peerScope.retainResources();
+  const payload={event:'resource.status',session:fields.session,transfer:'transfer_resource_01',kind:'text',direction:'to-host',state:'failed',bytes:0,total:10,reason:'error'};
+  assert.equal(peerScope.emitResource(payload),true);
+  const record=JSON.parse(t.contents.sent.at(-1)[1].text);
+  assert.equal(record.p,extProtocol);assert.equal(record.v,3);assert.equal(record.resumable,false);
+  assert.equal(Object.hasOwn(record,'text'),false);
+  assert.equal(peerScope.emit({event:'peer.candidate',session:fields.session,candidate:'',mid:null}),true);
+  assert.equal(peerScope.emitResource({...payload,session:'other_session_01'}),false);
+  peerScope.retire();assert.equal(peerScope.emitResource(payload),false);
+  t.bridge.dispose();
 });

@@ -94,6 +94,17 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     return answer;
   }
   function validate(entry, result) {
+    if (endpoint && entry.type === 'resource-text') {
+      if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'resource-text' || result.document !== entry.document) return false;
+      const value = result.answer;
+      if (value?.outcome === 'error') return privatePeer.answer(value, 'text');
+      if (!exact(value, ['outcome', 'result']) || value.outcome !== 'ok') return false;
+      if (entry.operation.action === 'verify-send') return exact(value.result, []);
+      const record = value.result;
+      return exact(record, ['transfer', 'bytes', 'packet']) && typeof record.transfer === 'string' && /^[A-Za-z0-9_-]{8,128}$/.test(record.transfer) &&
+        Number.isInteger(record.bytes) && record.bytes > 0 && record.bytes <= 65536 &&
+        (entry.operation.action === 'receive' ? record.packet === null : typeof record.packet === 'string' && record.packet.length > 0 && record.packet.length <= 16384 && Buffer.byteLength(record.packet) <= 65536);
+    }
     if (endpoint && entry.type === 'peer-ice') {
       if (!exact(result, ['type', 'document', 'answer']) || result.type !== 'peer-ice' || result.document !== entry.document) return false;
       const value = result.answer;
@@ -155,7 +166,7 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
     try {
       const text = decoder.decode(bytes);
       message = JSON.parse(text);
-      // The closed native reply vocabulary is ASCII and emitted compactly by
+      // The closed native reply vocabulary is UTF-8 and emitted compactly by
       // serde. Refuse duplicate fields, ambiguous encodings and trailing data.
       if (JSON.stringify(message) !== text) throw unavailable();
     } catch { poison(); return; }
@@ -232,6 +243,18 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       } catch (error) { return Promise.reject(error); }
     };
     if (endpoint) {
+      api.resourceText = (session, attempt, operation, document, requestSignal) => {
+        const keys = operation?.action === 'send' ? ['action', 'grantId', 'version'] : ['action', 'text'];
+        if (!privatePeer.operation({ action: 'check', session, attempt }) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked ||
+            !exact(operation, keys) || !['send', 'receive', 'verify-send'].includes(operation.action) ||
+            (operation.action === 'send' ? !Number.isInteger(operation.version) || operation.version < 1 || operation.version > 3 ||
+              typeof operation.grantId !== 'string' || !/^[A-Za-z0-9_-]{8,128}$/.test(operation.grantId) :
+              typeof operation.text !== 'string' || !operation.text || operation.text.length > 16384 || Buffer.byteLength(operation.text) > 65536)) return Promise.reject(unavailable());
+        return send({ type: 'resource-text', session, attempt, operation, document }, nativeProtocol.NATIVE_LIMITS.requestTimeoutMs, false, requestSignal).then(reply => {
+          if (reply.answer.outcome === 'error') throw new nativeProtocol.NativeBridgeError(reply.answer.code);
+          return reply.answer.result;
+        });
+      };
       api.peerIce = (session, attempt, document, requestSignal) => {
         if (!privatePeer.operation({ action: 'check', session, attempt }) || !Number.isInteger(document) || document < 0 || document >= 0xffffffff || revoked)
           return Promise.reject(unavailable());
@@ -271,7 +294,9 @@ async function openLiveChannel({ binary, manifestFile, lifecycle, probe = false,
       api.configureCapture = enabled => typeof enabled === 'boolean' ? send({ type: 'capture-setup', enabled }).then(v => v.enabled) : Promise.reject(unavailable());
       api.selectCapture = (selection, document) => {
         if (!Number.isInteger(document) || document < 0 || document >= 0xffffffff) return Promise.reject(unavailable());
-        return send({ type: 'capture-source', document, selection }).then(v => {
+        // This request now includes a guarded native human confirmation (60s),
+        // not just a quick geometry check. Source Stop still bypasses this lane.
+        return send({ type: 'capture-source', document, selection }, 65000).then(v => {
           if (!v.accepted) throw new nativeProtocol.NativeBridgeError('capture-unavailable');
         });
       };

@@ -236,6 +236,12 @@ struct GrantOperation {
     generation: u64,
     nonce: String,
 }
+struct OutgoingText {
+    sequence: u64,
+    digest: [u8; 32],
+    peer_cancel: Arc<AtomicBool>,
+    cancel: Arc<AtomicBool>,
+}
 pub struct SessionGate {
     issuer: [u8; 32],
     binding: Binding,
@@ -255,7 +261,9 @@ pub struct SessionGate {
     lease_until: Option<Instant>,
     last_lease: u64,
     last_wall: u64,
-    sequences: BTreeMap<String, u32>,
+    sequences: BTreeMap<String, u64>,
+    outgoing_sequences: BTreeMap<String, u64>,
+    outgoing_text: BTreeMap<String, OutgoingText>,
     rate: (Instant, f64),
     ended: bool,
     epoch: u64,
@@ -340,6 +348,8 @@ impl SessionGate {
             last_lease: 0,
             last_wall: now,
             sequences: BTreeMap::new(),
+            outgoing_sequences: BTreeMap::new(),
+            outgoing_text: BTreeMap::new(),
             rate: (instant, 240.0),
             ended: false,
             epoch: 1,
@@ -1193,7 +1203,17 @@ impl SessionGate {
                 .as_ref()
                 .is_some_and(|previous| !Arc::ptr_eq(previous, &permit.cancelled))
         {
-            return Err("input-setup-required");
+            if self
+                .resource_peer_cancelled
+                .as_ref()
+                .is_none_or(|previous| !previous.load(Ordering::SeqCst))
+            {
+                return Err("input-setup-required");
+            }
+            // The previous exact transport already ended input admission.
+            // Fence its grant epoch, retaining its executor/cleanup witnesses.
+            // Resource connection setup does not wait for or attest that join.
+            self.suspend_input();
         }
         self.resource_peer_verified = true;
         if let Some(previous) = &self.resource_peer_cancelled {
@@ -1258,6 +1278,88 @@ impl SessionGate {
         self.resource_peer_cancelled = Some(permit.cancellation());
         Ok(())
     }
+    pub(crate) fn record_outgoing_text(
+        &mut self,
+        raw: &str,
+        cancel: Arc<AtomicBool>,
+        peer_cancel: Arc<AtomicBool>,
+    ) -> Result<(), &'static str> {
+        use sha2::{Digest, Sha256};
+        let message = crate::resource::TextMessage::parse(raw)?;
+        if self.outgoing_sequences.get(&message.grant) != Some(&message.seq)
+            || cancel.load(Ordering::SeqCst)
+            || peer_cancel.load(Ordering::SeqCst)
+        {
+            return Err("revoked");
+        }
+        self.outgoing_text.insert(
+            message.grant,
+            OutgoingText {
+                sequence: message.seq,
+                digest: Sha256::digest(raw.as_bytes()).into(),
+                peer_cancel,
+                cancel,
+            },
+        );
+        Ok(())
+    }
+    pub(crate) fn verify_outgoing_text(
+        &mut self,
+        raw: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<(), &'static str> {
+        use sha2::{Digest, Sha256};
+        let message = crate::resource::TextMessage::parse(raw)?;
+        let grant = self.authorize(&message.grant, "clipboard_to_guest", now, instant)?;
+        if grant.generation != message.generation || message.session != self.binding.session {
+            return Err("binding-mismatch");
+        }
+        let pending = self.outgoing_text.get(&message.grant).ok_or("replay")?;
+        let digest: [u8; 32] = Sha256::digest(raw.as_bytes()).into();
+        if pending.sequence != message.seq
+            || pending.digest != digest
+            || pending.cancel.load(Ordering::SeqCst)
+            || pending.peer_cancel.load(Ordering::SeqCst)
+        {
+            return Err("revoked");
+        }
+        self.outgoing_text.remove(&message.grant);
+        Ok(())
+    }
+    pub(crate) fn receive_text_sequence(
+        &mut self,
+        id: &str,
+        generation: u64,
+        sequence: u64,
+        now: u64,
+        instant: Instant,
+    ) -> Result<(), &'static str> {
+        if sequence > 9_007_199_254_740_991 {
+            return Err("invalid-message");
+        }
+        let grant = self.resource_transport_grant(id, now, instant)?;
+        if grant.capability != "clipboard_to_host" || grant.generation != generation {
+            return Err("not-granted");
+        }
+        self.check_sequence(id, sequence, instant, true)
+    }
+    pub(crate) fn next_text_sequence(
+        &mut self,
+        id: &str,
+        now: u64,
+        instant: Instant,
+    ) -> Result<u64, &'static str> {
+        self.authorize(id, "clipboard_to_guest", now, instant)?;
+        let next = self
+            .outgoing_sequences
+            .get(id)
+            .map_or(Some(0), |value| value.checked_add(1))
+            .filter(|&value| value <= 9_007_199_254_740_991)
+            .ok_or("sequence-exhausted")?;
+        self.outgoing_sequences.insert(id.into(), next);
+        Ok(next)
+    }
     pub fn check_message(
         &mut self,
         grant_id: &str,
@@ -1274,12 +1376,12 @@ impl SessionGate {
         {
             return Err("stale-generation");
         }
-        self.check_sequence(grant_id, sequence, instant, true)
+        self.check_sequence(grant_id, u64::from(sequence), instant, true)
     }
     fn check_sequence(
         &mut self,
         grant_id: &str,
-        sequence: u32,
+        sequence: u64,
         instant: Instant,
         rate_limited: bool,
     ) -> Result<(), &'static str> {
@@ -1328,6 +1430,8 @@ impl SessionGate {
         self.consent.remove(id);
         self.revoked.insert(id.into());
         self.sequences.remove(id);
+        self.outgoing_sequences.remove(id);
+        self.outgoing_text.remove(id);
     }
     /// Terminal for the current input grants. A fresh lease or old consent cannot
     /// restore them. Independently granted clipboard/files keep their own checks.
@@ -1364,6 +1468,8 @@ impl SessionGate {
         self.lease = None;
         self.lease_until = None;
         self.sequences.clear();
+        self.outgoing_sequences.clear();
+        self.outgoing_text.clear();
     }
     pub fn ended(&self) -> bool {
         self.ended
@@ -1484,7 +1590,12 @@ impl SessionGate {
         {
             return Err("stale-generation");
         }
-        self.check_sequence(&message.grant, message.sequence, instant, !release)?;
+        self.check_sequence(
+            &message.grant,
+            u64::from(message.sequence),
+            instant,
+            !release,
+        )?;
         if self.cleanup_required.is_some() {
             return Err("cleanup-pending");
         }
@@ -1633,7 +1744,7 @@ impl SessionGate {
         {
             return Err("stale-generation");
         }
-        self.check_sequence(&message.grant, message.seq, instant, false)?;
+        self.check_sequence(&message.grant, u64::from(message.seq), instant, false)?;
         let (age, start) = self.input_age.as_mut().ok_or("peer-unverified")?;
         let arrival = instant
             .checked_duration_since(*start)
@@ -1776,7 +1887,19 @@ mod request_tests {
         u64,
         Instant,
     ) {
+        resource_gate_for("clipboard_to_host")
+    }
+    fn resource_gate_for(
+        capability: &str,
+    ) -> (
+        SessionGate,
+        SignedStreamGrant,
+        SignedStreamGrant,
+        u64,
+        Instant,
+    ) {
         let (mut gate, key, mouse, now, t) = setup();
+        gate.admit(&mouse, now).unwrap();
         let mut make = |capability| {
             let mut grant = other(&mouse, &key, 10, capability).grant;
             grant.endpoint = None;
@@ -1784,7 +1907,7 @@ mod request_tests {
             gate.admit(&grant, now).unwrap();
             grant
         };
-        let clipboard = make("clipboard_to_host");
+        let clipboard = make(capability);
         let file = make("file_to_host");
         let fixture: serde_json::Value = serde_json::from_str(include_str!(
             "../../../tests/fixtures/assist-control-v2.json"
@@ -1795,9 +1918,11 @@ mod request_tests {
                 .unwrap();
         lease.generation = 10;
         lease.grants = vec![
+            mouse.grant.grant_id.clone(),
             clipboard.grant.grant_id.clone(),
             file.grant.grant_id.clone(),
         ];
+        lease.grants.sort();
         let signed = SignedStreamLease {
             signature: URL_SAFE_NO_PAD
                 .encode(key.sign(&serde_json::to_vec(&lease).unwrap()).to_bytes()),
@@ -1805,6 +1930,142 @@ mod request_tests {
         };
         gate.refresh(&signed, now, t, t).unwrap();
         (gate, clipboard, file, now, t)
+    }
+    #[test]
+    fn resource_reconnect_fences_canceled_input_without_settling_its_cleanup_or_reauthorizing_it() {
+        let (mut gate, clipboard, _, now, t) = resource_gate();
+        let mouse = gate
+            .grants
+            .values()
+            .find(|g| is_input(&g.capability))
+            .unwrap()
+            .clone();
+        gate.consent(&mouse.grant_id, now).unwrap();
+        let input = gate.prepare_peer(&mouse.grant_id, now, t).unwrap();
+        let connection = input.cancellation();
+        let resource = gate
+            .prepare_resource_peer(&clipboard.grant.grant_id, now, t, connection.clone())
+            .unwrap();
+        let helper = gate.binding().helper_transport.clone();
+        gate.admit_peer(&input, &helper, now, t).unwrap();
+        gate.admit_resource_peer(&resource, &helper, now, t)
+            .unwrap();
+        let _reservation = gate.reserve_executor().unwrap();
+        let epoch = gate.input_epoch();
+        connection.store(true, Ordering::SeqCst);
+        let next = gate
+            .prepare_resource_peer(
+                &clipboard.grant.grant_id,
+                now,
+                t,
+                Arc::new(AtomicBool::new(false)),
+            )
+            .unwrap();
+        gate.admit_resource_peer(&next, &helper, now, t).unwrap();
+        assert!(gate.input_epoch() > epoch);
+        assert!(gate.input_generation_ended());
+        let _cleanup = gate.require_input_cleanup().unwrap();
+        assert!(gate.cleanup_required.is_some());
+        assert!(gate.executor.is_some());
+        assert!(
+            gate.authorize(&mouse.grant_id, "control_mouse", now, t)
+                .is_err()
+        );
+        assert!(gate.resource_peer_grant(&next, true, now, t).is_ok());
+    }
+    #[test]
+    fn clipboard_send_permit_binds_exact_payload_original_request_and_connection_once() {
+        for cancel_kind in ["none", "request", "peer", "revoked", "new-peer"] {
+            let (mut gate, clipboard, file, now, t) = resource_gate_for("clipboard_to_guest");
+            let connection = Arc::new(AtomicBool::new(false));
+            let permit = gate
+                .prepare_resource_peer(&clipboard.grant.grant_id, now, t, connection.clone())
+                .unwrap();
+            gate.admit_resource_peer(&permit, &clipboard.grant.helper_transport, now, t)
+                .unwrap();
+            gate.consent(&clipboard.grant.grant_id, now).unwrap();
+            assert!(
+                gate.next_text_sequence(&file.grant.grant_id, now, t)
+                    .is_err()
+            );
+            let seq = gate
+                .next_text_sequence(&clipboard.grant.grant_id, now, t)
+                .unwrap();
+            let raw = crate::resource::TextMessage::outgoing(
+                &clipboard.grant.session,
+                &clipboard.grant.grant_id,
+                clipboard.grant.generation,
+                seq,
+                "synthetic text".into(),
+            )
+            .unwrap();
+            let request = Arc::new(AtomicBool::new(false));
+            gate.record_outgoing_text(&raw, request.clone(), connection.clone())
+                .unwrap();
+            assert!(
+                gate.verify_outgoing_text(&raw.replace("synthetic text", "tampered text"), now, t)
+                    .is_err()
+            );
+            match cancel_kind {
+                "request" => request.store(true, Ordering::SeqCst),
+                "peer" => connection.store(true, Ordering::SeqCst),
+                "revoked" => gate.revoke(&clipboard.grant.grant_id),
+                "new-peer" => {
+                    let next = gate
+                        .prepare_resource_peer(
+                            &clipboard.grant.grant_id,
+                            now,
+                            t,
+                            Arc::new(AtomicBool::new(false)),
+                        )
+                        .unwrap();
+                    gate.admit_resource_peer(&next, &clipboard.grant.helper_transport, now, t)
+                        .unwrap();
+                    gate.authorize(&clipboard.grant.grant_id, "clipboard_to_guest", now, t)
+                        .unwrap();
+                }
+                _ => (),
+            }
+            assert_eq!(
+                gate.verify_outgoing_text(&raw, now, t).is_ok(),
+                cancel_kind == "none"
+            );
+            if cancel_kind == "none" {
+                assert!(gate.verify_outgoing_text(&raw, now, t).is_err());
+            }
+        }
+    }
+    #[test]
+    fn clipboard_receive_sequences_preserve_safe_integer_range_and_direction_without_granting_consent()
+     {
+        let (mut gate, clipboard, file, now, t) = resource_gate();
+        let id = &clipboard.grant.grant_id;
+        assert!(
+            gate.receive_text_sequence(&file.grant.grant_id, 10, 1, now, t)
+                .is_err()
+        );
+        assert!(gate.receive_text_sequence(id, 11, 1, now, t).is_err());
+        for seq in [1, u64::from(u32::MAX) + 1, 9_007_199_254_740_991] {
+            gate.receive_text_sequence(id, clipboard.grant.generation, seq, now, t)
+                .unwrap();
+            assert!(
+                gate.receive_text_sequence(id, clipboard.grant.generation, seq, now, t)
+                    .is_err()
+            );
+        }
+        assert!(
+            gate.receive_text_sequence(
+                id,
+                clipboard.grant.generation,
+                9_007_199_254_740_992,
+                now,
+                t
+            )
+            .is_err()
+        );
+        assert!(gate.consented_grant(id, now).unwrap().is_none());
+        gate.revoke(id);
+        assert!(gate.receive_text_sequence(id, 10, 2, now, t).is_err());
     }
     #[test]
     fn resource_peer_observation_never_grants_os_consent_or_input_readiness() {

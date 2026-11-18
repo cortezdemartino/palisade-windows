@@ -337,6 +337,11 @@ impl Endpoint {
             && cfg!(feature = "native-input")
             && crate::qualification::namespace().ok().flatten().is_some()
     }
+    fn qualified_clipboard_text(&self) -> bool {
+        !self.probe
+            && cfg!(feature = "native-resources")
+            && crate::qualification::namespace().ok().flatten().is_some()
+    }
     fn input_profile(&self) -> super::runtime::InputProfile {
         if self.qualified_input() && self.extension_version.is_some_and(|v| v >= 2) {
             super::runtime::InputProfile::Profile2
@@ -477,6 +482,7 @@ impl Endpoint {
                 if chosen == 3 {
                     features["localYield"] = false.into();
                 }
+                features["clipboardText"] = self.qualified_clipboard_text().into();
                 return Ok(json!({"version":chosen,"features":features}));
             }
             if self.extension_version != Some(version) {
@@ -517,7 +523,7 @@ impl Endpoint {
             // enrollment or replay tombstones. The private seal remains once-only.
             self.negotiated = true;
             return Ok(
-                json!({"version":1,"features":{"capture":self.capture.is_some(),"clipboard":false,"files":false,"input":self.qualified_input()}}),
+                json!({"version":1,"features":{"capture":self.capture.is_some(),"clipboard":self.qualified_clipboard_text(),"files":false,"input":self.qualified_input()}}),
             );
         }
         if !self.negotiated {
@@ -882,6 +888,65 @@ impl Endpoint {
     }
     /// Trusted-main setup only. Resource grants are already service-active and
     /// must never be routed through input grant.offer or given a synthetic ACK.
+    pub(crate) fn resource_text(
+        &mut self,
+        document: u32,
+        session: &str,
+        attempt: &str,
+        operation: crate::resource::TextOperation,
+        request: &GrantRequest,
+    ) -> Answer {
+        let result = (|| {
+            self.live()?;
+            if self.probe
+                || !cfg!(feature = "native-resources")
+                || crate::qualification::namespace().ok().flatten().is_none()
+            {
+                return Err(Error::TransportMismatch);
+            }
+            if self.document != Some(document) || !self.negotiated {
+                return Err(Error::StaleOperation);
+            }
+            let version = self.extension_version.ok_or(Error::UnsupportedVersion)?;
+            if let crate::resource::TextOperation::Send {
+                version: offered, ..
+            } = &operation
+            {
+                if *offered != version {
+                    return Err(Error::UnsupportedVersion);
+                }
+            }
+            request.check(&self.safety, document, session)?;
+            if crate::grant::decode::<32>(attempt).is_err() {
+                return Err(Error::InvalidMessage);
+            }
+            let owned = self
+                .sessions
+                .get_mut(session)
+                .ok_or(Error::BindingMismatch)?;
+            if !owned.source.live()
+                || !owned
+                    .runtime
+                    .source_confirmed()
+                    .map_err(map_runtime_error)?
+            {
+                return Err(Error::CaptureUnavailable);
+            }
+            let answer = owned
+                .runtime
+                .clipboard_text(attempt, operation, request.flag())
+                .map_err(map_runtime_error)?;
+            request.check(&self.safety, document, session)?;
+            if !owned.source.live() {
+                return Err(Error::CaptureUnavailable);
+            }
+            Ok(answer)
+        })();
+        match result {
+            Ok(value) => Answer::ok(value),
+            Err(error) => Answer::error(error),
+        }
+    }
     pub(crate) fn peer_ice(
         &mut self,
         document: u32,

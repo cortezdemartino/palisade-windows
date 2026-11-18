@@ -225,6 +225,151 @@ fn native_authority_and_separate_file_confirmation_are_required_before_creation(
     }
 }
 #[test]
+fn saving_cannot_refresh_a_request_that_expired_after_ownership_was_checked() {
+    let fixture = Fixture::new();
+    let request = fixture
+        .files
+        .request_receive(RECEIVE, "transfer_expired_save", metadata())
+        .unwrap();
+    let destination = fixture.root.join("never-saved.txt");
+    let selected = fixture.selected_receive(&request, &destination).unwrap();
+    fixture
+        .files
+        .write(&request, &selected.handle, 0, BYTES)
+        .unwrap();
+    let op = fixture
+        .files
+        .owned(&request, Direction::Receive, Some(&selected.handle))
+        .unwrap();
+    // Deterministic store-wait boundary: this exact previously checked operation
+    // reaches Save admission after its original deadline, before any UI or I/O.
+    let _store = fixture
+        .files
+        .state
+        .store(Direction::Receive)
+        .lock()
+        .unwrap();
+    let expired = Instant::now() - Duration::from_secs(1);
+    *op.until.lock().unwrap() = expired;
+    assert_eq!(fixture.files.begin_save(op), Err("transfer-cancelled"));
+    assert_eq!(*op.until.lock().unwrap(), expired);
+    assert_ne!(op.phase.load(Ordering::SeqCst), SAVING);
+    assert!(!destination.exists());
+}
+#[test]
+fn verified_receive_refuses_late_writes_and_requires_current_authority_for_save() {
+    let fixture = Fixture::new();
+    let request = fixture
+        .files
+        .request_receive(RECEIVE, "transfer_verified_01", metadata())
+        .unwrap();
+    let destination = fixture.root.join("verified.txt");
+    let selected = fixture.selected_receive(&request, &destination).unwrap();
+    fixture
+        .files
+        .write(&request, &selected.handle, 0, BYTES)
+        .unwrap();
+    assert!(
+        fixture
+            .files
+            .verify_receive(&request, &selected.handle)
+            .unwrap()
+            == metadata()
+    );
+    assert_eq!(request.operation.phase.load(Ordering::SeqCst), VERIFIED);
+    assert!(!destination.exists());
+    assert_eq!(
+        fixture
+            .files
+            .write(&request, &selected.handle, BYTES.len() as u64, b"late"),
+        Err("transfer-not-active")
+    );
+    assert!(!request.operation.cancel.load(Ordering::SeqCst));
+    fixture.files.commit(&request, &selected.handle).unwrap();
+    assert_eq!(std::fs::read(destination).unwrap(), BYTES);
+}
+#[test]
+fn verified_private_stage_is_cleaned_on_revocation_without_revoking_the_other_direction() {
+    let fixture = Fixture::new();
+    let source = fixture.source();
+    let send = fixture
+        .files
+        .request_send(SEND, "transfer_verified_send")
+        .unwrap();
+    let sending = fixture.selected_send(&send, &source).unwrap();
+    let receive = fixture
+        .files
+        .request_receive(RECEIVE, "transfer_private_revoke", metadata())
+        .unwrap();
+    let receiving = fixture
+        .files
+        .select_with(&receive, |store, op| {
+            let offered = op.metadata.lock().unwrap().clone().unwrap();
+            let token = store.open_staged_receive(&fixture.root, offered.clone(), &mut || {
+                fixture.files.state.check(op)
+            })?;
+            Ok((token, offered))
+        })
+        .unwrap();
+    fixture
+        .files
+        .write(&receive, &receiving.handle, 0, BYTES)
+        .unwrap();
+    fixture
+        .files
+        .verify_receive(&receive, &receiving.handle)
+        .unwrap();
+    assert!(!fixture.root.join("received.txt").exists());
+    fixture.gate.lock().unwrap().revoke(RECEIVE);
+    wait_until(|| {
+        fixture
+            .files
+            .state
+            .store(Direction::Receive)
+            .try_lock()
+            .is_ok_and(|store| store.transfers.is_empty())
+    });
+    assert!(fixture.files.commit(&receive, &receiving.handle).is_err());
+    assert_eq!(std::fs::read_dir(&fixture.root).unwrap().count(), 1);
+    assert_eq!(
+        fixture.files.read(&send, &sending.handle, 0).unwrap(),
+        BYTES
+    );
+}
+#[test]
+fn final_save_without_a_native_selection_does_not_publish_or_retain_staging() {
+    let fixture = Fixture::new();
+    let request = fixture
+        .files
+        .request_receive(RECEIVE, "transfer_private_save", metadata())
+        .unwrap();
+    let selected = fixture
+        .files
+        .select_with(&request, |store, op| {
+            let offered = op.metadata.lock().unwrap().clone().unwrap();
+            let token = store.open_staged_receive(&fixture.root, offered.clone(), &mut || {
+                fixture.files.state.check(op)
+            })?;
+            Ok((token, offered))
+        })
+        .unwrap();
+    fixture
+        .files
+        .write(&request, &selected.handle, 0, BYTES)
+        .unwrap();
+    fixture
+        .files
+        .verify_receive(&request, &selected.handle)
+        .unwrap();
+    assert!(matches!(
+        fixture.files.commit(&request, &selected.handle),
+        Err("file-test-ui-disabled")
+    ));
+    assert!(fixture.empty());
+    assert!(!fixture.root.join("received.txt").exists());
+    assert_eq!(std::fs::read_dir(&fixture.root).unwrap().count(), 0);
+}
+#[test]
 fn requests_tokens_directions_and_selected_metadata_cannot_be_swapped() {
     let fixture = Fixture::new();
     let other = Fixture::new();

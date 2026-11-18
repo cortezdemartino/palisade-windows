@@ -28,7 +28,7 @@ async function verifyAssistPackage(resources = path.resolve('out/win-unpacked/re
     if (info.error || info.status !== 0) throw Error('Packaged native build policy unavailable');
     const compiled = JSON.parse(info.stdout);
     if (compiled.origin !== 'https://palisade.onyxops.org' || compiled.namespace !== null || compiled.issuerFingerprint !== null ||
-        compiled.nativeInput !== false || compiled.localYield !== false) throw Error('Qualification helper cannot be packaged for production');
+        compiled.nativeInput !== false || compiled.localYield !== false || compiled.compiledNativeInput !== false || compiled.compiledNativeResources !== false) throw Error('Qualification helper cannot be packaged for production');
     // Reuse the fixed no-authority fixture against the bytes actually packaged,
     // so release/profile overrides cannot make panic recovery debug-only.
     const probe = spawnSync(process.execPath, ['--test', '--test-reporter=tap', '--test-name-pattern=^' + CLEANUP_TEST + '$',
