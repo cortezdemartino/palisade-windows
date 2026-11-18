@@ -931,6 +931,42 @@ fn dialog(
 }
 
 #[cfg(test)]
+fn fixture_directory(prefix: &str) -> PathBuf {
+    assert!(matches!(
+        prefix,
+        "palisade-native-file-test-" | "palisade-bound-file-test-"
+    ));
+    // GitHub's Windows TEMP can use RUNNER~1. The production guard deliberately
+    // compares actual long names exactly; fixtures must supply those same names.
+    // Expand only the existing test base, before creating the owned directory.
+    let input = wide(&std::env::temp_dir());
+    let mut buffer = [0u16; 32768];
+    let count =
+        unsafe { GetLongPathNameW(input.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) };
+    assert!(
+        count > 0 && (count as usize) < buffer.len(),
+        "fixture TEMP must have a long absolute path"
+    );
+    let mut base = PathBuf::from(std::ffi::OsString::from_wide(&buffer[..count as usize]))
+        .canonicalize()
+        .expect("fixture TEMP must resolve to its actual directory name");
+    if matches!(base.components().next(), Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::VerbatimDisk(_)))
+    {
+        // std::fs canonicalization may yield this prefix; ParentGuard intentionally
+        // accepts ordinary drive paths only. This conversion is test-only.
+        let output: Vec<u16> = base.as_os_str().encode_wide().collect();
+        base = PathBuf::from(std::ffi::OsString::from_wide(&output[4..]));
+    }
+    assert!(base.is_absolute());
+    assert!(
+        matches!(base.components().next(), Some(Component::Prefix(p)) if matches!(p.kind(), Prefix::Disk(_)))
+    );
+    let path = base.join(format!("{prefix}{}", identifier().unwrap()));
+    std::fs::create_dir(&path).unwrap();
+    path
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     mod junction;
@@ -951,12 +987,7 @@ mod tests {
     struct Fixture(PathBuf);
     impl Fixture {
         fn new() -> Self {
-            let path = std::env::temp_dir().join(format!(
-                "palisade-native-file-test-{}",
-                identifier().unwrap()
-            ));
-            std::fs::create_dir(&path).unwrap();
-            Self(path)
+            Self(fixture_directory("palisade-native-file-test-"))
         }
         fn store(&self) -> FileStore {
             FileStore::new(Arc::new(AtomicBool::new(false)))
@@ -983,6 +1014,71 @@ mod tests {
             size: bytes.len() as u64,
             sha256: hex(&Sha256::digest(bytes)),
         }
+    }
+    #[test]
+    fn fixture_temp_alias_is_expanded_before_testing_native_path_binding() {
+        const ENV: &str = "PALISADE_NATIVE_FILE_ALIAS_FIXTURE";
+        if let Some(base) = std::env::var_os(ENV) {
+            let base = PathBuf::from(base).canonicalize().unwrap();
+            assert_eq!(std::env::temp_dir().canonicalize().unwrap(), base);
+            assert_eq!(base.file_name().unwrap(), "long-temporary-directory");
+            assert!(
+                base.parent()
+                    .unwrap()
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("palisade-native-file-test-")
+            );
+            let fixture = Fixture::new();
+            let mut store = fixture.store();
+            let token = store
+                .open_staged_receive(
+                    &fixture.0,
+                    metadata("received.txt", b"fixture bytes"),
+                    &mut || Ok(()),
+                )
+                .unwrap();
+            store.write(&token, 0, b"fixture bytes", || Ok(())).unwrap();
+            store
+                .commit_to(&token, &fixture.0.join("saved.txt"), || Ok(()))
+                .unwrap();
+            assert_eq!(
+                std::fs::read(fixture.0.join("saved.txt")).unwrap(),
+                b"fixture bytes"
+            );
+            return;
+        }
+        let fixture = Fixture::new();
+        let base = fixture.0.join("long-temporary-directory");
+        std::fs::create_dir(&base).unwrap();
+        let input = wide(&base);
+        let mut buffer = [0u16; 32768];
+        let count =
+            unsafe { GetShortPathNameW(input.as_ptr(), buffer.as_mut_ptr(), buffer.len() as u32) };
+        assert!(count > 0 && (count as usize) < buffer.len());
+        let short = PathBuf::from(std::ffi::OsString::from_wide(&buffer[..count as usize]));
+        let alias = if short == base {
+            eprintln!(
+                "8.3 aliases are disabled here; exercising the same normalization boundary with a real case alias."
+            );
+            base.with_file_name("LONG-TEMPORARY-DIRECTORY")
+        } else {
+            eprintln!("Exercising disposable 8.3 TEMP alias: {}", short.display());
+            short
+        };
+        let result = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "windows::files::tests::fixture_temp_alias_is_expanded_before_testing_native_path_binding", "--nocapture"])
+            .env(ENV, &base).env("TEMP", &alias).env("TMP", &alias)
+            .output().unwrap();
+        assert!(
+            result.status.success(),
+            "alias fixture failed: {}\nstdout:\n{}\nstderr:\n{}",
+            result.status,
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert_eq!(std::fs::read_dir(&base).unwrap().count(), 0);
     }
     #[test]
     fn process_exit_removes_owned_uncommitted_staging_file() {

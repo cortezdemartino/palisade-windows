@@ -122,11 +122,7 @@ impl Fixture {
             })
             .unwrap(),
         );
-        let root = std::env::temp_dir().join(format!(
-            "palisade-bound-file-test-{}",
-            super::super::identifier().unwrap()
-        ));
-        std::fs::create_dir(&root).unwrap();
+        let root = super::super::fixture_directory("palisade-bound-file-test-");
         Self {
             files,
             gate,
