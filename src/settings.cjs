@@ -20,7 +20,17 @@ function loadSettings(directory) {
   } catch { return { ...DEFAULTS }; }
 }
 function saveSettings(directory, value) {
-  const settings = normalize({ ...loadSettings(directory), ...value });
+  // Reading defaults is safe for startup, but writing them over an unreadable
+  // file would destroy preferences the user may still be able to recover.
+  let previous;
+  try {
+    previous = readState(path.join(directory, 'desktop-settings.json'), 4096);
+    if (!previous || typeof previous !== 'object' || Array.isArray(previous)) throw Error('Invalid settings');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw Error('Your saved settings could not be read. They have been preserved.');
+    previous = DEFAULTS;
+  }
+  const settings = normalize({ ...previous, ...value });
   writeState(path.join(directory, 'desktop-settings.json'), settings);
   return settings;
 }

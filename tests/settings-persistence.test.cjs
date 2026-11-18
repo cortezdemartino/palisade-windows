@@ -2,6 +2,19 @@
 const test = require('node:test'), assert = require('node:assert/strict');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), vm = require('node:vm');
 const { loadSettings, saveSettings } = require('../src/settings.cjs');
+
+test('saving a preference preserves corrupt, oversized or invalid existing settings for recovery', () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'palisade-settings-recovery-'));
+  try {
+    const filename = path.join(directory, 'desktop-settings.json');
+    for (const raw of ['{broken', 'null', '[]', '"text"', ' '.repeat(4097)]) {
+      fs.writeFileSync(filename, raw);
+      assert.equal(loadSettings(directory).autoCheck, true);
+      assert.throws(() => saveSettings(directory, { autoCheck: false }), /preserved/);
+      assert.equal(fs.readFileSync(filename, 'utf8'), raw);
+    }
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
 test('changing a desktop preference preserves older update choices and session files across reload', () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'palisade-ux-settings-'));
   try {
