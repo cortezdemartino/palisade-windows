@@ -15,7 +15,9 @@ let owner;
 const deadline = setTimeout(() => { console.error('Settings UI fixture timed out'); app.exit(1); }, 60000);
 app.whenReady().then(async () => {
   const actions = [], cases = [], images = [];
-  const mediaPrefs = require('../src/media-settings.cjs');
+  const mediaRoot = process.env.PALISADE_WINDOW_SMOKE_ASAR
+    ? path.join(process.env.PALISADE_WINDOW_SMOKE_ASAR, 'src') : path.join(__dirname, '../src');
+  const mediaPrefs = require(path.join(mediaRoot, 'media-settings.cjs'));
   let media = mediaPrefs.defaults();
   let state = { version: '0.3.4', architecture: 'x64', electronVersion: process.versions.electron, buildKind: 'installed',
     keepRunningInTray: true, launchOnLogin: false, loginAvailable: true, updaterAvailable: true, managerAvailable: true,
@@ -77,7 +79,7 @@ app.whenReady().then(async () => {
   await js("document.getElementById('background-media-shortcuts').click()"); await pause(25); assert.equal(media.backgroundShortcuts, true);
   await js("document.getElementById('reset-shortcuts').click()"); await pause(25); assert.equal(media.backgroundShortcuts, false);
   cases.push('shortcut recorder, clear, reset and revisioned background preference');
-  const shortcuts = require('../src/media-shortcuts.cjs').createMediaShortcuts({
+  const shortcuts = require(path.join(mediaRoot, 'media-shortcuts.cjs')).createMediaShortcuts({
     globalShortcut: { register() { throw Error('No real global registration in the UI fixture'); }, unregister() {} },
     focused: () => true, available: action => action === 'device-settings',
     dispatch: () => desktop.showSettings('permissions'),
@@ -95,7 +97,7 @@ app.whenReady().then(async () => {
   const registration = mediaPrefs.defaults(); registration.backgroundShortcuts = true;
   registration.keybinds['device-settings'].accelerator = 'Control+Alt+Shift+F9';
   let focused = false;
-  const nativeShortcuts = require('../src/media-shortcuts.cjs').createMediaShortcuts({
+  const nativeShortcuts = require(path.join(mediaRoot, 'media-shortcuts.cjs')).createMediaShortcuts({
     globalShortcut, focused: () => focused, available: action => action === 'device-settings', dispatch: () => {},
   });
   let nativeRegistration = false;
