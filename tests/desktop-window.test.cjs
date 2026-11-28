@@ -188,14 +188,15 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './diagnostics/store.cjs') return { createStore: () => ({ list: () => [] }) };
     if (name === './diagnostics/monitor.cjs') return { promptRecovery: async () => false, createDiagnostics: () => ({ start() { diagnosticsCalls.push('start'); },
       onRenderGone() {}, onChildGone() {}, watchContents() { diagnosticsCalls.push('watch'); }, markWindowReady() {}, markCleanExit() { diagnosticsCalls.push('clean-exit'); },
-      recovery: () => ({}), expectRendererExit() {}, updateFailed() {}, helperFailed() {} }) };
+      recovery: () => ({}), sessionId: '00000000-0000-4000-8000-000000000000', identity: () => ({}), expectRendererExit() {}, updateFailed() {}, helperFailed() {} }) };
+    if (name === './diagnostics/telemetry.cjs') return { createTelemetry: () => ({ onLaunch() { diagnosticsCalls.push('telemetry'); }, lifecycle() {}, measure() {}, update() {}, startSampling() {}, stopSampling() {} }) };
     if (name === './diagnostics/bridge.cjs') return { installDiagnosticsBridge: () => { diagnosticsCalls.push('bridge'); return { requestRecovery() {}, dispose() {} }; } };
     return require(name);
   } };
   const diagnosticsCalls = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/main.cjs'), 'utf8'), context);
   await new Promise((resolve) => setImmediate(resolve));
-  assert.deepEqual(diagnosticsCalls, ['start', 'watch', 'bridge']);
+  assert.deepEqual(diagnosticsCalls, ['start', 'telemetry', 'watch', 'bridge']);
   assert.equal(app.listenerCount('render-process-gone'), 1);
   assert.equal(app.listenerCount('child-process-gone'), 1);
   assert.equal(appId, 'org.onyxops.palisade.development');

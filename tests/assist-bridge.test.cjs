@@ -62,7 +62,7 @@ test('isolated preload exposes only the three canonical members, bounds requests
   const exposed = new Map();
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/chat-notifications-preload.cjs'), 'utf8'), context);
   assert.deepEqual([...exposed.keys()].sort(), ['palisadeDesktopAssist', 'palisadeDiagnostics']);
-  assert.equal(Object.keys(exposed.get('palisadeDiagnostics')).sort().join(','), 'acknowledge,breadcrumb,info,onRecovery,pending');
+  assert.equal(Object.keys(exposed.get('palisadeDiagnostics')).sort().join(','), 'acknowledge,acknowledgeEvents,breadcrumb,info,onRecovery,pending,pendingEvents');
   assert.equal(Object.keys(api).sort().join(','), 'getCapabilities,onCapabilitiesChanged,protocol');
   await api.getCapabilities({ protocol: 'palisade.assist.bridge', versions: [1] });
   assert.equal(calls[0][0], 'palisade:assist-capabilities');

@@ -23,6 +23,7 @@ const { createDesktopWindow } = require('./desktop-window.cjs');
 const { createStore: createDiagnosticsStore } = require('./diagnostics/store.cjs');
 const { createDiagnostics, promptRecovery } = require('./diagnostics/monitor.cjs');
 const { installDiagnosticsBridge } = require('./diagnostics/bridge.cjs');
+const { createTelemetry } = require('./diagnostics/telemetry.cjs');
 const {
   PALISADE_URL,
   isPalisadeUrl,
@@ -57,7 +58,7 @@ let notificationBranding = Promise.resolve();
 let notificationStatus = 'No desktop notifications sent yet.';
 let deviceFeedback = '', deviceFeedbackError = false;
 // Testing Center crash detection (src/diagnostics): local only; started after the instance lock.
-let diagnostics = null, diagnosticsStore = null, diagnosticsBridge = null, lastUpdatePhase = '';
+let diagnostics = null, diagnosticsStore = null, diagnosticsBridge = null, desktopTelemetry = null, lastUpdatePhase = '';
 const assistLifecycle = createAssistLifecycle();
 // The live native coordinator must register its own retained child-exit holder
 // before admitting authority. This holder covers the existing capture lifecycle.
@@ -86,9 +87,11 @@ if (!app.requestSingleInstanceLock()) {
     diagnosticsStore = createDiagnosticsStore({ dir: path.join(app.getPath('userData'), 'diagnostics') });
     diagnostics = createDiagnostics({ app, crashReporter, store: diagnosticsStore });
     diagnostics.start();
+    desktopTelemetry = createTelemetry({ dir: path.join(app.getPath('userData'), 'diagnostics'), identity: diagnostics.identity, sessionId: diagnostics.sessionId, app });
+    desktopTelemetry.onLaunch({ previous: diagnostics.recovery().previous });
     app.on('render-process-gone', diagnostics.onRenderGone);
     app.on('child-process-gone', diagnostics.onChildGone);
-    app.on('will-quit', () => diagnostics?.markCleanExit());
+    app.on('will-quit', () => { desktopTelemetry?.lifecycle('quit'); desktopTelemetry?.stopSampling(); diagnostics?.markCleanExit(); });
   } catch {
     // Diagnostics are optional: Palisade starts without them.
     diagnostics = null;
@@ -166,7 +169,14 @@ if (!app.requestSingleInstanceLock()) {
       const changed = updateStatus !== status;
       updateStatus = status;
       const phase = updaterController?.notesState?.().updatePhase || '';
-      if (phase === 'failed' && lastUpdatePhase !== 'failed') diagnostics?.updateFailed('UPDATE_FAILED');
+      if (phase === 'failed' && lastUpdatePhase !== 'failed') {
+        diagnostics?.updateFailed('UPDATE_FAILED');
+        desktopTelemetry?.update(['downloading', 'verifying'].includes(lastUpdatePhase) ? 'download' : 'install', 'failure', 'UPDATE_FAILED');
+      } else if (phase !== lastUpdatePhase) {
+        if (phase === 'available') desktopTelemetry?.update('check', 'success');
+        if (phase === 'staged') desktopTelemetry?.update('download', 'success');
+        if (phase === 'installing') desktopTelemetry?.update('install', 'success');
+      }
       lastUpdatePhase = phase;
       if (changed) { updateTrayMenu(); createApplicationMenu(); }
       refreshDeviceSettings?.();
@@ -308,7 +318,7 @@ function createMainWindow(profile, startupVerified) {
   });
   if (diagnostics && diagnosticsStore) {
     diagnostics.watchContents(contents);
-    diagnosticsBridge = installDiagnosticsBridge(contents, { diagnostics, store: diagnosticsStore });
+    diagnosticsBridge = installDiagnosticsBridge(contents, { diagnostics, store: diagnosticsStore, telemetry: desktopTelemetry });
   }
   installChatNotifications(window, contents, { notify: notifyDesktop, openWindow, setUnreadIndicator: image => tray?.setImage(image) });
   contents.setWindowOpenHandler(({ url }) => {
@@ -346,6 +356,11 @@ function createMainWindow(profile, startupVerified) {
   window.once('ready-to-show', () => {
     window?.show(); mainContents?.focus();
     diagnostics?.markWindowReady();
+    // Process start to a shown window: the desktop cold start.
+    const coldStart = Math.round(process.uptime() * 1000);
+    desktopTelemetry?.lifecycle('ready', { durationMs: Math.min(coldStart, 3600000) });
+    desktopTelemetry?.measure('cold-start', coldStart, 'ms', 'startup');
+    desktopTelemetry?.startSampling(() => window?.isFocused?.() === true);
     // After an unexpected end, offer (never force) a report. The page opens Report a bug.
     if (diagnostics) {
       void promptRecovery({ dialog, window, recovery: diagnostics.recovery() }).then(report => {

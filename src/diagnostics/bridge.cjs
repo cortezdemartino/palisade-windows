@@ -15,9 +15,11 @@ const PENDING = 'palisade:diagnostics-pending';
 const ACK = 'palisade:diagnostics-ack';
 const CRUMB = 'palisade:diagnostics-breadcrumb';
 const RECOVERY = 'palisade:diagnostics-recovery';
+const EVENTS = 'palisade:diagnostics-events';
+const EVENTS_ACK = 'palisade:diagnostics-events-ack';
 const ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 
-function installDiagnosticsBridge(contents, { diagnostics, store, now = Date.now, ipc = require('electron').ipcMain }) {
+function installDiagnosticsBridge(contents, { diagnostics, store, telemetry = null, now = Date.now, ipc = require('electron').ipcMain }) {
   let stopped = false, windowStart = now(), calls = 0, crumbStart = now(), crumbCount = 0, requested = false;
   const trusted = event => !stopped && !contents.isDestroyed() && event.sender === contents &&
     event.senderFrame === contents.mainFrame && isPalisadeUrl(contents.getURL()) && isPalisadeUrl(event.senderFrame?.url);
@@ -51,6 +53,17 @@ function installDiagnosticsBridge(contents, { diagnostics, store, now = Date.now
     }
     return { removed: store.remove(ids) };
   });
+  // Desktop telemetry events (telemetry.cjs), read and acknowledged like crash summaries.
+  ipc.handle(EVENTS, (event, ...args) => {
+    guard(event, args);
+    if (args.length !== 0) throw new Error('Diagnostics request refused');
+    return telemetry ? telemetry.list().slice(0, 50).map(({ localId, event: e, consent }) => ({ localId, event: e, consent })) : [];
+  });
+  ipc.handle(EVENTS_ACK, (event, ids) => {
+    guard(event, [ids]);
+    if (!Array.isArray(ids) || ids.length > 50 || !ids.every(id => typeof id === 'string' && ID.test(id))) throw new Error('Diagnostics request refused');
+    return { removed: telemetry ? telemetry.remove(ids) : 0 };
+  });
   const onCrumb = (event, crumb) => {
     if (!trusted(event)) return;
     const t = now();
@@ -69,11 +82,11 @@ function installDiagnosticsBridge(contents, { diagnostics, store, now = Date.now
   }
   function dispose() {
     if (stopped) return; stopped = true;
-    ipc.removeHandler(INFO); ipc.removeHandler(PENDING); ipc.removeHandler(ACK); ipc.removeListener(CRUMB, onCrumb);
+    ipc.removeHandler(INFO); ipc.removeHandler(PENDING); ipc.removeHandler(ACK); ipc.removeHandler(EVENTS); ipc.removeHandler(EVENTS_ACK); ipc.removeListener(CRUMB, onCrumb);
     contents.removeListener('destroyed', dispose);
   }
   contents.once('destroyed', dispose);
   return { requestRecovery, dispose };
 }
 
-module.exports = { installDiagnosticsBridge, PROTOCOL, INFO, PENDING, ACK, CRUMB, RECOVERY };
+module.exports = { installDiagnosticsBridge, PROTOCOL, INFO, PENDING, ACK, CRUMB, RECOVERY, EVENTS, EVENTS_ACK };

@@ -241,3 +241,52 @@ test('bridge: only the trusted Palisade main frame, exact arguments, rate limite
   contents.emit('destroyed');
   assert.equal(ipc.handlers.size, 0);
 });
+
+const { createTelemetry } = require('../src/diagnostics/telemetry.cjs');
+const { EVENTS, EVENTS_ACK } = require('../src/diagnostics/bridge.cjs');
+
+test('desktop telemetry: bounded local queue, migration and recovery, resource sampling with getAppMetrics', (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const dir = tempDir();
+  let clock = Date.parse('2026-11-28T12:00:00Z');
+  let version = '0.3.6';
+  const identity = () => ({ platform: 'windows-electron', appVersion: version, buildId: 'win-' + version, channel: 'stable', os: { family: 'windows', version: '10.0.26100' } });
+  const app = { getAppMetrics: () => [{ type: 'Browser', memory: { workingSetSize: 200 * 1024 }, cpu: { percentCPUUsage: 1.5 } }, { type: 'Tab', memory: { workingSetSize: 300 * 1024 }, cpu: { percentCPUUsage: 2.5 } }] };
+  const tel = createTelemetry({ dir, identity, sessionId: require('node:crypto').randomUUID(), now: () => clock, app });
+  tel.onLaunch({ previous: undefined });
+  version = '0.3.7';
+  tel.onLaunch({ previous: { crashRecorded: false } });
+  const phases = tel.list().map((e) => e.event.payload.phase);
+  assert.deepEqual(phases, ['launch', 'launch', 'migrate', 'recover']);
+  assert.equal(tel.list().at(-1).event.payload.previous, 'unclean');
+  tel.startSampling(() => false);
+  t.mock.timers.tick(10 * 60000);
+  const perf = tel.list().filter((e) => e.event.type === 'performance.measure').map((e) => [e.event.payload.metric, e.event.payload.value, e.event.payload.activity, e.consent]);
+  assert.deepEqual(perf.filter((p) => p[0] !== 'queue-size'), [['memory-mb', 500, 'idle', 'performance'], ['memory-peak-mb', 500, 'idle', 'performance'], ['cpu-percent', 4, 'idle', 'performance'], ['process-count', 2, 'idle', 'performance']]);
+  tel.stopSampling();
+  assert.equal(tel.measure('typed-text', 1, 'ms'), undefined, 'unknown metrics are not recorded');
+  for (let i = 0; i < 250; i += 1) tel.lifecycle('foreground');
+  assert.equal(tel.list().length, 200);
+  assert.ok(tel.list().every((e) => !('installationId' in e.event)));
+  clock += 8 * 86400000;
+  assert.equal(tel.list().length, 0, 'expired after 7 days');
+});
+
+test('bridge: desktop events are read and acknowledged only by the trusted page', () => {
+  const dir = tempDir();
+  const store = createStore({ dir });
+  const diagnostics = createDiagnostics({ app: fakeApp(), crashReporter: { start() {} }, store });
+  const tel = createTelemetry({ dir, identity: diagnostics.identity, sessionId: diagnostics.sessionId });
+  tel.lifecycle('ready', { durationMs: 1200 });
+  const mainFrame = { url: 'https://palisade.onyxops.org/' };
+  const contents = Object.assign(new EventEmitter(), { mainFrame, isDestroyed: () => false, getURL: () => 'https://palisade.onyxops.org/', send() {} });
+  const ipc = fakeIpc();
+  installDiagnosticsBridge(contents, { diagnostics, store, telemetry: tel, ipc });
+  const trusted = { sender: contents, senderFrame: mainFrame };
+  assert.throws(() => ipc.handlers.get(EVENTS)({ sender: contents, senderFrame: { url: 'https://evil.example/' } }));
+  const events = ipc.handlers.get(EVENTS)(trusted);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].consent, 'analytics');
+  assert.throws(() => ipc.handlers.get(EVENTS_ACK)(trusted, ['x']));
+  assert.deepEqual(ipc.handlers.get(EVENTS_ACK)(trusted, [events[0].localId]), { removed: 1 });
+});

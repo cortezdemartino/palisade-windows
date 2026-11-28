@@ -152,6 +152,13 @@ if (typeof process !== 'undefined' && process.isMainFrame && location.origin ===
       }
       return timed(ipcRenderer.invoke('palisade:diagnostics-ack', [...ids]), 2500);
     },
+    pendingEvents: () => timed(ipcRenderer.invoke('palisade:diagnostics-events'), 2500),
+    acknowledgeEvents: ids => {
+      if (!Array.isArray(ids) || ids.length > 50 || !ids.every(id => typeof id === 'string' && id.length === 36)) {
+        return Promise.reject(new Error('Invalid diagnostics request'));
+      }
+      return timed(ipcRenderer.invoke('palisade:diagnostics-events-ack', [...ids]), 2500);
+    },
     breadcrumb: crumb => {
       if (!crumb || typeof crumb !== 'object' || Array.isArray(crumb)) return;
       // Copy only the contract fields; the main process validates them again.

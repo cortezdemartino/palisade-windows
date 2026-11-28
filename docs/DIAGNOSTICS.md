@@ -128,3 +128,32 @@ personal machines or production services without authorization.
 
 Reverting this change removes the bridge and detection; existing `diagnostics` and `Crashpad`
 folders can be deleted. Nothing on the server depends on the desktop app sending summaries.
+
+## Telemetry (Testing Center TC-03)
+
+`src/diagnostics/telemetry.cjs` records desktop events in the Testing Center event envelope and,
+like crash summaries, only stores them on the PC (`diagnostics/events`, 200 events, 128 KiB,
+7 days). The signed-in page reads them over the bridge (`pendingEvents()`,
+`acknowledgeEvents(ids)`), adds this account's installation id and sends them only with consent:
+
+| Event | Consent | When |
+| --- | --- | --- |
+| `app.lifecycle` `launch` (`coldStart`), `ready` (`durationMs`), `quit`, `recover` (`previous`: `unclean`/`crashed`), `migrate` | usage analytics | start, window shown, clean exit, after an unclean end, after a version change |
+| `update.lifecycle` `check`/`download`/`install` with `success`/`failure` | diagnostics | updater phase changes (`available`, `staged`, `installing`, `failed`) |
+| `performance.measure` `cold-start` | performance | process start to window shown |
+| `performance.measure` `memory-mb`, `memory-peak-mb`, `cpu-percent`, `process-count` (all Electron processes, `app.getAppMetrics()`), `queue-size` | performance | every 10 minutes, `idle` or `active` (window focused) |
+| `performance.measure` `event-loop-lag` | performance | when the main event loop is late by more than 200 ms |
+
+The hosted page reports its own usage, feature and in-page performance events as platform `web`;
+the desktop app does not report "active" use itself, so people are not counted twice. Unclean-exit
+summaries now carry the ended session's id as `correlationId`, so session stability is attributed
+to the right session.
+
+Not measured on the desktop yet: warm start, IPC latency, renderer responsiveness timings, GPU
+utilisation, disk use and native helper resource use (pending; the helper runs outside Electron's
+process metrics).
+
+Verification: `tests/diagnostics.test.cjs` (11 tests, simulated Electron objects). Real Electron
+44.7.2 on Linux (headless): `app.getAppMetrics()` returns working-set memory and CPU for the
+Browser, GPU, Utility and Tab processes as the sampler expects, and one sample takes about 1.3 ms
+(every 10 minutes). **Not verified on Windows.**

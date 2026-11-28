@@ -86,7 +86,9 @@ function createDiagnostics({ app, crashReporter, store, now = Date.now, packaged
       // Nothing confirmed a crash: an unclean end is inferred, and may be ordinary (power, updates).
       // Before the window appeared it may have been a failed start, but that is not confirmed.
       const kind = previous.crashLoop ? 'crash-loop' : 'unclean-exit';
+      // correlationId: the session that ended uncleanly, so stability counts it for that session.
       store_({ kind, classification: 'inferred', process: 'main', subsystem: previous.reachedWindow ? 'shell' : 'startup',
+        ...(/^[0-9a-f-]{36}$/.test(previous.sessionId || '') ? { correlationId: previous.sessionId } : {}),
         reason: 'unknown', fatal: true, crashLoopCount: Math.min(100, previous.loopCount) });
     } else if (previous?.crashLoop) {
       store_({ kind: 'crash-loop', classification: 'inferred', process: 'main', subsystem: 'startup', reason: 'crashed', fatal: true, crashLoopCount: Math.min(100, previous.loopCount) });
