@@ -80,6 +80,21 @@ Windows notification settings and your Palisade channel preferences both affect 
 
 New profiles keep Palisade running in the tray when the window is minimized or closed. Existing saved preferences are respected. Change **Keep Palisade in the system tray** under **Settings > General** to change this behavior. Use **Quit Palisade** or Ctrl+Q to exit completely.
 
+## When Palisade closes unexpectedly
+
+If Palisade did not close normally last time, it says so when it opens again. Choose **Report
+the problem** to tell the team what happened, or **Not now** to carry on. This also happens after
+a Windows restart or a power cut, so it does not always mean something is broken.
+
+Palisade notes crashes on your PC: which part stopped, why, and the version. It sends that short
+summary only if you allowed crash reports in **Account and security → My bug reports →
+Diagnostics settings**, or if you attach it to a bug report yourself after reviewing it. It never
+sends messages, files or memory contents. Unsent summaries are deleted after 14 days. To clear
+them now, quit Palisade and delete the `diagnostics` and `Crashpad` folders in
+`%APPDATA%\Palisade`.
+
+To report any other problem, use **Account and security → Report a bug**.
+
 ## Security and recovery
 
 Closing or uninstalling Palisade does not revoke a Matrix session. Sign out in Palisade or revoke the device from another trusted session. Local Matrix session and crypto storage remains in the dedicated Electron profile. The existing web session vault does not provide independent TPM-backed protection.

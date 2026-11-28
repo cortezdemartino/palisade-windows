@@ -183,10 +183,21 @@ test('tray close stays silent, explicit notification click restores the app, and
     if (name === './updates/updater.cjs') return { createUpdateController: () => ({ start() {}, check(manual) { if (manual) manualChecks++; }, onQuit() {} }) };
     if (name === './updates/native-helper.cjs') return { createNativeHelper: () => ({ status: async () => ({ state: 'idle' }) }) };
     if (name === './security-policy.cjs') return require('../src/security-policy.cjs');
+    // Diagnostics are covered by tests/diagnostics.test.cjs; here only their wiring is checked,
+    // with stubs so nothing is written to the working directory.
+    if (name === './diagnostics/store.cjs') return { createStore: () => ({ list: () => [] }) };
+    if (name === './diagnostics/monitor.cjs') return { promptRecovery: async () => false, createDiagnostics: () => ({ start() { diagnosticsCalls.push('start'); },
+      onRenderGone() {}, onChildGone() {}, watchContents() { diagnosticsCalls.push('watch'); }, markWindowReady() {}, markCleanExit() { diagnosticsCalls.push('clean-exit'); },
+      recovery: () => ({}), expectRendererExit() {}, updateFailed() {}, helperFailed() {} }) };
+    if (name === './diagnostics/bridge.cjs') return { installDiagnosticsBridge: () => { diagnosticsCalls.push('bridge'); return { requestRecovery() {}, dispose() {} }; } };
     return require(name);
   } };
+  const diagnosticsCalls = [];
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/main.cjs'), 'utf8'), context);
   await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(diagnosticsCalls, ['start', 'watch', 'bridge']);
+  assert.equal(app.listenerCount('render-process-gone'), 1);
+  assert.equal(app.listenerCount('child-process-gone'), 1);
   assert.equal(appId, 'org.onyxops.palisade.development');
   assert.equal(openSettings().version, '0.2.2');
   deviceAction('tray-off');

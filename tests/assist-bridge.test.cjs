@@ -53,10 +53,16 @@ test('isolated preload exposes only the three canonical members, bounds requests
   const report = JSON.parse(JSON.stringify(harness().invoke()));
   ipc.invoke = async (...args) => { calls.push(args); return report; };
   const context = { Object, process: { isMainFrame: true }, location: { origin: 'https://palisade.onyxops.org' },
-    window: { addEventListener: (name, fn) => { if (name === 'unload') unload = fn; } },
-    setTimeout, clearTimeout, require: () => ({ ipcRenderer: ipc, contextBridge: { exposeInMainWorld: (name, value) => { assert.equal(name, 'palisadeDesktopAssist'); api = value; } } }),
+    window: { addEventListener: (name, fn) => { if (name === 'unload') { const previous = unload; unload = () => { previous?.(); fn(); }; } } },
+    setTimeout, clearTimeout, require: () => ({ ipcRenderer: ipc, contextBridge: { exposeInMainWorld: (name, value) => {
+      // Exactly two page globals: this Assist description API and the diagnostics bridge.
+      assert.ok(['palisadeDesktopAssist', 'palisadeDiagnostics'].includes(name), name);
+      exposed.set(name, value); if (name === 'palisadeDesktopAssist') api = value; } } }),
   };
+  const exposed = new Map();
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, '../src/chat-notifications-preload.cjs'), 'utf8'), context);
+  assert.deepEqual([...exposed.keys()].sort(), ['palisadeDesktopAssist', 'palisadeDiagnostics']);
+  assert.equal(Object.keys(exposed.get('palisadeDiagnostics')).sort().join(','), 'acknowledge,breadcrumb,info,onRecovery,pending');
   assert.equal(Object.keys(api).sort().join(','), 'getCapabilities,onCapabilitiesChanged,protocol');
   await api.getCapabilities({ protocol: 'palisade.assist.bridge', versions: [1] });
   assert.equal(calls[0][0], 'palisade:assist-capabilities');

@@ -66,6 +66,7 @@ The repository contains no backend service, web assets or Matrix authentication 
 
 ## Documentation
 
+- [Crash and failure diagnostics (Testing Center)](docs/DIAGNOSTICS.md)
 - [Rust and GPUI client roadmap](docs/GPUI-ROADMAP.md)
 - [Windows Assist contract audit and preparation](docs/ASSIST-INTEGRATION.md)
 - [Full Assist integration and release plan](docs/ASSIST-RELEASE-PLAN.md)

@@ -131,3 +131,41 @@ if (typeof process !== 'undefined' && process.isMainFrame && location.origin ===
   });
   window.addEventListener("unload", () => { listeners.clear(); ipcRenderer.removeListener("palisade:assist-capabilities-changed", changed); }, { once: true });
 }
+
+// Diagnostics bridge v1 (src/diagnostics/bridge.cjs): pending crash summaries, acknowledgement
+// and breadcrumb forwarding only. No files, dumps, settings or session data.
+if (typeof process !== 'undefined' && process.isMainFrame && location.origin === 'https://palisade.onyxops.org') {
+  const listeners = new Set();
+  const recovery = () => { for (const listener of listeners) { try { listener(); } catch {} } };
+  ipcRenderer.on('palisade:diagnostics-recovery', recovery);
+  const timed = (promise, ms) => {
+    let timer;
+    return Promise.race([promise, new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error('Diagnostics timeout')), ms); })])
+      .finally(() => clearTimeout(timer));
+  };
+  contextBridge.exposeInMainWorld('palisadeDiagnostics', {
+    info: () => timed(ipcRenderer.invoke('palisade:diagnostics-info'), 2500),
+    pending: () => timed(ipcRenderer.invoke('palisade:diagnostics-pending'), 2500),
+    acknowledge: ids => {
+      if (!Array.isArray(ids) || ids.length > 20 || !ids.every(id => typeof id === 'string' && id.length === 36)) {
+        return Promise.reject(new Error('Invalid diagnostics request'));
+      }
+      return timed(ipcRenderer.invoke('palisade:diagnostics-ack', [...ids]), 2500);
+    },
+    breadcrumb: crumb => {
+      if (!crumb || typeof crumb !== 'object' || Array.isArray(crumb)) return;
+      // Copy only the contract fields; the main process validates them again.
+      const copy = {};
+      for (const key of ['at', 'id', 'category', 'subsystem', 'action', 'outcome', 'code', 'correlationId']) {
+        if (crumb[key] !== undefined) copy[key] = crumb[key];
+      }
+      ipcRenderer.send('palisade:diagnostics-breadcrumb', copy);
+    },
+    onRecovery: listener => {
+      if (typeof listener !== 'function' || listeners.size >= 4) return () => {};
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  });
+  window.addEventListener('unload', () => { listeners.clear(); ipcRenderer.removeListener('palisade:diagnostics-recovery', recovery); }, { once: true });
+}

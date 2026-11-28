@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, desktopCapturer, globalShortcut, powerMonitor, screen, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
+const { app, crashReporter, desktopCapturer, globalShortcut, powerMonitor, screen, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray } = require('electron');
 const path = require('node:path');
 const { APP_ID, ensureNotificationBranding } = require('./windows-notification-branding.cjs');
 const { appDetails, ensureAppRegistration } = require('./windows-app-registration.cjs');
@@ -20,6 +20,9 @@ const { packagedGuardianPaths } = require('./assist/guardian.cjs');
 const { createAssistLifecycle, installQuitBarrier } = require('./assist/lifecycle.cjs');
 const { installChatNotifications } = require('./chat-notifications.cjs');
 const { createDesktopWindow } = require('./desktop-window.cjs');
+const { createStore: createDiagnosticsStore } = require('./diagnostics/store.cjs');
+const { createDiagnostics, promptRecovery } = require('./diagnostics/monitor.cjs');
+const { installDiagnosticsBridge } = require('./diagnostics/bridge.cjs');
 const {
   PALISADE_URL,
   isPalisadeUrl,
@@ -53,6 +56,8 @@ let updateStatus = 'Updates: idle';
 let notificationBranding = Promise.resolve();
 let notificationStatus = 'No desktop notifications sent yet.';
 let deviceFeedback = '', deviceFeedbackError = false;
+// Testing Center crash detection (src/diagnostics): local only; started after the instance lock.
+let diagnostics = null, diagnosticsStore = null, diagnosticsBridge = null, lastUpdatePhase = '';
 const assistLifecycle = createAssistLifecycle();
 // The live native coordinator must register its own retained child-exit holder
 // before admitting authority. This holder covers the existing capture lifecycle.
@@ -77,6 +82,17 @@ if (process.platform === 'win32') app.setAppUserModelId(qualification ? APP_ID +
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  try {
+    diagnosticsStore = createDiagnosticsStore({ dir: path.join(app.getPath('userData'), 'diagnostics') });
+    diagnostics = createDiagnostics({ app, crashReporter, store: diagnosticsStore });
+    diagnostics.start();
+    app.on('render-process-gone', diagnostics.onRenderGone);
+    app.on('child-process-gone', diagnostics.onChildGone);
+    app.on('will-quit', () => diagnostics?.markCleanExit());
+  } catch {
+    // Diagnostics are optional: Palisade starts without them.
+    diagnostics = null;
+  }
   app.on('second-instance', () => {
     if (!window) return;
     window.show();
@@ -149,6 +165,9 @@ if (!app.requestSingleInstanceLock()) {
     updaterController = createUpdateController(() => window, (status) => {
       const changed = updateStatus !== status;
       updateStatus = status;
+      const phase = updaterController?.notesState?.().updatePhase || '';
+      if (phase === 'failed' && lastUpdatePhase !== 'failed') diagnostics?.updateFailed('UPDATE_FAILED');
+      lastUpdatePhase = phase;
       if (changed) { updateTrayMenu(); createApplicationMenu(); }
       refreshDeviceSettings?.();
     }, { native, beforeManager: prepareForExit, preferences: () => desktopSettings, canInstallOnQuit: () => !assistCapture?.busy(),
@@ -259,7 +278,7 @@ function createMainWindow(profile, startupVerified) {
   contents.on('destroyed', mediaShortcuts.stop);
   assistCapture = createCaptureController({ enabled: captureEnabled && startupVerified, getContents: () => contents, getWindow: () => window,
     enumerate: options => desktopCapturer.getSources(options), choose: chooseSource, onState: () => updateTrayMenu(),
-    revoke: () => { if (!contents.isDestroyed()) { contents.forcefullyCrashRenderer(); contents.reload(); } } });
+    revoke: () => { if (!contents.isDestroyed()) { diagnostics?.expectRendererExit(); contents.forcefullyCrashRenderer(); contents.reload(); } } });
   installSessionPolicy(profile, () => mainContents);
   assistBridge = installAssistBridge(contents, { desktopVersion: app.getVersion() });
   if (nativeEndpointEnabled && app.isPackaged && startupVerified) {
@@ -267,7 +286,11 @@ function createMainWindow(profile, startupVerified) {
       ...packagedGuardianPaths(process.resourcesPath),
       captureOptions: qualification ? { getContents: () => contents, getWindow: () => window, screen,
         enumerate: options => desktopCapturer.getSources(options), choose: chooseSource } : null,
-      onStatus: status => { nativeAssistStatus = status; refreshDeviceSettings?.(); updateTrayMenu(); } });
+      onStatus: status => {
+        nativeAssistStatus = status; refreshDeviceSettings?.(); updateTrayMenu();
+        if (status === 'Cleanup failed') diagnostics?.helperFailed('ASSIST_CLEANUP_FAILED');
+        else if (status === 'Native endpoint unavailable') diagnostics?.helperFailed('ASSIST_ENDPOINT_UNAVAILABLE');
+      } });
     void nativeAssistRuntime.ready.catch(() => {});
     nativeAssistBridge = installNativeBridge(contents, { enabled: true,
       dispatch: nativeAssistRuntime.dispatch, stopAll: nativeAssistRuntime.stopAll });
@@ -283,6 +306,10 @@ function createMainWindow(profile, startupVerified) {
     for (const name of ['lock-screen', 'suspend', 'shutdown']) powerMonitor.removeListener(name, revokeCapture);
     for (const name of ['display-added', 'display-removed', 'display-metrics-changed']) screen.removeListener(name, revokeCapture);
   });
+  if (diagnostics && diagnosticsStore) {
+    diagnostics.watchContents(contents);
+    diagnosticsBridge = installDiagnosticsBridge(contents, { diagnostics, store: diagnosticsStore });
+  }
   installChatNotifications(window, contents, { notify: notifyDesktop, openWindow, setUnreadIndicator: image => tray?.setImage(image) });
   contents.setWindowOpenHandler(({ url }) => {
     if (isPalisadeUrl(url)) {
@@ -316,7 +343,16 @@ function createMainWindow(profile, startupVerified) {
     }
   });
 
-  window.once('ready-to-show', () => { window?.show(); mainContents?.focus(); });
+  window.once('ready-to-show', () => {
+    window?.show(); mainContents?.focus();
+    diagnostics?.markWindowReady();
+    // After an unexpected end, offer (never force) a report. The page opens Report a bug.
+    if (diagnostics) {
+      void promptRecovery({ dialog, window, recovery: diagnostics.recovery() }).then(report => {
+        if (report) diagnosticsBridge?.requestRecovery();
+      }).catch(() => {});
+    }
+  });
   window.on('minimize', () => {
     if (keepRunningInTray) hideToTray();
   });

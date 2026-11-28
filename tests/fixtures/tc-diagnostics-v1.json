@@ -1,0 +1,932 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://palisade.invalid/contracts/tc/diagnostics-v1.json",
+  "title": "Palisade Testing Center crash and error report, schema version 1",
+  "description": "One report as sent in POST /api/v1/tc/client/crashes {reports: [...]} (1-20 per batch). The validator is services/admin/src/tc/diagnostics.ts (docs/68 §16). Vectors under x-vectors are conformance tests for every client: a client must produce the valid ones and never the others. \"$NOW\" in occurredAt means a time within the last minute (the server refuses more than 10 minutes in the future or 7 days in the past). Status: implemented in TC-02.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "reportId",
+    "kind",
+    "classification",
+    "occurredAt",
+    "client",
+    "installationId",
+    "sessionId",
+    "process",
+    "subsystem",
+    "fatal",
+    "frames"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "reportId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Client-generated; the idempotency key (reused on retry)."
+    },
+    "kind": {
+      "enum": [
+        "process-crash",
+        "oom",
+        "hang",
+        "unclean-exit",
+        "startup-failure",
+        "crash-loop",
+        "native-crash",
+        "panic",
+        "exception",
+        "unhandled-rejection",
+        "render-failure",
+        "api-failure",
+        "sync-failure",
+        "auth-failure",
+        "media-failure",
+        "assist-failure",
+        "ipc-failure",
+        "native-module-failure",
+        "helper-failure",
+        "update-failure",
+        "install-failure",
+        "unrecoverable-state"
+      ],
+      "description": "The first eight need consent crashReports; the rest need consent diagnostics."
+    },
+    "classification": {
+      "enum": [
+        "confirmed",
+        "inferred"
+      ],
+      "description": "inferred only for unclean-exit and crash-loop."
+    },
+    "occurredAt": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d{1,3})?Z$"
+    },
+    "client": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "platform",
+        "appVersion",
+        "buildId",
+        "channel",
+        "os"
+      ],
+      "properties": {
+        "platform": {
+          "enum": [
+            "web",
+            "windows-electron",
+            "windows-native"
+          ]
+        },
+        "appVersion": {
+          "type": "string",
+          "pattern": "^\\d{1,4}\\.\\d{1,5}\\.\\d{1,6}([-+][0-9A-Za-z.-]{1,32})?$"
+        },
+        "buildId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._-]{1,64}$"
+        },
+        "channel": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,23}$"
+        },
+        "os": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "family"
+          ],
+          "properties": {
+            "family": {
+              "enum": [
+                "windows",
+                "macos",
+                "linux",
+                "android",
+                "ios",
+                "chromeos",
+                "other"
+              ]
+            },
+            "version": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^[0-9]{1,5}(\\.[0-9]{1,6}){0,3}$"
+            }
+          }
+        }
+      }
+    },
+    "installationId": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Random per account per device; never derived from hardware."
+    },
+    "sessionId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "correlationId": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "uuid"
+    },
+    "process": {
+      "enum": [
+        "browser",
+        "web-worker",
+        "main",
+        "renderer",
+        "gpu",
+        "utility",
+        "native-helper",
+        "updater",
+        "installer",
+        "native"
+      ]
+    },
+    "subsystem": {
+      "enum": [
+        "shell",
+        "startup",
+        "auth",
+        "sync",
+        "crypto",
+        "messaging",
+        "voice",
+        "video",
+        "assist",
+        "updater",
+        "settings",
+        "ipc",
+        "native",
+        "network",
+        "storage",
+        "ui",
+        "other"
+      ]
+    },
+    "reason": {
+      "enum": [
+        "crashed",
+        "oom",
+        "killed",
+        "abnormal-exit",
+        "launch-failed",
+        "integrity-failure",
+        "memory-eviction",
+        "unresponsive",
+        "timeout",
+        "unknown",
+        null
+      ]
+    },
+    "exceptionType": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Za-z][A-Za-z0-9_.]{0,63}$",
+      "description": "The type name only (TypeError). Never the message."
+    },
+    "errorCode": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[A-Z][A-Z0-9_]{1,47}$"
+    },
+    "fatal": {
+      "type": "boolean"
+    },
+    "frames": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "module",
+          "inApp"
+        ],
+        "properties": {
+          "module": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_][A-Za-z0-9._@+-]{0,95}$",
+            "description": "File name only, no directory."
+          },
+          "function": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[A-Za-z0-9_$<>.\\[\\] -]{1,128}$"
+          },
+          "line": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "column": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "inApp": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "breadcrumbs": {
+      "type": "array",
+      "maxItems": 50,
+      "description": "Stored only when diagnostics consent is current.",
+      "items": {
+        "$ref": "#/$defs/breadcrumb"
+      }
+    },
+    "memoryMb": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 1048576
+    },
+    "uptimeMs": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0
+    },
+    "crashLoopCount": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 100
+    }
+  },
+  "$defs": {
+    "breadcrumb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "at",
+        "id",
+        "category",
+        "subsystem",
+        "action",
+        "outcome"
+      ],
+      "properties": {
+        "at": {
+          "type": "integer",
+          "description": "Epoch milliseconds."
+        },
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "category": {
+          "enum": [
+            "init",
+            "navigation",
+            "auth",
+            "sync",
+            "messaging",
+            "voice",
+            "assist",
+            "ipc",
+            "process",
+            "resource",
+            "update",
+            "error",
+            "recovery"
+          ]
+        },
+        "subsystem": {
+          "enum": [
+            "shell",
+            "startup",
+            "auth",
+            "sync",
+            "crypto",
+            "messaging",
+            "voice",
+            "video",
+            "assist",
+            "updater",
+            "settings",
+            "ipc",
+            "native",
+            "network",
+            "storage",
+            "ui",
+            "other"
+          ]
+        },
+        "action": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,47}(\\.[a-z][a-z0-9-]{1,47}){0,2}$"
+        },
+        "outcome": {
+          "enum": [
+            "start",
+            "success",
+            "failure",
+            "cancelled",
+            "timeout",
+            "info",
+            "warning"
+          ]
+        },
+        "code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{1,47}$"
+        },
+        "correlationId": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    }
+  },
+  "x-vectors": [
+    {
+      "name": "valid renderer crash (Electron)",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "valid"
+    },
+    {
+      "name": "valid main-process exception with frames",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "exception",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "main",
+        "subsystem": "updater",
+        "reason": null,
+        "fatal": false,
+        "frames": [
+          {
+            "module": "updater.cjs",
+            "function": "verifyPackage",
+            "line": 212,
+            "column": 17,
+            "inApp": true
+          }
+        ],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0,
+        "exceptionType": "TypeError",
+        "errorCode": "UPDATE_VERIFY_FAILED"
+      },
+      "expect": "valid"
+    },
+    {
+      "name": "valid inferred unclean exit",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "unclean-exit",
+        "classification": "inferred",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "main",
+        "subsystem": "shell",
+        "reason": "unknown",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "valid"
+    },
+    {
+      "name": "valid web unhandled rejection",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "unhandled-rejection",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "web",
+          "appVersion": "0.1.0",
+          "buildId": "web-271de72",
+          "channel": "alpha",
+          "os": {
+            "family": "windows"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "browser",
+        "subsystem": "sync",
+        "reason": null,
+        "fatal": false,
+        "frames": [
+          {
+            "module": "index-4f2a9c1b.js",
+            "function": "runSync",
+            "line": 1,
+            "column": 48211,
+            "inApp": true
+          }
+        ],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0,
+        "exceptionType": "Error",
+        "errorCode": "SYNC_FAILED"
+      },
+      "expect": "valid"
+    },
+    {
+      "name": "exception message is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0,
+        "message": "Cannot send: hello Bob"
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "report.message"
+    },
+    {
+      "name": "module with a directory is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [
+          {
+            "module": "C:\\Users\\alice\\AppData\\app.asar\\main.cjs",
+            "inApp": true
+          }
+        ],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "frames[0].module"
+    },
+    {
+      "name": "crashed classified as inferred is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "inferred",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "classification"
+    },
+    {
+      "name": "breadcrumb with free text is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT",
+            "text": "typed message"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "breadcrumbs[0].text"
+    },
+    {
+      "name": "breadcrumb with a URL as action is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "https://example.com/x",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "breadcrumbs[0].action"
+    },
+    {
+      "name": "token-like exception type is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0,
+        "exceptionType": "syt_YWxpY2U_abcdefghijklmnop"
+      },
+      "expect": "P_TC_SENSITIVE_PAYLOAD",
+      "field": "exceptionType"
+    },
+    {
+      "name": "unknown process type is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "kernel",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "process"
+    },
+    {
+      "name": "schema version 2 is refused",
+      "report": {
+        "schemaVersion": 2,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "installationId": "0b5e7c1a-2d3f-4a5b-8c6d-7e8f9a0b1c2d",
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_UNSUPPORTED_SCHEMA",
+      "field": "schemaVersion"
+    },
+    {
+      "name": "missing installation id is refused",
+      "report": {
+        "schemaVersion": 1,
+        "reportId": "8d2c4b6a-1e3f-4a5b-9c7d-0e1f2a3b4c5d",
+        "kind": "process-crash",
+        "classification": "confirmed",
+        "occurredAt": "$NOW",
+        "client": {
+          "platform": "windows-electron",
+          "appVersion": "0.3.6",
+          "buildId": "win-0c4ce18",
+          "channel": "alpha",
+          "os": {
+            "family": "windows",
+            "version": "10.0.26100"
+          }
+        },
+        "sessionId": "1c6f8d2b-3e4a-4b6c-9d7e-8f9a0b1c2d3e",
+        "process": "renderer",
+        "subsystem": "shell",
+        "reason": "crashed",
+        "fatal": true,
+        "frames": [],
+        "breadcrumbs": [
+          {
+            "at": 1764331140000,
+            "id": "3f6c1e2a-9b8d-4c7e-8f1a-2b3c4d5e6f70",
+            "category": "ipc",
+            "subsystem": "ipc",
+            "action": "assist.native-request",
+            "outcome": "timeout",
+            "code": "IPC_TIMEOUT"
+          }
+        ],
+        "uptimeMs": 360000,
+        "crashLoopCount": 0
+      },
+      "expect": "P_TC_INVALID_REPORT",
+      "field": "report.installationId"
+    }
+  ]
+}
